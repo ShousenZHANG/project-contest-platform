@@ -1,0 +1,81 @@
+services:
+  backend-api-gateway:
+    container_name: backend-api-gateway
+    build:
+      context: .
+      dockerfile: backend/api-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      - my-network
+
+  backend-user-service:
+    container_name: backend-user-service
+    build:
+      context: .
+      dockerfile: backend/user-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+
+  backend-competition-service:
+    container_name: backend-competition-service
+    build:
+      context: .
+      dockerfile: backend/competition-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+
+  backend-file-service:
+    container_name: backend-file-service
+    build:
+      context: .
+      dockerfile: backend/file-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+
+  backend-registration-service:
+    container_name: backend-registration-service
+    build:
+      context: .
+      dockerfile: backend/registration-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+
+  backend-interaction-service:
+    container_name: backend-interaction-service
+    build:
+      context: .
+      dockerfile: backend/interaction-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+
+  backend-judge-service:
+    container_name: backend-judge-service
+    build:
+      context: .
+      dockerfile: backend/judge-service/Dockerfile
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+
+networks:
+  my-network:
