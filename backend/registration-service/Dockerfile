@@ -23,12 +23,19 @@ FROM eclipse-temurin:23-jre-alpine-3.21
 
 # Set working directory for the runtime container
 WORKDIR /app
+RUN apk add --no-cache bash
 
 # Copy the built JAR file from builder stage
 COPY --from=builder /app/backend/registration-service/target/*.jar registration-service.jar
 
-# Expose the port used by the Competition Service
+COPY ../../wait-for-it.sh /wait-for-it.sh
+RUN chmod +x /wait-for-it.sh
+
 EXPOSE 8084
 
-# Define the command to run the application
-ENTRYPOINT ["java", "-jar", "/app/registration-service.jar"]
+CMD /wait-for-it.sh mysql:3306 -- \
+    /wait-for-it.sh redis:6379 -- \
+    /wait-for-it.sh rabbitmq:5672 -- \
+    /wait-for-it.sh nacos:8848 -- \
+    /wait-for-it.sh minio:9000 -- \
+    java -jar /app/registration-service.jar

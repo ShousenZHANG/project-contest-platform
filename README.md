@@ -12,31 +12,30 @@ Follow these steps to quickly set up and run the full platform:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/unsw-cse-comp99-3900/capstone-project-2025-t1-25t1-9900-w16a-danish.git
-   cd capstone-project-2025-t1-25t1-9900-w16a-danish
+   git clone https://github.com/ShousenZHANG/project-contest-platform.git
+   cd project-contest-platform
    ```
 
-2. **Start infrastructure services**  
-   In the project root directory, start database and middleware containers:
+2. **Prepare environment variables**  
+   Create a .env file in the project root with your required secrets and credentials (e.g. JWT, email account for notifications):
    ```bash
-   docker-compose -f docker-compose.env.yml up -d
+   MAIL_USERNAME=your-email@example.com
+   MAIL_PASSWORD=your-smtp-app-password
+   JWT_SECRET=your-jwt-secret
+   GITHUB_CLIENT_ID=your-github-client-id
+   GITHUB_CLIENT_SECRET=your-github-client-secret
+   GOOGLE_CLIENT_ID=your-google-client-id
+   GOOGLE_CLIENT_SECRET=your-google-client-secret
    ```
 
-3. **Start backend microservices**  
-   Still in the project root directory, start all backend services:
+3. **One-command full stack startup**  
+   Build and start all backend, frontend, database, and infrastructure services with one command:
    ```bash
-   docker-compose -f docker-compose.service.yml up -d
+   docker-compose up --build -d
    ```
+   ⏳ The first startup may take several minutes for image build and initialization.
 
-4. **Start frontend**
-   Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   npm install
-   npm start
-   ```
-
-5. **Manually verify database connection (IMPORTANT!)**
+4. **Manually verify database connection (IMPORTANT!)**
 
    After all services have started, **use Navicat**, **DataGrip**, or **any MySQL client** to **manually connect** to the database.  
    Open the `project_contest_platform` database and verify the tables are properly initialized.
@@ -52,7 +51,7 @@ Follow these steps to quickly set up and run the full platform:
    - **Password:** `root`
    - **Database:** `project_contest_platform`
 
-6. **Access the platform**
+5. **Access the platform**
   - Swagger API Docs: [http://localhost:8080/doc.html#/home](http://localhost:8080/doc.html#/home)
   - Frontend Web App: [http://localhost:3000](http://localhost:3000)
 

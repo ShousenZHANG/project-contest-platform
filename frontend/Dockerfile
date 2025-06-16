@@ -7,11 +7,22 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 
-RUN npm install
+RUN npm install --frozen-lockfile || npm install
 
 COPY . .
 
 RUN npm run build
+
+# -----------------------------
+# Stage 2: Serve the React app
+# -----------------------------
+FROM node:alpine3.22
+
+WORKDIR /app
+
+RUN npm install -g serve
+
+COPY --from=builder /app/build ./build
 
 EXPOSE 3000
 

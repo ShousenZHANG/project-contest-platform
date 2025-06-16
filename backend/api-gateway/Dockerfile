@@ -24,11 +24,20 @@ FROM eclipse-temurin:23-jre-alpine-3.21
 # Set working directory for runtime container
 WORKDIR /app
 
+RUN apk add --no-cache bash
+
 # Copy the built jar file from the builder stage
 COPY --from=builder /app/backend/api-gateway/target/*.jar api-gateway.jar
+
+COPY ../../wait-for-it.sh /wait-for-it.sh
+RUN chmod +x /wait-for-it.sh
 
 # Expose the port used by the API Gateway service
 EXPOSE 8080
 
-# Define the command to run the application
-ENTRYPOINT ["java", "-jar", "/app/api-gateway.jar"]
+CMD /wait-for-it.sh mysql:3306 -- \
+    /wait-for-it.sh redis:6379 -- \
+    /wait-for-it.sh rabbitmq:5672 -- \
+    /wait-for-it.sh nacos:8848 -- \
+    /wait-for-it.sh minio:9000 -- \
+    java -jar /app/api-gateway.jar
