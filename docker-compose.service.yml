@@ -77,5 +77,23 @@ services:
     depends_on:
       - backend-api-gateway
 
+  frontend-web:
+    container_name: frontend-web
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    networks:
+      - my-network
+    depends_on:
+      - backend-api-gateway
+      - backend-user-service
+      - backend-competition-service
+      - backend-file-service
+      - backend-registration-service
+      - backend-interaction-service
+      - backend-judge-service
+
 networks:
   my-network:
