@@ -66,7 +66,7 @@ spring:
           predicates:
             - Path=/dashboard/**
 jwt:
-  secret: "7p7Zqa9XICFWydiTqLH6qBfKW3hBoqGg"
+  secret: ${JWT_SECRET}
   expiration: 86400000
   public-urls:
     - /user-service/v3/api-docs
