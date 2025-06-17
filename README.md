@@ -55,6 +55,29 @@ Follow these steps to quickly set up and run the full platform:
   - Swagger API Docs: [http://localhost:8080/doc.html#/home](http://localhost:8080/doc.html#/home)
   - Frontend Web App: [http://localhost:3000](http://localhost:3000)
 
+## ⚙️ Jenkins CI/CD (Continuous Integration & Deployment)
+
+This project includes built-in support for **automated CI/CD pipelines with Jenkins**.
+
+- **Jenkins service is included** in `docker-compose.yml` (`jenkins` container).
+- On every code push, Jenkins can automatically:
+    - Pull the latest code from GitHub
+    - Build all backend/frontend Docker images
+    - Run tests and start or update the platform stack
+
+**Quick Start:**
+1. Start Jenkins:
+   ```bash
+   docker-compose up -d jenkins
+    ```
+2. Access Jenkins Dashboard: [http://localhost:8888](http://localhost:8888)
+3. Get the initial password:
+   ```bash
+   docker logs -f jenkins
+   ```
+4. Set up your pipeline job (see sample Jenkinsfile in the repo) and connect your GitHub repository.
+5. On each commit, Jenkins will automatically build and deploy the latest platform stack.
+Jenkins enables true one-click automated build, test, and deployment for this microservices project.
 ---
 
 ## 🔑 Default Admin Account
