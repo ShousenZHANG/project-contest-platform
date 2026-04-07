@@ -1,10 +1,10 @@
 /**
  * ResetPassword.js
- * 
+ *
  * This component allows users to reset their password using a secure token.
  * It validates the new password for strength and ensures confirmation matches.
  * Upon successful reset, the user is redirected to the homepage.
- * 
+ *
  * Developer: Zhaoyi Yang
  */
 
@@ -13,6 +13,8 @@ import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import './ResetPassword.css';
 import apiClient from '../api/apiClient';
+
+const REDIRECT_DELAY_MS = 3000;
 
 function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -37,41 +39,23 @@ function ResetPassword() {
 
     const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(newPassword)) {
-      setError('❌ Password must be at least 8 characters long, include at least one uppercase letter and one number.');
+      setError('Password must be at least 8 characters long, include at least one uppercase letter and one number.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('❌ Passwords do not match!');
+      setError('Passwords do not match!');
       return;
     }
 
-    console.log("📦 Payload being sent:", {
-      token,
-      newPassword,
-    });
-
     setIsSubmitting(true);
     try {
-      const res = await fetch('/users/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          newPassword,
-        }),
-      });
-
-      if (res.ok) {
-        setSuccessMessage('✅ Password has been reset successfully! Redirecting...');
-        setTimeout(() => navigate('/'), 8080);
-      } else {
-        const data = await res.json();
-        setError(data.message || 'Reset failed');
-      }
+      await apiClient.post('/users/reset-password', { token, newPassword });
+      setSuccessMessage('Password has been reset successfully! Redirecting...');
+      setTimeout(() => navigate('/'), REDIRECT_DELAY_MS);
     } catch (err) {
-      console.error('Reset password error:', err);
-      setError('Server error. Please try again later.');
+      const msg = err.response?.data?.message || 'Reset failed. Please try again later.';
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

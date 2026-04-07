@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import SubmissionRatings from "../../Organizer/SubmissionRatings";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockedNavigate = jest.fn();
 
@@ -11,26 +14,18 @@ jest.mock("react-router-dom", () => ({
   useNavigate: () => mockedNavigate,
 }));
 
-beforeAll(() => {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ data: [] }),
-    })
-  );
-});
-
-afterAll(() => {
-  global.fetch.mockRestore();
-});
-
 beforeEach(() => {
   localStorage.setItem("token", "fake-token");
   localStorage.setItem("userId", "user-123");
   localStorage.setItem("role", "organizer");
   jest.clearAllMocks();
   window.alert = jest.fn();
+
+  apiClient.get.mockResolvedValue({
+    data: { data: [] },
+  });
+
+  apiClient.post.mockResolvedValue({ data: {} });
 });
 
 afterEach(() => {

@@ -17,8 +17,8 @@
 
 import React, { useState } from "react";
 import PropTypes from "prop-types";
-import axios from "axios";
 import { IconButton, Snackbar, Alert } from "@mui/material";
+import apiClient from "../../api/apiClient";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 function DeleteComment({ commentId, onDeleted }) {
@@ -26,37 +26,25 @@ function DeleteComment({ commentId, onDeleted }) {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
-  const currentUserId = localStorage.getItem("userId");
-  const token = localStorage.getItem("token");
-  const userRole = localStorage.getItem("role");
-
   const handleDelete = () => {
+    const currentUserId = localStorage.getItem("userId");
+    const token = localStorage.getItem("token");
+
     if (!currentUserId || !token) {
       setSnackbarMessage("Please log in.");
       setSnackbarSeverity("error");
       return setSnackbarOpen(true);
     }
 
-    axios
-      .delete(
-        `/interactions/comments/${commentId}`,
-        {
-          headers: {
-            "User-ID": currentUserId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        }
-      )
+    apiClient
+      .delete(`/interactions/comments/${commentId}`)
       .then(() => {
         setSnackbarMessage("Comment deleted successfully!");
         setSnackbarSeverity("success");
         setSnackbarOpen(true);
         onDeleted();
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(() => {
         setSnackbarMessage("Failed to delete comment.");
         setSnackbarSeverity("error");
         setSnackbarOpen(true);

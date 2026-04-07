@@ -1,10 +1,10 @@
 /**
  * ViewSubmission.js
- * 
+ *
  * Participant view for submission details.
  * Displays submission info, file download, voting, and comments access.
  * Includes loading and error handling for fetching submission data.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -31,7 +31,7 @@ import {
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import "./ViewSubmission.css";
 import ViewVote from "./ViewVote";
-import axios from "axios";
+import apiClient from "../api/apiClient";
 
 function ViewSubmission() {
   const navigate = useNavigate();
@@ -45,14 +45,13 @@ function ViewSubmission() {
 
   // Get details of submission
   useEffect(() => {
-    axios
+    apiClient
       .get(`/submissions/public/${submissionId}`)
       .then((res) => {
         setSubmission(res.data);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("❌ Failed to obtain submission", err);
+      .catch(() => {
         setSnackbarMessage("Failed to obtain the work information");
         setSnackbarSeverity("error");
         setSnackbarOpen(true);
@@ -71,8 +70,8 @@ function ViewSubmission() {
   if (loading) {
     return (
       <>
-        
-        
+
+
         <div className="view-submission-content" style={{ textAlign: "center", padding: "40px" }}>
           <CircularProgress color="warning" />
           <Typography mt={2}>Load the work information...</Typography>
@@ -101,9 +100,9 @@ function ViewSubmission() {
 
   return (
     <>
-      
+
       <div className="view-submission-container">
-        
+
         <div className="view-submission-content">
           <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
             <IconButton onClick={handleGoBack} sx={{ color: "#FF9800" }}>

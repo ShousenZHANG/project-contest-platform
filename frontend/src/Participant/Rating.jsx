@@ -1,9 +1,9 @@
 /**
  * Rating.js
- * 
+ *
  * Displays a list of competitions assigned to the current judge, allowing them to view the competition details and review submissions.
  * Provides functionality to navigate to review submission pages and view competition-related information, such as category, start/end dates, scoring criteria, and allowed submission types.
- * 
+ *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
@@ -37,57 +37,33 @@ function Rating() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
 
-  const token = localStorage.getItem('token');
-  const userId = localStorage.getItem('userId');
-
   useEffect(() => {
-    if (!token || !userId) return;
-
-    fetch(`/judges/my-competitions?page=1&size=100`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-ID': userId,
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Fetch error: ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        setCompetitions(data.data || []);
-      })
-      .catch((err) => {
-        console.error('Error fetching competitions:', err);
-      });
-  }, [token, userId]);
+    const fetchCompetitions = async () => {
+      try {
+        const res = await apiClient.get(`/judges/my-competitions?page=1&size=100`);
+        setCompetitions(res.data.data || []);
+      } catch (err) {
+        // Failed to fetch competitions
+      }
+    };
+    fetchCompetitions();
+  }, []);
 
   const fetchCompetitionDetail = async (id) => {
     try {
-      const res = await fetch(`/competitions/${id}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-ID': userId,
-        },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSelectedComp(data);
-        setDialogOpen(true);
-      } else {
-        alert(data.message || 'Failed to fetch competition detail');
-      }
+      const res = await apiClient.get(`/competitions/${id}`);
+      setSelectedComp(res.data);
+      setDialogOpen(true);
     } catch (error) {
-      console.error('Error fetching competition detail:', error);
+      alert('Failed to fetch competition detail');
     }
   };
 
   return (
     <>
-      
+
       <div className="rating-container">
-        
+
         <div className="rating-content">
           <Typography variant="h5" gutterBottom>
             Competitions Assigned to You as Judge

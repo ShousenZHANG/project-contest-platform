@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerSubmissions from "../../Organizer/CheckSubmissions";
 import { BrowserRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 beforeAll(() => {
   Storage.prototype.getItem = jest.fn((key) => {
@@ -14,17 +17,15 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  global.fetch = jest.fn((url) => {
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ name: "Test Competition" }),
+        data: { name: "Test Competition" },
       });
     }
     if (url.includes("/submissions/public")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
+        data: {
           data: [
             {
               id: "submission-1",
@@ -40,10 +41,10 @@ beforeEach(() => {
           ],
           pages: 1,
           total: 1,
-        }),
+        },
       });
     }
-    return Promise.resolve({ ok: false });
+    return Promise.reject(new Error("Unknown URL"));
   });
 });
 

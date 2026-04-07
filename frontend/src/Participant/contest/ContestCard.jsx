@@ -1,6 +1,6 @@
 /**
  * @file ContestCard.js
- * @description 
+ * @description
  * This component displays a single contest in a card format for participants.
  * Participants can:
  *  - View basic contest information (title, date, category, description, status).
@@ -10,7 +10,7 @@
  * The component manages registration, cancellation, and team selection with backend API integration,
  * handles authentication, and provides user feedback via dialogs and snackbars.
  * It uses Material-UI components for styling and layout.
- * 
+ *
  * Role: Participant
  * Developer: Zhaoyi Yang, Beiqi Dai
  */
@@ -51,63 +51,37 @@ function ContestCard({ contest, onLoginRequest }) {
   const [teamsLoading, setTeamsLoading] = useState(false);
 
   const showSnackbar = (message, severity = "success") => {
-    console.log(`Snackbar: [${severity}] ${message}`);
     setSnackbar({ open: true, message, severity });
   };
 
   const handleSnackbarClose = (event, reason) => {
     if (event) event.stopPropagation();
-    setSnackbar({ ...snackbar, open: false });
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   const checkTeamStatus = async (teamId) => {
-    const token = localStorage.getItem("token");
     try {
-      const res = await fetch(
-        `/registrations/teams/${contest.id}/${teamId}/status`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${token}` },
-        }
+      const res = await apiClient.get(
+        `/registrations/teams/${contest.id}/${teamId}/status`
       );
-      console.log('Check team status response:', res.status);
-      if (res.ok) {
-        const text = await res.text();
-        console.log('Team status:', text);
-        return text === 'true';
-      }
-      console.error('Error checking team status:', res.status);
-      return false;
+      return res.data === true || res.data === 'true';
     } catch (err) {
-      console.error('Network error checking team status:', err);
       return false;
     }
   };
 
   const fetchCreatedTeams = async () => {
     const userId = localStorage.getItem("userId");
-    console.log('Fetching teams for user:', userId);
     setTeamsLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `/teams/public/created?userId=${userId}&page=1&size=100`,
-        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" } }
+      const res = await apiClient.get(
+        `/teams/public/created?userId=${userId}&page=1&size=100`
       );
-      console.log('Fetch created teams status:', res.status);
-      if (res.ok) {
-        const result = await res.json();
-        console.log('Created teams:', result.data);
-        setCreatedTeams(result.data || []);
-        return result.data || [];
-      } else {
-        const errText = await res.text();
-        console.error('Teams API error:', errText);
-        showSnackbar("Failed to load your teams.", "error");
-      }
+      const teams = res.data.data || [];
+      setCreatedTeams(teams);
+      return teams;
     } catch (err) {
-      console.error('Network error fetching teams:', err);
-      showSnackbar("Network error fetching your teams.", "error");
+      showSnackbar("Failed to load your teams.", "error");
     } finally {
       setTeamsLoading(false);
     }
@@ -115,65 +89,20 @@ function ContestCard({ contest, onLoginRequest }) {
   };
 
   const registerTeam = async (teamId) => {
-    console.log('Register team', { competitionId: contest.id, teamId });
-    const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("userId");
-    const userRole = localStorage.getItem("userRole");
     try {
-      const res = await fetch(
-        `/registrations/teams/${contest.id}/${teamId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-ID": userId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-          },
-          body: "",
-        }
-      );
-      console.log('Team registration status:', res.status);
-      if (res.ok) showSnackbar("Team registered successfully!", "success");
-      else {
-        const errText = await res.text();
-        console.error('Team registration failed:', errText);
-        showSnackbar("Team registration failed.", "error");
-      }
+      await apiClient.post(`/registrations/teams/${contest.id}/${teamId}`);
+      showSnackbar("Team registered successfully!", "success");
     } catch (err) {
-      console.error('Error in team registration:', err);
-      showSnackbar("Network or server error.", "error");
+      showSnackbar("Team registration failed.", "error");
     }
   };
 
   const cancelTeamRegistration = async (teamId) => {
-    console.log('Cancel team registration', { competitionId: contest.id, teamId });
-    const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("userId");
-    const userRole = localStorage.getItem("userRole");
     try {
-      const res = await fetch(
-        `/registrations/teams/${contest.id}/${teamId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-ID": userId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      console.log('Cancel team status:', res.status);
-      if (res.ok) showSnackbar("Team registration cancelled!", "success");
-      else {
-        const errText = await res.text();
-        console.error('Cancel team registration failed:', errText);
-        showSnackbar("Team cancellation failed.", "error");
-      }
+      await apiClient.delete(`/registrations/teams/${contest.id}/${teamId}`);
+      showSnackbar("Team registration cancelled!", "success");
     } catch (err) {
-      console.error('Error cancelling team registration:', err);
-      showSnackbar("Network or server error.", "error");
+      showSnackbar("Team cancellation failed.", "error");
     } finally {
       setOpenTeamDialog(false);
     }
@@ -181,7 +110,6 @@ function ContestCard({ contest, onLoginRequest }) {
 
   const handleJoinClick = async (e) => {
     e.stopPropagation();
-    console.log('Join click:', contest.id, contest.participationType);
 
     if (contest.status !== "ONGOING") {
       showSnackbar("You can only join ongoing competitions.", "warning");
@@ -190,7 +118,6 @@ function ContestCard({ contest, onLoginRequest }) {
 
     const token = localStorage.getItem("token");
     if (!token) {
-      console.log('User not logged in');
       if (onLoginRequest) onLoginRequest();
       else showSnackbar("Please log in first!", "warning");
       return;
@@ -202,55 +129,23 @@ function ContestCard({ contest, onLoginRequest }) {
       return;
     }
 
-    console.log('Registering individual');
     try {
-      const userId = localStorage.getItem("userId");
-      const userRole = localStorage.getItem("userRole");
-      const res = await fetch(
-        `/registrations/${contest.id}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-ID": userId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-          },
-          body: "",
-        }
-      );
-      console.log('Individual registration status:', res.status);
-      if (res.ok) showSnackbar("Registration successful!", "success");
-      else {
-        const text = await res.text();
-        console.warn('Registration error:', text);
-        if (text.includes("already registered")) setOpenRegDialog(true);
-        else showSnackbar("Registration failed.", "error");
-      }
+      await apiClient.post(`/registrations/${contest.id}`);
+      showSnackbar("Registration successful!", "success");
     } catch (err) {
-      console.error('Error registering individual:', err);
-      showSnackbar("Network error during registration.", "error");
+      const text = typeof err.response?.data === 'string' ? err.response.data : JSON.stringify(err.response?.data || '');
+      if (text.includes("already registered")) setOpenRegDialog(true);
+      else showSnackbar("Registration failed.", "error");
     }
   };
 
   const handleCancelRegistration = async () => {
-    console.log('Cancel individual registration', contest.id);
     try {
-      const token = localStorage.getItem("token");
-      const userId = localStorage.getItem("userId");
-      const userRole = localStorage.getItem("userRole");
-      const res = await fetch(
-        `/registrations/${contest.id}`,
-        { method: "DELETE", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-ID": userId, "User-Role": userRole, Authorization: `Bearer ${token}` } }
-      );
-      console.log('Cancel status:', res.status);
-      if (res.ok) {
-        showSnackbar("Cancelled successfully!", "success");
-        setOpenRegDialog(false);
-      } else showSnackbar("Cancellation failed.", "error");
+      await apiClient.delete(`/registrations/${contest.id}`);
+      showSnackbar("Cancelled successfully!", "success");
+      setOpenRegDialog(false);
     } catch (err) {
-      console.error('Error cancelling:', err);
-      showSnackbar("Network error.", "error");
+      showSnackbar("Cancellation failed.", "error");
     }
   };
 
@@ -258,39 +153,25 @@ function ContestCard({ contest, onLoginRequest }) {
     e.stopPropagation();
 
     if (!contest?.id) {
-      console.warn("Contest ID is undefined, cannot fetch submissions.");
       showSnackbar("Invalid contest ID.", "error");
       return;
     }
 
     try {
-      const res = await fetch(
+      const res = await apiClient.get(
         `/submissions/public/approved?competitionId=${contest.id}`
       );
-
-      console.log('📥 Fetch submissions status:', res.status);
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn("Backend returned an error:", text);
-        showSnackbar("Failed to fetch submissions.", "error");
-        return;
-      }
-
-      const result = await res.json();
-      const submissions = result.data || [];
+      const submissions = res.data.data || [];
       if (submissions.length === 0) {
         showSnackbar("No approved submissions yet.", "info");
         return;
       }
-      const url = `/view-submission/${contest.id}`;
-      navigate(url);
+      navigate(`/view-submission/${contest.id}`);
     } catch (err) {
-      console.error('Error fetching submissions:', err);
       showSnackbar("Network error fetching submissions.", "error");
     }
   };
-  
+
 
   return (
     <>

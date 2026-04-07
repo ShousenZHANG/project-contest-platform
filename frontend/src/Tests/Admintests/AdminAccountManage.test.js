@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import AdminAccountManage from "../../Admin/AdminAccountManage";
 import { BrowserRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 beforeAll(() => {
   Storage.prototype.getItem = jest.fn((key) => {
@@ -14,36 +17,23 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  global.fetch = jest.fn((url, options) => {
-    if (url.includes("/users/admin/list")) {
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            data: [
-              {
-                id: "user-1",
-                name: "Test User",
-                email: "testuser@example.com",
-                description: "A test user",
-                role: "PARTICIPANT",
-              },
-            ],
-            pages: 1,
-            total: 1,
-          }),
-      });
-    }
-
-    if (url.includes("/users/") && options?.method === "DELETE") {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ message: "User deleted successfully." }),
-      });
-    }
-
-    return Promise.resolve({ ok: false });
+  apiClient.get.mockResolvedValue({
+    data: {
+      data: [
+        {
+          id: "user-1",
+          name: "Test User",
+          email: "testuser@example.com",
+          description: "A test user",
+          role: "PARTICIPANT",
+        },
+      ],
+      pages: 1,
+      total: 1,
+    },
   });
+
+  apiClient.delete.mockResolvedValue({ data: { message: "User deleted successfully." } });
 });
 
 afterEach(() => {
@@ -92,11 +82,8 @@ describe("AdminAccountManage", () => {
     const deleteButton = await screen.findByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/users/user-1"),
-      expect.objectContaining({
-        method: "DELETE",
-      })
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      expect.stringContaining("/users/user-1")
     );
   });
 });

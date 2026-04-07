@@ -29,7 +29,6 @@ function ContestCard({ contest, onCardClick }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "warning" });
 
   const handleCardClick = () => {
-    console.log("Card clicked:", contest);
     onCardClick && onCardClick(contest);
   };
 
@@ -46,7 +45,7 @@ function ContestCard({ contest, onCardClick }) {
     if (event) {
       event.stopPropagation();
     }
-    setSnackbar({ ...snackbar, open: false });
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   return (

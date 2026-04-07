@@ -43,17 +43,12 @@ function TopBar() {
 
     const fetchUserAvatar = async () => {
       try {
-        const response = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        const data = await response.json();
-        if (response.ok && data.avatarUrl) {
-          setAvatarUrl(data.avatarUrl);
+        const res = await apiClient.get('/users/profile');
+        if (res.data?.avatarUrl) {
+          setAvatarUrl(res.data.avatarUrl);
         }
       } catch (error) {
-        console.error("Failed to fetch user avatar:", error);
+        // Avatar fetch failed silently
       }
     };
 
@@ -65,15 +60,15 @@ function TopBar() {
 
   const handleConfirmLogout = async () => {
     try {
-      await fetch("/users/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
+      await apiClient.post("/users/logout");
     } catch (err) {
-      console.error("Logout error:", err);
+      // Logout API call failed silently
     }
 
-    localStorage.clear();
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("email");
+    localStorage.removeItem("role");
     setOpen(false);
     window.location.href = "/";
   };

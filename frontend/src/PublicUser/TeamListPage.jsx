@@ -32,16 +32,13 @@ function TeamListPage() {
   useEffect(() => {
     const fetchTeams = async () => {
       try {
-        const response = await fetch(
-          `/registrations/public/${contestId}/teams?page=1&size=100`
+        const response = await apiClient.get(
+          `/registrations/public/${contestId}/teams`,
+          { params: { page: 1, size: 100 } }
         );
-        if (!response.ok) {
-          throw new Error("Failed to fetch team data");
-        }
-        const result = await response.json();
-        setTeams(result.data || []);
+        setTeams(response.data.data || []);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Failed to fetch team data");
       } finally {
         setLoading(false);
       }

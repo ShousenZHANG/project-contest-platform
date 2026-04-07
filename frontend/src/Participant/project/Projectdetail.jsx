@@ -1,6 +1,6 @@
 /**
  * @file ProjectDetail.js
- * @description 
+ * @description
  * This component provides participants with the ability to view, edit, and delete their competition submissions.
  * Key functionalities include:
  *  - Fetching and displaying submission details for a specific competition.
@@ -9,7 +9,7 @@
  *  - Displaying operation feedback through Snackbar notifications.
  *  - Handling both loading and error states during data fetching.
  *  - Seamlessly integrating with backend APIs for submission management.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -28,7 +28,6 @@ import {
 // Use useParams and useNavigate to get route params and navigation methods
 import { useParams, useNavigate } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-// Import top navigation bar and sidebar components
 // Import page styles
 import './Projectdetail.css';
 import apiClient from '../../api/apiClient';
@@ -57,16 +56,10 @@ function ProjectDetail() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await response.json();
-        setUserData(data);
+        const res = await apiClient.get('/users/profile');
+        setUserData(res.data);
       } catch (err) {
-        console.error("获取用户信息失败:", err);
+        console.error("Failed to fetch user data:", err);
       }
     };
     fetchUserData();
@@ -78,25 +71,11 @@ function ProjectDetail() {
 
     const fetchSubmissionDetail = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/submissions/${competitionId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-ID': userData.userId,
-            'User-Role': userData.role || '',
-            Authorization: `Bearer ${token}`
-          }
-        });
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Failed to fetch submission details: ${errText}`);
-        }
-        const data = await response.json();
-        setSubmission(data);
+        const res = await apiClient.get(`/submissions/${competitionId}`);
+        setSubmission(res.data);
         setLoading(false);
       } catch (err) {
-        setError(err.message || "Error fetching submission details");
+        setError(err.response?.data || err.message || "Error fetching submission details");
         setLoading(false);
       }
     };
@@ -112,23 +91,10 @@ function ProjectDetail() {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/submissions/${submission.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-ID': userData.userId,
-          'User-Role': userData.role || '',
-          Authorization: `Bearer ${token}`
-        }
-      });
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(errText);
-      }
+      await apiClient.delete(`/submissions/${submission.id}`);
       setSnackbarMessage("Submission deleted successfully!");
       setSnackbarOpen(true);
-      // After deletion, navigate back to the list page (assuming the list page route is /project)
+      // After deletion, navigate back to the list page
       setTimeout(() => navigate(-1), 1500);
     } catch (err) {
       setSnackbarMessage("Failed to delete submission");
@@ -157,37 +123,21 @@ function ProjectDetail() {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      const userId = userData.userId;
-      const userRole = userData.role || '';
-
       const formData = new FormData();
       formData.append('competitionId', competitionId);
       formData.append('title', updatedTitle);
       formData.append('description', updatedDescription);
       formData.append('file', updatedFile);
 
-      const response = await fetch('/submissions/upload', {
-        method: 'POST',
-        headers: {
-          'User-ID': userId,
-          'User-Role': userRole,
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
+      const res = await apiClient.post('/submissions/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-      const updatedSubmission = await response.json();
-      setSubmission(updatedSubmission);
+      setSubmission(res.data);
       setSnackbarMessage("Submission updated successfully!");
       setSnackbarOpen(true);
       setEditMode(false);
     } catch (err) {
-      alert("Update failed: " + err.message);
+      alert("Update failed: " + (err.response?.data || err.message));
     }
   };
 
@@ -206,9 +156,9 @@ function ProjectDetail() {
 
   return (
     <>
-      
+
       <div className="participant-project-container">
-        
+
         <div className="participant-project-content">
           {/* Back button fixed at top-left of content area */}
           <div className="back-button" onClick={() => navigate(-1)}>

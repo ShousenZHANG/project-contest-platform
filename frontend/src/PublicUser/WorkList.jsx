@@ -58,24 +58,33 @@ function WorkList() {
       if (!competitionId) return;
       setLoading(true);
       try {
-        const res = await fetch(`/submissions/public/approved?competitionId=${competitionId}`);
-        const result = await res.json();
-        const mappedWorks = await Promise.all(result.data.map(async (item, idx) => {
-          const voteRes = await fetch(`/interactions/votes/count?submissionId=${item.id}`);
-          const voteCount = voteRes.ok ? await voteRes.text() : "0";
+        const res = await apiClient.get(`/submissions/public/approved`, {
+          params: { competitionId },
+        });
+        const items = res.data.data || [];
+        const mappedWorks = await Promise.all(items.map(async (item, idx) => {
+          let voteCount = 0;
+          try {
+            const voteRes = await apiClient.get(`/interactions/votes/count`, {
+              params: { submissionId: item.id },
+            });
+            voteCount = parseInt(voteRes.data, 10) || 0;
+          } catch {
+            // vote count fetch failed — default to 0
+          }
           return {
             id: item.id || String(idx),
             title: item.title || `Work ${idx}`,
             description: item.description || "No description.",
             fileType: item.fileType || "",
             fileUrl: item.fileUrl || "",
-            voteCount: parseInt(voteCount, 10) || 0
+            voteCount,
           };
         }));
         setWorks(mappedWorks);
-        setFilteredWorks(mappedWorks); // 初始显示全部
+        setFilteredWorks(mappedWorks);
       } catch (err) {
-        console.error("Error fetching works:", err);
+        // fetch failed — works remain empty
       } finally {
         setLoading(false);
       }
@@ -84,7 +93,6 @@ function WorkList() {
   }, [competitionId]);
 
   const handleSearchClick = () => {
-    console.log("[Search] searchInput:", searchInput);
     const term = searchInput.trim().toLowerCase();
     if (!term) {
       setFilteredWorks(works); // 输入为空，恢复全量
@@ -96,9 +104,8 @@ function WorkList() {
     }
   };
 
-  const handleVoteClick = (work) => {
-    console.log("Vote clicked:", work);
-    setSnackbarOpen(true); // 这里可以接入真正的投票逻辑
+  const handleVoteClick = () => {
+    setSnackbarOpen(true);
   };
 
   const handleSnackbarClose = () => setSnackbarOpen(false);

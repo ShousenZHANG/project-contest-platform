@@ -18,7 +18,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Snackbar, Alert } from "@mui/material";
-import axios from "axios";
+import apiClient from "../../api/apiClient";
 
 function ProjectComment({ submissionId }) {
   const [comments, setComments] = useState([]);
@@ -33,7 +33,7 @@ function ProjectComment({ submissionId }) {
   useEffect(() => {
     if (submissionId) {
       setCommentsLoading(true);
-      axios
+      apiClient
         .get(`/interactions/comments/list`, {
           params: {
             submissionId: submissionId,
@@ -47,8 +47,7 @@ function ProjectComment({ submissionId }) {
           setComments(res.data.data || []);
           setCommentsLoading(false);
         })
-        .catch((err) => {
-          console.error("Failed to fetch comments:", err);
+        .catch(() => {
           setComments([]);
           setCommentsLoading(false);
         });
@@ -82,13 +81,8 @@ function ProjectComment({ submissionId }) {
       content: newComment,
     };
 
-    axios
-      .post(`/interactions/comments`, commentData, {
-        headers: {
-          "User-ID": userId,
-          "Authorization": `Bearer ${token}`,
-        },
-      })
+    apiClient
+      .post(`/interactions/comments`, commentData)
       .then(() => {
         setSnackbarMessage("Comment posted successfully!");
         setSnackbarSeverity("success");

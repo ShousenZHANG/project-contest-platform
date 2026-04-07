@@ -7,9 +7,9 @@
  *  - Upload a new avatar.
  *  - Delete their own account permanently.
  *  - Password must meet specific strength criteria (minimum 8 characters, at least one uppercase letter).
- * 
+ *
  * The email and role fields are read-only.
- * 
+ *
  * Role: Organizer
  * Developer: Zhaoyi Yang
  */
@@ -38,14 +38,9 @@ function OrganizerProfile() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await response.json();
-        if (response.ok) {
+        const response = await apiClient.get('/users/profile');
+        const data = response.data;
+        if (data) {
           setFormData({
             name: data.name || '',
             email: data.email || '',
@@ -56,7 +51,7 @@ function OrganizerProfile() {
           setAvatarUrl(data.avatarUrl);
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        // Failed to fetch user data
       }
     };
 
@@ -75,32 +70,18 @@ function OrganizerProfile() {
     if (formData.password) {
       const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
       if (!passwordRegex.test(formData.password)) {
-        alert('❌ Password must be at least 8 characters and contain at least one uppercase letter.');
+        alert('Password must be at least 8 characters and contain at least one uppercase letter.');
         return;
       }
     }
 
     try {
-      const response = await fetch('/users/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': localStorage.getItem('userId')
-        },
-        body: JSON.stringify({
-          ...formData,
-          avatarUrl
-        })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        alert('Profile updated successfully');
-      } else {
-        alert(data.message || 'Error updating profile');
-      }
+      const { role, ...profileData } = formData;
+      await apiClient.put('/users/profile', { ...profileData, avatarUrl });
+      alert('Profile updated successfully');
     } catch (error) {
-      console.error('Error updating profile:', error);
+      const msg = error.response?.data?.message || 'Error updating profile';
+      alert(msg);
     }
   };
 
@@ -121,34 +102,26 @@ function OrganizerProfile() {
 
   const handleAvatarSave = async () => {
     if (!tempAvatar) return;
-  
+
     const formDataUpload = new FormData();
     formDataUpload.append('file', tempAvatar);
-  
-    try {
-      const response = await fetch('/users/profile/avatar', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': localStorage.getItem('userId')
-        },
-        body: formDataUpload
-      });
-      const data = await response.json();
-      if (response.ok) {
-        if (avatarUrl) {
-          URL.revokeObjectURL(avatarUrl);
-        }
-        setAvatarUrl(data.avatarUrl);
 
+    try {
+      const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const data = response.data;
+      if (data?.avatarUrl) {
+        setAvatarUrl(data.avatarUrl);
         window.location.reload();
       } else {
-        alert(data.message || 'Error uploading avatar');
+        alert('Error uploading avatar');
       }
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      const msg = error.response?.data?.message || 'Error uploading avatar';
+      alert(msg);
     }
-  
+
     setTempAvatar(null);
     setTempAvatarUrl('');
     setAvatarDialogOpen(false);
@@ -165,29 +138,18 @@ function OrganizerProfile() {
 
   const handleDeleteAccount = async () => {
     const userId = localStorage.getItem('userId');
-    const role = localStorage.getItem('role');
 
     try {
-      const response = await fetch(`/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': userId,
-          'User-Role': role
-        }
-      });
-
-      if (response.ok) {
-        alert('Your account has been deleted.');
-        localStorage.clear();
-        window.location.href = '/';
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Error deleting account.');
-      }
+      await apiClient.delete(`/users/${userId}`);
+      alert('Your account has been deleted.');
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("email");
+      localStorage.removeItem("role");
+      window.location.href = '/';
     } catch (error) {
-      console.error('Error deleting account:', error);
-      alert('Server error while deleting account.');
+      const msg = error.response?.data?.message || 'Error deleting account.';
+      alert(msg);
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -195,17 +157,17 @@ function OrganizerProfile() {
 
   useEffect(() => {
     return () => {
-      if (avatarUrl) {
-        URL.revokeObjectURL(avatarUrl);
+      if (tempAvatarUrl) {
+        URL.revokeObjectURL(tempAvatarUrl);
       }
     };
-  }, [avatarUrl]);
+  }, [tempAvatarUrl]);
 
   return (
     <>
-      
+
       <div className="profile-container">
-        
+
         <div className="profile-content">
           <div className="profile-header">
             <div className="profile-avatar" onClick={handleAvatarIconClick}>

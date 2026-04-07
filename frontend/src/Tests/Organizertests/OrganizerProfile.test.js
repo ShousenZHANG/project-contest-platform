@@ -2,35 +2,27 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerProfile from "../../Organizer/Profile";
 import { MemoryRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 beforeEach(() => {
   localStorage.setItem("token", "fake-token");
   localStorage.setItem("userId", "fake-user-id");
   localStorage.setItem("role", "organizer");
 
-  global.fetch = jest.fn((url, options) => {
-    if (url.endsWith("/users/profile") && (!options || options.method === "GET" || !options.method)) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          name: "Test User",
-          email: "test@example.com",
-          description: "A test user",
-          avatarUrl: "/test-avatar.png",
-        }),
-      });
-    }
-    if (url.endsWith("/users/profile") && options?.method === "PUT") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-    if (url.endsWith("/users/profile/avatar") && options?.method === "POST") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ avatarUrl: "/new-avatar.png" }) });
-    }
-    if (url.includes("/users/") && options?.method === "DELETE") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  apiClient.get.mockResolvedValue({
+    data: {
+      name: "Test User",
+      email: "test@example.com",
+      description: "A test user",
+      avatarUrl: "/test-avatar.png",
+    },
   });
+
+  apiClient.put.mockResolvedValue({ data: {} });
+  apiClient.post.mockResolvedValue({ data: { avatarUrl: "/new-avatar.png" } });
+  apiClient.delete.mockResolvedValue({ data: {} });
 
   window.alert = jest.fn();
   window.URL.createObjectURL = jest.fn(() => "blob:fake-url");
@@ -72,7 +64,7 @@ describe("OrganizerProfile", () => {
     renderProfile();
 
     const avatars = await screen.findAllByAltText("User Avatar");
-    fireEvent.click(avatars[1]);
+    fireEvent.click(avatars[0]);
     await waitFor(() => {
       expect(screen.getByText("Upload Avatar")).toBeInTheDocument();
     });

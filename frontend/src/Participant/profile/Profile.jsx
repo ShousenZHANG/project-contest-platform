@@ -1,6 +1,6 @@
 /**
  * @file Profile.js
- * @description 
+ * @description
  * This component allows participants to view and update their profile information.
  * Features include:
  *  - Viewing and editing basic user information (name, email, password, description).
@@ -9,7 +9,7 @@
  *  - Providing real-time feedback through Snackbar notifications.
  *  - Utilizing Material-UI components for consistent and user-friendly design.
  * The component communicates with the backend API for fetching, updating, and deleting user data.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -39,7 +39,7 @@ function Profile() {
   const [tempAvatar, setTempAvatar] = useState(null);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'warning' }); // Orange color
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'warning' });
 
   const showSnackbar = (message, severity = 'warning') => {
     setSnackbar({ open: true, message, severity });
@@ -49,20 +49,15 @@ function Profile() {
     if (event) {
       event.stopPropagation();
     }
-    setSnackbar({ ...snackbar, open: false });
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await response.json();
-        if (response.ok) {
+        const response = await apiClient.get('/users/profile');
+        const data = response.data;
+        if (data) {
           setFormData({
             name: data.name || '',
             email: data.email || '',
@@ -73,7 +68,7 @@ function Profile() {
           setAvatarUrl(data.avatarUrl);
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        // Failed to fetch user data
       }
     };
 
@@ -97,27 +92,12 @@ function Profile() {
     }
 
     try {
-      const response = await fetch('/users/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': localStorage.getItem('userId')
-        },
-        body: JSON.stringify({
-          ...formData,
-          avatarUrl
-        })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        showSnackbar('Profile updated successfully!', 'success');
-      } else {
-        showSnackbar(data.message || 'Error updating profile.', 'error');
-      }
+      const { role, ...profileData } = formData;
+      await apiClient.put('/users/profile', { ...profileData, avatarUrl });
+      showSnackbar('Profile updated successfully!', 'success');
     } catch (error) {
-      console.error('Error updating profile:', error);
-      showSnackbar('Server error while updating profile.', 'error');
+      const msg = error.response?.data?.message || 'Error updating profile.';
+      showSnackbar(msg, 'error');
     }
   };
 
@@ -160,29 +140,22 @@ function Profile() {
     formDataUpload.append('file', tempAvatar);
 
     try {
-      const response = await fetch('/users/profile/avatar', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': localStorage.getItem('userId')
-        },
-        body: formDataUpload
+      const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-
-      const data = await response.json();
-      if (response.ok) {
+      const data = response.data;
+      if (data?.avatarUrl) {
         setAvatarUrl(data.avatarUrl);
         setTempAvatar(null);
         setTempAvatarUrl('');
         setAvatarDialogOpen(false);
         window.location.reload(true);
       } else {
-        console.error('Error uploading avatar:', data);
-        showSnackbar(data.message || 'Error uploading avatar.', 'error');
+        showSnackbar('Error uploading avatar.', 'error');
       }
     } catch (error) {
-      console.error('Error uploading avatar:', error);
-      showSnackbar('Failed to upload avatar.', 'error');
+      const msg = error.response?.data?.message || 'Failed to upload avatar.';
+      showSnackbar(msg, 'error');
     }
   };
 
@@ -202,31 +175,20 @@ function Profile() {
 
   const handleDeleteAccount = async () => {
     const userId = localStorage.getItem('userId');
-    const role = localStorage.getItem('role');
 
     try {
-      const response = await fetch(`/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'User-ID': userId,
-          'User-Role': role
-        }
-      });
-
-      if (response.ok) {
-        showSnackbar('Your account has been deleted.', 'success');
-        localStorage.clear();
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1500);
-      } else {
-        const data = await response.json();
-        showSnackbar(data.message || 'Error deleting account.', 'error');
-      }
+      await apiClient.delete(`/users/${userId}`);
+      showSnackbar('Your account has been deleted.', 'success');
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("email");
+      localStorage.removeItem("role");
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
     } catch (error) {
-      console.error('Error deleting account:', error);
-      showSnackbar('Server error while deleting account.', 'error');
+      const msg = error.response?.data?.message || 'Error deleting account.';
+      showSnackbar(msg, 'error');
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -234,21 +196,19 @@ function Profile() {
 
   useEffect(() => {
     return () => {
-      if (avatarUrl) {
-        URL.revokeObjectURL(avatarUrl);
+      if (tempAvatarUrl) {
+        URL.revokeObjectURL(tempAvatarUrl);
       }
     };
-  }, [avatarUrl]);
+  }, [tempAvatarUrl]);
 
   return (
     <>
-      
+
       <div className="Participantprofile-container">
-        
+
         <div className="Participantprofile-content">
-          {/* 👇 The entire work badge, including the lanyard hole + avatar + form */}
           <div className="profile-badge">
-            {/* The lanyard hole is ::before. Just put the avatar here directly */}
             <div
               className="profile-avatar"
               style={{ position: 'relative', marginTop: '-60px' }}
@@ -267,13 +227,11 @@ function Profile() {
                   boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
                 }}
               />
-              <div className="edit-icon" title="Edit Avatar">✏️</div>
+              <div className="edit-icon" title="Edit Avatar">Edit</div>
             </div>
 
-            {/* Form section */}
             <form className="profile-form" onSubmit={handleSubmit}>
               <div className="profile-form-columns">
-                {/* Left Column */}
                 <div className="form-left">
                   <div className="input-group">
                     <BadgeIcon style={{ marginRight: '8px' }} />
@@ -301,7 +259,6 @@ function Profile() {
 
                 </div>
 
-                {/* Right Column */}
                 <div className="form-right">
                   <div className="input-group">
                     <DescriptionIcon style={{ marginRight: '8px' }} />
@@ -309,18 +266,16 @@ function Profile() {
                   </div>
                   <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Tell us about yourself"
                     style={{ minHeight: '150px' }} />
-                  <button type="submit" className="save-button">💾 Save</button>
-                  <button type="button" onClick={() => setDeleteDialogOpen(true)} className="delete-button">🗑️ Delete Account</button>
+                  <button type="submit" className="save-button">Save</button>
+                  <button type="button" onClick={() => setDeleteDialogOpen(true)} className="delete-button">Delete Account</button>
                 </div>
               </div>
             </form>
 
           </div>
-          {/* 👆 profile-badge end */}
         </div>
       </div>
 
-      {/* Avatar Upload Dialog */}
       <Dialog open={avatarDialogOpen} onClose={handleAvatarDialogClose}>
         <DialogTitle>Upload Avatar</DialogTitle>
         <DialogContent>
@@ -332,7 +287,6 @@ function Profile() {
         </DialogActions>
       </Dialog>
 
-      {/* Delete Account Dialog */}
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>Delete Account</DialogTitle>
         <DialogContent>Are you sure you want to delete your account? This action is irreversible.</DialogContent>
@@ -342,7 +296,6 @@ function Profile() {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for feedback */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

@@ -56,27 +56,13 @@ function AdminAccountManage() {
         order: "desc",
       });
 
-      const response = await fetch(
-        `/users/admin/list?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "User-ID": localStorage.getItem("userId"),
-            "User-Role": localStorage.getItem("role"),
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-      if (response.ok) {
-        setUsers(data.data);
-        setTotalPages(data.pages);
-      } else {
-        alert(data.message || "Failed to fetch users");
-      }
+      const response = await apiClient.get(`/users/admin/list?${params.toString()}`);
+      const data = response.data;
+      setUsers(data.data);
+      setTotalPages(data.pages);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      const msg = error.response?.data?.message || "Failed to fetch users";
+      alert(msg);
     } finally {
       setLoading(false);
     }
@@ -84,12 +70,7 @@ function AdminAccountManage() {
 
   useEffect(() => {
     fetchUsers(page, roleFilter, keyword);
-  }, [page, roleFilter, keyword]);  
-
-  useEffect(() => {
-    setPage(1);
-    fetchUsers(1, roleFilter, keyword);
-  }, [roleFilter, keyword]);
+  }, [page, roleFilter, keyword]);
 
   const handlePageChange = (_, value) => {
     setPage(value);
@@ -99,25 +80,12 @@ function AdminAccountManage() {
     if (!window.confirm("Are you sure you want to delete this user?")) return;
 
     try {
-      const response = await fetch(`/users/${userId}`, {
-        method: "DELETE",
-        headers: {
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role"),
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      if (response.ok) {
-        alert("User deleted successfully.");
-        fetchUsers(page, roleFilter, keyword);
-      } else {
-        const err = await response.json();
-        alert(err.message || "Failed to delete user.");
-      }
+      await apiClient.delete(`/users/${userId}`);
+      alert("User deleted successfully.");
+      fetchUsers(page, roleFilter, keyword);
     } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("An error occurred while deleting user.");
+      const msg = error.response?.data?.message || "Failed to delete user.";
+      alert(msg);
     }
   };
 

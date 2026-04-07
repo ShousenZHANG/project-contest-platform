@@ -52,9 +52,6 @@ function OrganizerSubmissions() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
   const email = localStorage.getItem("email");
-  const token = localStorage.getItem("token");
-  const userId = localStorage.getItem("userId");
-  const role = localStorage.getItem("role");
 
   const [submissions, setSubmissions] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -74,43 +71,27 @@ function OrganizerSubmissions() {
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `/submissions/public?competitionId=${competitionId}&page=${page}&size=10&keyword=${keyword}&sortBy=${sortBy}&order=${order}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.get(
+        `/submissions/public?competitionId=${competitionId}&page=${page}&size=10&keyword=${keyword}&sortBy=${sortBy}&order=${order}`
       );
-      const data = await res.json();
-      if (res.ok) {
-        setSubmissions(data.data || []);
-        setTotalPages(data.pages || 1);
-        setTotalCount(data.total || 0);
-      } else {
-        console.error("Failed to fetch submissions:", data);
-      }
-    } catch (err) {
-      console.error("Error fetching submissions:", err);
+      const data = res.data;
+      setSubmissions(data.data || []);
+      setTotalPages(data.pages || 1);
+      setTotalCount(data.total || 0);
+    } catch {
+      // fetch error handled silently
     } finally {
       setLoading(false);
     }
-  }, [competitionId, page, keyword, sortBy, order, token, userId, role]);
+  }, [competitionId, page, keyword, sortBy, order]);
 
   useEffect(() => {
     const fetchCompetitionName = async () => {
       try {
-        const res = await fetch(`/competitions/${competitionId}`);
-        const data = await res.json();
-        if (res.ok) {
-          setCompetitionName(data.name || "Unnamed Competition");
-        } else {
-          console.error("Failed to fetch competition name:", data);
-        }
-      } catch (err) {
-        console.error("Error fetching competition name:", err);
+        const res = await apiClient.get(`/competitions/${competitionId}`);
+        setCompetitionName(res.data.name || "Unnamed Competition");
+      } catch {
+        // fetch error handled silently
       }
     };
     fetchCompetitionName();
@@ -140,31 +121,16 @@ function OrganizerSubmissions() {
   const handleReviewSubmit = async () => {
     if (!selectedSubmission) return;
     try {
-      const res = await fetch("/submissions/review", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-ID": userId,
-          "User-Role": role.toUpperCase(),
-        },
-        body: JSON.stringify({
-          submissionId: selectedSubmission.id,
-          reviewStatus,
-          reviewComments,
-        }),
+      await apiClient.post("/submissions/review", {
+        submissionId: selectedSubmission.id,
+        reviewStatus,
+        reviewComments,
       });
-      if (res.ok) {
-        alert("✅ Review submitted successfully");
-        setDialogOpen(false);
-        fetchSubmissions();
-      } else {
-        const err = await res.json();
-        alert("❌ Review failed: " + err.message);
-      }
-    } catch (err) {
-      alert("❌ Error submitting review");
-      console.error(err);
+      alert("✅ Review submitted successfully");
+      setDialogOpen(false);
+      fetchSubmissions();
+    } catch (error) {
+      alert("❌ Review failed: " + (error.response?.data?.message || "Error submitting review"));
     }
   };
 

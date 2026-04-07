@@ -1,8 +1,8 @@
 /**
  * ReRating.js
- * 
+ *
  * This component allows judges to update their previous rating for a submission. It fetches the initial judging details and provides sliders to adjust scores and a text field for feedback. Once the rating is updated, the data is submitted to the backend.
- * 
+ *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
@@ -39,36 +39,21 @@ function ReRating() {
 
   useEffect(() => {
     const fetchJudgingDetails = async () => {
-      const token = localStorage.getItem('token');
-      const userId = localStorage.getItem('userId');
-      if (!token || !userId) return;
-
       try {
-        const res = await fetch(`/judges/${submissionId}/detail`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'User-ID': userId,
-          },
+        const res = await apiClient.get(`/judges/${submissionId}/detail`);
+        const data = res.data;
+        const newScores = {};
+        const newWeights = {};
+        data.scores.forEach(s => {
+          newScores[s.criterion] = s.score;
+          newWeights[s.criterion] = s.weight;
         });
-
-        const data = await res.json();
-        if (res.ok) {
-          const newScores = {};
-          const newWeights = {};
-          data.scores.forEach(s => {
-            newScores[s.criterion] = s.score;
-            newWeights[s.criterion] = s.weight;
-          });
-          setScoringCriteria(data.scores.map(s => s.criterion));
-          setScores(newScores);
-          setWeights(newWeights);
-          setFeedback(data.judgeComments || '');
-        } else {
-          console.error('Failed to fetch judging detail:', data);
-        }
+        setScoringCriteria(data.scores.map(s => s.criterion));
+        setScores(newScores);
+        setWeights(newWeights);
+        setFeedback(data.judgeComments || '');
       } catch (err) {
-        console.error('Error fetching judging detail:', err);
+        // Failed to fetch judging detail
       } finally {
         setLoading(false);
       }
@@ -82,10 +67,6 @@ function ReRating() {
   };
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-    if (!token || !userId) return;
-
     const scoreArray = scoringCriteria.map(criterion => ({
       criterion,
       score: scores[criterion],
@@ -93,39 +74,25 @@ function ReRating() {
     }));
 
     try {
-      const res = await fetch(`/judges/${submissionId}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-ID': userId,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          competitionId,
-          submissionId,
-          judgeComments: feedback,
-          scores: scoreArray,
-        }),
+      await apiClient.put(`/judges/${submissionId}`, {
+        competitionId,
+        submissionId,
+        judgeComments: feedback,
+        scores: scoreArray,
       });
-
-      if (res.ok) {
-        setSnackbar({ open: true, message: 'Rating updated successfully ✅', severity: 'success' });
-        setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
-      } else {
-        const data = await res.json();
-        setSnackbar({ open: true, message: `Failed to update: ${data.error}`, severity: 'error' });
-      }
+      setSnackbar({ open: true, message: 'Rating updated successfully', severity: 'success' });
+      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
     } catch (err) {
-      console.error('Error updating rating:', err);
-      setSnackbar({ open: true, message: 'Error updating rating ❌', severity: 'error' });
+      const errorMsg = err.response?.data?.error || 'Error updating rating';
+      setSnackbar({ open: true, message: errorMsg, severity: 'error' });
     }
   };
 
   return (
     <>
-      
+
       <div className="rating-container">
-        
+
         <div className="rating-content">
           <Typography variant="h5" gutterBottom>
             Update Your Rating

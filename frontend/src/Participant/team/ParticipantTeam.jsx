@@ -63,32 +63,24 @@ function ParticipantTeam() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await res.json();
+        const res = await apiClient.get('/users/profile');
+        const data = res.data;
         data.userId = localStorage.getItem('userId');
-        console.log('[Debug] User data:', data);
         setUserData(data);
       } catch (error) {
-        console.error('[Debug] Failed to fetch user data:', error);
+        console.error('Failed to fetch user data:', error);
       }
     })();
   }, []);
 
   useEffect(() => {
     if (userData?.userId) {
-      console.log('[Debug] useEffect triggered, calling fetchTeams...');
       fetchJoinedTeams(userData, setJoinedTeams);
       fetchTeams({ page, keyword, sortBy, order }, setTeams, setPages);
     }
   }, [userData, page, keyword, sortBy, order]);
 
   if (!userData) return null;
-  console.log('[Render] Current team list length:', teams.length);
 
   const handleUpdateMyTeams = () => {
     fetchMyTeams(userData, setMyTeams);

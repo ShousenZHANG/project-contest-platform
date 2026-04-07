@@ -110,27 +110,11 @@ function OrganizerContest() {
         imageUrls: [],
         introVideoUrl: "",
       };
-      console.log("Sending payload:", payload);
-
-      const response = await fetch("/competitions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        alert("🎉 Contest created successfully!");
-        navigate(`/OrganizerContestList/${email}`);
-      } else {
-        alert("❌ Failed to create contest: " + (data.message || "Unknown error"));
-      }
+      await apiClient.post("/competitions", payload);
+      alert("🎉 Contest created successfully!");
+      navigate(`/OrganizerContestList/${email}`);
     } catch (error) {
-      console.error("Error creating contest:", error);
-      alert("❌ Server error. Please try again.");
+      alert("❌ Failed to create contest: " + (error.response?.data?.message || "Server error. Please try again."));
     }
   };
 

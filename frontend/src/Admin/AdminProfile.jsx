@@ -76,7 +76,8 @@ function AdminProfile() {
     }
 
     try {
-      const response = await apiClient.put('/users/profile', { ...formData, avatarUrl });
+      const { role, ...profileData } = formData;
+      const response = await apiClient.put('/users/profile', { ...profileData, avatarUrl });
       const data = response.data;
       if (data) {
         alert('Profile updated successfully');
@@ -115,9 +116,6 @@ function AdminProfile() {
       });
       const data = response.data;
       if (data) {
-        if (avatarUrl) {
-          URL.revokeObjectURL(avatarUrl);
-        }
         setAvatarUrl(data.avatarUrl);
 
         window.location.reload();
@@ -144,11 +142,11 @@ function AdminProfile() {
 
   useEffect(() => {
     return () => {
-      if (avatarUrl) {
-        URL.revokeObjectURL(avatarUrl);
+      if (tempAvatarUrl) {
+        URL.revokeObjectURL(tempAvatarUrl);
       }
     };
-  }, [avatarUrl]);
+  }, [tempAvatarUrl]);
 
   return (
     <>

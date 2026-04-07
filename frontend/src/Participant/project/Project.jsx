@@ -1,6 +1,6 @@
 /**
  * @file Project.js
- * @description 
+ * @description
  * This component allows participants to manage their contest participation and submissions.
  * Key functionalities include:
  *  - Viewing a list of joined contests in both individual and team modes.
@@ -10,7 +10,7 @@
  *  - Switching between individual and team registration views.
  *  - Providing real-time feedback through Snackbar notifications.
  *  - Integrating with backend APIs to fetch registration, contest, and submission data.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -53,46 +53,28 @@ function Project() {
 
   const navigate = useNavigate();
 
-  // 1️⃣ Fetch user information
+  // 1. Fetch user information
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await res.json();
-        console.log('[Debug] User data:', data);
-        setUserData(data);
+        const res = await apiClient.get('/users/profile');
+        setUserData(res.data);
       } catch (error) {
-        console.error('[Debug] Failed to fetch user data:', error);
+        console.error('Failed to fetch user data:', error);
       }
     })();
   }, []);
 
   /**
-   * 2️⃣ Fetch personal registrations (wrapped in useCallback so the reference is stable)
+   * 2. Fetch personal registrations (wrapped in useCallback so the reference is stable)
    */
   const fetchRegistrations = useCallback(
     async (currentPage = 1) => {
       try {
-        const url = new URL('/registrations/my');
-        url.searchParams.append('page', currentPage);
-        url.searchParams.append('size', pagination.size);
-
-        const response = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-ID': userData?.userId ?? '',
-            'User-Role': userData?.role ?? '',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
+        const res = await apiClient.get('/registrations/my', {
+          params: { page: currentPage, size: pagination.size }
         });
-        const data = await response.json();
-        console.log('[Debug] Registration data:', data);
+        const data = res.data;
         setRegistrationData(Array.isArray(data.data) ? data.data : []);
         setPagination(prev => ({
           ...prev,
@@ -101,15 +83,15 @@ function Project() {
           pages: data.pages ?? 0
         }));
       } catch (error) {
-        console.error('[Debug] Failed to fetch registration info:', error);
+        console.error('Failed to fetch registration info:', error);
         setRegistrationData([]);
       }
     },
-    [pagination.size, userData]
+    [pagination.size]
   );
 
   /**
-   * 3️⃣ Fetch data whenever userData / page / mode changes
+   * 3. Fetch data whenever userData / page / mode changes
    */
   useEffect(() => {
     if (!userData) return;
@@ -119,28 +101,15 @@ function Project() {
     // Team mode data is fetched inside TeamRegistrations component
   }, [userData, pagination.page, viewMode, fetchRegistrations]);
 
-  // 4️⃣ Populate submission details for personal entries
+  // 4. Populate submission details for personal entries
   useEffect(() => {
     if (viewMode !== 'personal' || !userData || registrationData.length === 0) return;
     registrationData
       .filter(item => item.hasSubmitted && !item.fileName)
       .forEach(async item => {
         try {
-          const res = await fetch(`/submissions/${item.competitionId}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'User-ID': userData.userId,
-              'User-Role': userData.role || '',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          if (!res.ok) {
-            console.error('[Debug] Failed to fetch submission details:', res.status);
-            return;
-          }
-          const submissionData = await res.json();
-          console.log('[Debug] Submission details for', item.competitionId, submissionData);
+          const res = await apiClient.get(`/submissions/${item.competitionId}`);
+          const submissionData = res.data;
           setRegistrationData(prev =>
             prev.map(reg =>
               reg.competitionId === item.competitionId
@@ -149,14 +118,13 @@ function Project() {
             )
           );
         } catch (err) {
-          console.error('[Debug] Error fetching submission details:', err);
+          console.error('Error fetching submission details:', err);
         }
       });
   }, [registrationData, userData, viewMode]);
 
   // Open/close the submit dialog
   const handleOpenSubmitDialog = competitionId => {
-    console.log('[Debug] Open submit dialog:', competitionId);
     setSelectedCompetitionId(competitionId);
     setOpenSubmitDialog(true);
   };
@@ -165,7 +133,7 @@ function Project() {
     setSelectedCompetitionId(null);
   };
 
-  // 5️⃣ Submission or edit logic (unchanged)
+  // 5. Submission or edit logic
   const handleDialogSubmit = async ({ title, description, file }) => {
     if (!file) {
       setSnackbarMessage('Please select a file to upload!');
@@ -175,26 +143,10 @@ function Project() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const userId = userData.userId;
-      const userRole = userData.role || '';
-
       // Fetch competition details
-      const detailResponse = await fetch(`/competitions/${selectedCompetitionId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Bearer ${token}`
-        }
-      });
-      if (!detailResponse.ok) {
-        const errText = await detailResponse.text();
-        console.error('[Debug] Failed to fetch competition details:', detailResponse.status, errText);
-        throw new Error('Failed to get competition details');
-      }
-      const competitionDetail = await detailResponse.json();
+      const detailRes = await apiClient.get(`/competitions/${selectedCompetitionId}`);
+      const competitionDetail = detailRes.data;
       const allowedSubmissionTypes = competitionDetail.allowedSubmissionTypes || [];
-      console.log('[Debug] Allowed types:', allowedSubmissionTypes);
       setAllowedTypes(allowedSubmissionTypes);
 
       // Validate file type
@@ -227,21 +179,10 @@ function Project() {
       formData.append('file', file);
 
       // Upload
-      const uploadResponse = await fetch('/submissions/upload', {
-        method: 'POST',
-        headers: {
-          'User-ID': userId,
-          'User-Role': userRole,
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
+      await apiClient.post('/submissions/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      if (!uploadResponse.ok) {
-        const errText = await uploadResponse.text();
-        console.error('[Debug] Upload failed:', uploadResponse.status, errText);
-        throw new Error('Failed to submit work');
-      }
-      console.log('[Debug] Upload successful!');
+
       // Locally update submission state
       setRegistrationData(prev =>
         prev.map(item =>
@@ -251,7 +192,7 @@ function Project() {
         )
       );
     } catch (error) {
-      console.error('[Debug] Submission failed:', error);
+      console.error('Submission failed:', error);
       setSnackbarMessage('Upload failed. Please try again.');
       setSnackbarOpen(true);
     } finally {
@@ -266,9 +207,9 @@ function Project() {
 
   return (
     <>
-      
+
       <div className="participant-project-container">
-        
+
         <div className="participant-project-content">
           {/* Header */}
           <div style={{

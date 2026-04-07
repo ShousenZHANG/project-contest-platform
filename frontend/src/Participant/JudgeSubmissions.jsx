@@ -1,9 +1,9 @@
 /**
  * JudgeSubmissions.js
- * 
+ *
  * Allows judges to view, search, and review pending submissions for a competition.
  * Provides functionality to open detailed judge comments and scores for each submission.
- * 
+ *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
@@ -45,30 +45,15 @@ function JudgeSubmissions() {
   const navigate = useNavigate();
 
   const fetchSubmissions = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
     setLoading(true);
     try {
-      const res = await fetch(
-        `/judges/pending-submissions?competitionId=${competitionId}&keyword=${keyword}&page=${page}&size=10&sortOrder=desc`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const res = await apiClient.get(
+        `/judges/pending-submissions?competitionId=${competitionId}&keyword=${keyword}&page=${page}&size=10&sortOrder=desc`
       );
-
-      const data = await res.json();
-      if (res.ok) {
-        setSubmissions(data.data || []);
-        setTotalPages(data.pages || 1);
-      } else {
-        console.error('Failed to fetch submissions:', data);
-      }
+      setSubmissions(res.data.data || []);
+      setTotalPages(res.data.pages || 1);
     } catch (err) {
-      console.error('Error fetching pending submissions:', err);
+      // Failed to fetch submissions
     } finally {
       setLoading(false);
     }
@@ -79,36 +64,20 @@ function JudgeSubmissions() {
   }, [fetchSubmissions]);
 
   const handleViewJudgingDetail = async (submissionId) => {
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-    if (!token || !userId) return;
-
     try {
-      const res = await fetch(`/judges/${submissionId}/detail`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-ID': userId,
-        },
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setJudgeDetail(data);
-        setOpenDialog(true);
-      } else {
-        console.error('Failed to fetch judging detail:', data);
-      }
+      const res = await apiClient.get(`/judges/${submissionId}/detail`);
+      setJudgeDetail(res.data);
+      setOpenDialog(true);
     } catch (err) {
-      console.error('Error fetching judging detail:', err);
+      // Failed to fetch judging detail
     }
   };
 
   return (
     <>
-      
+
       <div className="rating-container">
-        
+
         <div className="rating-content">
           <Typography variant="h5" gutterBottom>
             Pending Submissions for Review
@@ -215,7 +184,6 @@ function JudgeSubmissions() {
         </div>
       </div>
 
-      {/* 美观弹窗 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.5rem', textAlign: 'center' }}>
           🧑‍⚖️ Judging Details

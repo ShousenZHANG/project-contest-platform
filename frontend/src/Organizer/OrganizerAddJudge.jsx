@@ -40,9 +40,6 @@ function OrganizerAddJudge() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
   const email = localStorage.getItem("email");
-  const token = localStorage.getItem("token");
-  const userId = localStorage.getItem("userId");
-  const role = localStorage.getItem("role");
 
   const [judgeEmail, setJudgeEmail] = useState("");
   const [judges, setJudges] = useState([]);
@@ -57,38 +54,26 @@ function OrganizerAddJudge() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/competitions/${competitionId}`);
-        const data = await res.json();
-        if (res.ok) setCompetitionName(data.name || "Unnamed Competition");
-      } catch (err) {
-        console.error("Error fetching competition name:", err);
+        const res = await apiClient.get(`/competitions/${competitionId}`);
+        setCompetitionName(res.data.name || "Unnamed Competition");
+      } catch {
+        // fetch error handled silently
       }
     })();
   }, [competitionId]);
 
   const fetchJudges = useCallback(async (currentPage = 1) => {
     try {
-      const res = await fetch(
-        `/competitions/${competitionId}/judges?page=${currentPage}&size=10`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.get(
+        `/competitions/${competitionId}/judges?page=${currentPage}&size=10`
       );
-      const data = await res.json();
-      if (res.ok) {
-        setJudges(data.data || []);
-        setTotalPages(data.pages || 1);
-      } else {
-        console.error("Failed to fetch judges:", data);
-      }
-    } catch (err) {
-      console.error("Error fetching judges:", err);
+      const data = res.data;
+      setJudges(data.data || []);
+      setTotalPages(data.pages || 1);
+    } catch {
+      // fetch error handled silently
     }
-  }, [competitionId, token, userId, role]);
+  }, [competitionId]);
 
   useEffect(() => {
     fetchJudges(page);
@@ -96,27 +81,16 @@ function OrganizerAddJudge() {
 
   const fetchParticipants = useCallback(async () => {
     try {
-      const res = await fetch(
-        `/registrations/${competitionId}/participants?page=1&size=10000`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.get(
+        `/registrations/${competitionId}/participants?page=1&size=10000`
       );
-      const data = await res.json();
-      if (res.ok) {
-        const emailsSet = new Set((data.data || []).map((p) => p.email));
-        setParticipantsEmails(emailsSet);
-      } else {
-        console.error("Failed to fetch participants:", data);
-      }
-    } catch (err) {
-      console.error("Error fetching participants:", err);
+      const data = res.data;
+      const emailsSet = new Set((data.data || []).map((p) => p.email));
+      setParticipantsEmails(emailsSet);
+    } catch {
+      // fetch error handled silently
     }
-  }, [competitionId, token, userId, role]);
+  }, [competitionId]);
 
   useEffect(() => {
     fetchParticipants();
@@ -144,36 +118,20 @@ function OrganizerAddJudge() {
     }
 
     try {
-      const res = await fetch(
+      const res = await apiClient.post(
         `/competitions/${competitionId}/assign-judges`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-          body: JSON.stringify({ judgeEmails: trimmedEmails }),
-        }
+        { judgeEmails: trimmedEmails }
       );
-
-      const text = await res.text();
-      if (res.ok) {
-        setSnackbar({ open: true, message: "✅ " + text, severity: "success" });
-        setJudgeEmail("");
-        fetchJudges(page);
-      } else {
-        let errorMessage = text;
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed.error) errorMessage = "❌ " + parsed.error;
-        } catch { }
-        setSnackbar({ open: true, message: errorMessage, severity: "error" });
-      }
-    } catch (err) {
-      console.error("Error assigning judge:", err);
-      setSnackbar({ open: true, message: "❌ Error assigning judge", severity: "error" });
+      const text = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+      setSnackbar({ open: true, message: "✅ " + text, severity: "success" });
+      setJudgeEmail("");
+      fetchJudges(page);
+    } catch (error) {
+      const errData = error.response?.data;
+      const errorMessage = typeof errData === "string"
+        ? errData
+        : errData?.error ? "❌ " + errData.error : "❌ Error assigning judge";
+      setSnackbar({ open: true, message: errorMessage, severity: "error" });
     }
   };
 
@@ -181,26 +139,13 @@ function OrganizerAddJudge() {
     if (!window.confirm("Are you sure you want to remove this judge?")) return;
 
     try {
-      const res = await fetch(
-        `/competitions/${competitionId}/judges/${judgeId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.delete(
+        `/competitions/${competitionId}/judges/${judgeId}`
       );
-      const msg = await res.text();
-      if (res.ok) {
-        setSnackbar({ open: true, message: "✅ " + msg, severity: "success" });
-        fetchJudges(page);
-      } else {
-        setSnackbar({ open: true, message: "❌ Failed to delete: " + msg, severity: "error" });
-      }
-    } catch (err) {
-      console.error("Error deleting judge:", err);
+      const msg = typeof res.data === "string" ? res.data : "Judge removed";
+      setSnackbar({ open: true, message: "✅ " + msg, severity: "success" });
+      fetchJudges(page);
+    } catch {
       setSnackbar({ open: true, message: "❌ Error deleting judge", severity: "error" });
     }
   };

@@ -1,9 +1,9 @@
 /**
  * TeamProjectDetail.js
- * 
+ *
  * View and manage team submissions.
  * Allows the team creator to edit or delete the team's submitted work.
- * 
+ *
  * Role: Participant (Team Leader)
  * Developer: Beiqi Dai
  */
@@ -33,30 +33,20 @@ function TeamProjectDetail() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const userId = localStorage.getItem('userId');
-  const userRole = localStorage.getItem('role');
-  const token = localStorage.getItem('token');
 
   useEffect(() => {
     const fetchSubmission = async () => {
       try {
-        const response = await fetch(
-          `/submissions/public/teams/${competitionId}/${teamId}`,
-          {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-          }
+        const res = await apiClient.get(
+          `/submissions/public/teams/${competitionId}/${teamId}`
         );
-        if (!response.ok) {
-          if (response.status === 404) setError('Submission not found.');
-          else throw new Error(await response.text());
-        } else {
-          const data = await response.json();
-          setSubmission(data);
-          setUpdatedTitle(data.title || '');
-          setUpdatedDescription(data.description || '');
-        }
+        const data = res.data;
+        setSubmission(data);
+        setUpdatedTitle(data.title || '');
+        setUpdatedDescription(data.description || '');
       } catch (err) {
-        setError(err.message || 'Failed to load submission.');
+        if (err.response?.status === 404) setError('Submission not found.');
+        else setError(err.response?.data || err.message || 'Failed to load submission.');
       } finally {
         setLoading(false);
       }
@@ -64,15 +54,10 @@ function TeamProjectDetail() {
 
     const checkIfCreator = async () => {
       try {
-        const url = new URL('/teams/public/created');
-        url.searchParams.set('userId', userId);
-        url.searchParams.set('page', 1);
-        url.searchParams.set('size', 100);
-        const res = await fetch(url.toString(), {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        const res = await apiClient.get('/teams/public/created', {
+          params: { userId, page: 1, size: 100 }
         });
-        const data = await res.json();
-        const is = data.data?.some(team => team.id === teamId);
+        const is = res.data.data?.some(team => team.id === teamId);
         setIsCreator(is);
       } catch (err) {
         console.error('Failed to verify creator:', err);
@@ -96,41 +81,25 @@ function TeamProjectDetail() {
       formData.append('description', updatedDescription);
       if (updatedFile) formData.append('file', updatedFile);
 
-      const res = await fetch('/submissions/teams/upload', {
-        method: 'POST',
-        headers: {
-          'User-ID': userId,
-          'User-Role': userRole,
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
+      await apiClient.post('/submissions/teams/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (!res.ok) throw new Error('Update failed');
       setSnackbarMessage('Submission updated successfully!');
       setEditMode(false);
     } catch (err) {
-      setSnackbarMessage(err.message);
+      setSnackbarMessage(err.response?.data || err.message);
     }
   };
 
   const handleDelete = async () => {
     if (!submission?.submissionId || !window.confirm('Confirm delete submission?')) return;
     try {
-      const res = await fetch(`/submissions/teams/${submission.submissionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-ID': userId,
-          'User-Role': userRole,
-          Authorization: `Bearer ${token}`
-        }
-      });
-      if (!res.ok) throw new Error('Delete failed');
+      await apiClient.delete(`/submissions/teams/${submission.submissionId}`);
       setSnackbarMessage('Submission deleted.');
       setTimeout(() => navigate(-1), 1500);
     } catch (err) {
-      setSnackbarMessage(err.message);
+      setSnackbarMessage(err.response?.data || err.message);
     }
   };
 
@@ -139,9 +108,9 @@ function TeamProjectDetail() {
 
   return (
     <>
-      
+
       <div className="participant-project-container">
-        
+
         <div className="participant-project-content">
           <div className="back-button" onClick={() => navigate(-1)}>
             <ArrowBackIcon className="back-icon" sx={{ color: '#FF9800' }} />

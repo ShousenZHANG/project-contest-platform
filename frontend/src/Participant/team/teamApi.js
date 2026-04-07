@@ -2,9 +2,9 @@ import apiClient from '../../api/apiClient';
 /**
  * @file teamApi.js
  * @description
- * This module provides a set of API utility functions for managing team operations 
+ * This module provides a set of API utility functions for managing team operations
  * such as fetching, creating, updating, joining, leaving, and deleting teams.
- * 
+ *
  * Main Functions:
  *  - fetchJoinedTeams: Fetch all teams the user has joined.
  *  - fetchTeams: Fetch paginated public teams with optional sorting and keyword filtering.
@@ -17,29 +17,18 @@ import apiClient from '../../api/apiClient';
  *  - getTeamCreator: Retrieve the creator's information of a specific team.
  *  - removeTeamMember: Remove a member from a team (only allowed for the creator).
  *  - getTeamDetail: Fetch detailed team information (public endpoint).
- * 
- * Helper:
- *  - buildHeaders: Build standard headers for requests with User-ID and Authorization token.
- * 
- * Base URL:
- *  - All endpoints are prefixed with ''
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
 
-// ParticipantTeam/teamApi.js
-const BASE_URL = '';
-
 export const fetchJoinedTeams = async (userData, setState) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/my-joined?page=1&size=1000`, {
-      headers: buildHeaders(userData, token)
+    const res = await apiClient.get('/teams/my-joined', {
+      params: { page: 1, size: 1000 }
     });
-    const json = await res.json();
-    const ids = (json.data || []).map(t => t.id);
+    const ids = (res.data.data || []).map(t => t.id);
     setState(new Set(ids));
   } catch (e) {
     console.error('[fetchJoinedTeams]', e);
@@ -48,13 +37,11 @@ export const fetchJoinedTeams = async (userData, setState) => {
 
 export const fetchTeams = async ({ page, keyword, sortBy, order }, setTeams, setPages) => {
   try {
-    const url = `${BASE_URL}/teams/public/all?page=${page}&size=5&sortBy=${sortBy}&order=${order}&keyword=${keyword}`;
-    console.log('[Debug] fetchTeams request URL:', url);
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-    const json = await res.json();
-    console.log('[Debug] fetchTeams response:', json);
-    setTeams(json.data || []);
-    setPages(json.pages || 1);
+    const res = await apiClient.get('/teams/public/all', {
+      params: { page, size: 5, sortBy, order, keyword }
+    });
+    setTeams(res.data.data || []);
+    setPages(res.data.pages || 1);
   } catch (e) {
     console.error('[fetchTeams]', e);
   }
@@ -62,12 +49,10 @@ export const fetchTeams = async ({ page, keyword, sortBy, order }, setTeams, set
 
 export const fetchMyTeams = async (userData, setState) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/my-joined?page=1&size=1000`, {
-      headers: buildHeaders(userData, token)
+    const res = await apiClient.get('/teams/my-joined', {
+      params: { page: 1, size: 1000 }
     });
-    const json = await res.json();
-    setState(json.data || []);
+    setState(res.data.data || []);
   } catch (e) {
     console.error('[fetchMyTeams]', e);
   }
@@ -75,66 +60,51 @@ export const fetchMyTeams = async (userData, setState) => {
 
 export const createTeam = async (name, description, userData, { onSuccess, onError }) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/create`, {
-      method: 'POST',
-      headers: {
-        ...buildHeaders(userData, token),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, description })
-    });
-    if (res.status === 201) onSuccess();
-    else onError(`Error ${res.status}: ${await res.text()}`);
+    await apiClient.post('/teams/create', { name, description });
+    onSuccess();
   } catch (e) {
-    onError(e.message);
+    const status = e.response?.status;
+    const text = e.response?.data;
+    onError(`Error ${status}: ${typeof text === 'string' ? text : JSON.stringify(text)}`);
   }
 };
 
 export const joinTeam = async (team, userData, setState, setMsg, setSuccess, setOpen) => {
   try {
     if (team.createdBy === userData.userId) throw new Error('You are the creator');
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/${team.id}/join`, {
-      method: 'POST',
-      headers: buildHeaders(userData, token)
-    });
-    const msg = res.status === 409 ? 'Already a member' : 'Successfully joined';
-    if (res.ok) {
+    await apiClient.post(`/teams/${team.id}/join`);
+    setState(prev => new Set(prev).add(team.id));
+    setMsg('Successfully joined');
+    setSuccess(true);
+    setOpen(true);
+  } catch (e) {
+    if (e.response?.status === 409) {
       setState(prev => new Set(prev).add(team.id));
-      setMsg(msg);
+      setMsg('Already a member');
       setSuccess(true);
       setOpen(true);
-    } else throw new Error(`${res.status}: ${await res.text()}`);
-  } catch (e) {
-    setMsg(`Join failed: ${e.message}`);
-    setSuccess(false);
-    setOpen(true);
+    } else {
+      setMsg(`Join failed: ${e.message}`);
+      setSuccess(false);
+      setOpen(true);
+    }
   }
 };
 
 export const leaveTeam = async (id, userData, setState, setMsg, setSuccess, setOpen) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/${id}/leave`, {
-      method: 'POST',
-      headers: buildHeaders(userData, token)
+    await apiClient.post(`/teams/${id}/leave`);
+    setState(prev => {
+      const copy = new Set(prev);
+      copy.delete(id);
+      return copy;
     });
-    if (res.ok) {
-      setState(prev => {
-        const copy = new Set(prev);
-        copy.delete(id);
-        return copy;
-      });
-      setMsg('Left successfully');
-      setSuccess(true);
-      setOpen(true);
-    } else {
-      const errMsg = res.status === 403 ? 'Team leader cannot leave' : await res.text();
-      throw new Error(`${res.status}: ${errMsg}`);
-    }
+    setMsg('Left successfully');
+    setSuccess(true);
+    setOpen(true);
   } catch (e) {
-    setMsg(`Leave failed: ${e.message}`);
+    const errMsg = e.response?.status === 403 ? 'Team leader cannot leave' : (e.response?.data || e.message);
+    setMsg(`Leave failed: ${e.response?.status}: ${errMsg}`);
     setSuccess(false);
     setOpen(true);
   }
@@ -142,59 +112,34 @@ export const leaveTeam = async (id, userData, setState, setMsg, setSuccess, setO
 
 export const deleteTeam = async (id, userData, { onSuccess, onError }) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/${id}`, {
-      method: 'DELETE',
-      headers: buildHeaders(userData, token)
-    });
-
-    if (res.ok) {
-      onSuccess && onSuccess();
-    } else if (res.status === 403) {
+    await apiClient.delete(`/teams/${id}`);
+    onSuccess && onSuccess();
+  } catch (e) {
+    if (e.response?.status === 403) {
       onError && onError('You are not authorized to delete this team.');
-    } else if (res.status === 404) {
+    } else if (e.response?.status === 404) {
       onError && onError('Team not found. It may have already been deleted.');
     } else {
-      const text = await res.text();
-      onError && onError(`Error ${res.status}: ${text}`);
+      const text = e.response?.data;
+      onError && onError(`Error ${e.response?.status}: ${typeof text === 'string' ? text : JSON.stringify(text)}`);
     }
-  } catch (e) {
-    onError && onError(`Request failed: ${e.message}`);
   }
 };
 
 
-const buildHeaders = (userData, token) => ({
-  'User-ID': userData?.userId || '',
-  'User-Role': userData?.role || '',
-  Authorization: `Bearer ${token}`
-});
-
 export const updateTeam = async (teamId, { name, description }, userData, { onSuccess, onError }) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`/teams/${teamId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-ID': userData?.userId || '',
-        'User-Role': userData?.role || '',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ name, description })
-    });
-    if (res.status === 200) {
-      onSuccess && onSuccess();
-    } else if (res.status === 403) {
+    await apiClient.put(`/teams/${teamId}`, { name, description });
+    onSuccess && onSuccess();
+  } catch (err) {
+    if (err.response?.status === 403) {
       onError && onError('You are not authorized to update this team.');
-    } else if (res.status === 404) {
+    } else if (err.response?.status === 404) {
       onError && onError('Team not found.');
     } else {
-      const text = await res.text();
-      onError && onError(`Error ${res.status}: ${text}`);
+      const text = err.response?.data;
+      onError && onError(`Error ${err.response?.status}: ${typeof text === 'string' ? text : JSON.stringify(text)}`);
     }
-  } catch (err) {
-    onError && onError(`Request failed: ${err.message}`);
   }
 };
 
@@ -206,46 +151,27 @@ export const updateTeam = async (teamId, { name, description }, userData, { onSu
  */
 export const getTeamCreator = async (teamId, userData) => {
   try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`${BASE_URL}/teams/${teamId}/creator`, {
-      method: 'GET',
-      headers: buildHeaders(userData, token)
-    });
-
-    if (res.status === 200) {
-      const data = await res.json();
-      return data;
-    } else if (res.status === 404) {
-      throw new Error(`Team ${teamId} not found.`);
-    } else {
-      const text = await res.text();
-      throw new Error(`Error ${res.status}: ${text}`);
-    }
+    const res = await apiClient.get(`/teams/${teamId}/creator`);
+    return res.data;
   } catch (err) {
-    console.error(`[getTeamCreator] ${err.message}`);
-    throw err;
+    if (err.response?.status === 404) {
+      throw new Error(`Team ${teamId} not found.`);
+    }
+    const text = err.response?.data;
+    throw new Error(`Error ${err.response?.status}: ${typeof text === 'string' ? text : JSON.stringify(text)}`);
   }
 };
 
 export const removeTeamMember = async (teamId, memberId, userData) => {
-  const token = localStorage.getItem('token');
-  const res = await fetch(`/teams/${teamId}/members/${memberId}`, {
-    method: 'DELETE',
-    headers: {
-      'User-ID': userData?.userId || '',
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    }
-  });
-
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(`${res.status}: ${msg}`);
+  try {
+    await apiClient.delete(`/teams/${teamId}/members/${memberId}`);
+  } catch (err) {
+    const msg = err.response?.data || err.message;
+    throw new Error(`${err.response?.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
   }
 };
 
 export const getTeamDetail = async (teamId) => {
-  const res = await fetch(`/teams/public/${teamId}`);
-  if (!res.ok) throw new Error(`Failed to fetch team detail: ${res.status}`);
-  return await res.json();
+  const res = await apiClient.get(`/teams/public/${teamId}`);
+  return res.data;
 };

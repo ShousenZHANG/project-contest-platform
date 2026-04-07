@@ -46,9 +46,6 @@ function ParticipantList() {
   const location = useLocation();
   const email = localStorage.getItem("email");
 
-  const token = localStorage.getItem("token");
-  const userId = localStorage.getItem("userId");
-  const role = localStorage.getItem("role");
 
   const initialType = location.state?.participationType || "";
   const [participationType, setParticipationType] = useState(initialType);
@@ -71,69 +68,50 @@ function ParticipantList() {
 
   const fetchCompetitionInfo = useCallback(async () => {
     try {
-      const res = await fetch(`/competitions/${competitionId}`);
-      const data = await res.json();
-      if (res.ok) {
-        setCompetitionInfo({
-          name: data.name || "Unnamed Competition",
-          category: data.category || "Unknown",
-          startDate: data.startDate ? new Date(data.startDate).toLocaleDateString() : "",
-          endDate: data.endDate ? new Date(data.endDate).toLocaleDateString() : "",
-          status: data.status || "",
-        });
-        setParticipationType((prev) => prev || data.selectedParticipationType || "INDIVIDUAL");
-      } else {
-        console.error("Failed to fetch competition info:", data);
-      }
-    } catch (err) {
-      console.error("Error fetching competition info:", err);
+      const res = await apiClient.get(`/competitions/${competitionId}`);
+      const data = res.data;
+      setCompetitionInfo({
+        name: data.name || "Unnamed Competition",
+        category: data.category || "Unknown",
+        startDate: data.startDate ? new Date(data.startDate).toLocaleDateString() : "",
+        endDate: data.endDate ? new Date(data.endDate).toLocaleDateString() : "",
+        status: data.status || "",
+      });
+      setParticipationType((prev) => prev || data.selectedParticipationType || "INDIVIDUAL");
+    } catch {
+      // fetch error handled silently
     }
   }, [competitionId]);
 
   const fetchParticipants = useCallback(async (pageNum = 1, kw = "", order = "asc") => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `/registrations/${competitionId}/participants?page=${pageNum}&size=10&keyword=${kw}&sortBy=registeredAt&order=${order}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.get(
+        `/registrations/${competitionId}/participants?page=${pageNum}&size=10&keyword=${kw}&sortBy=registeredAt&order=${order}`
       );
-      const data = await res.json();
-      if (res.ok) {
-        setParticipants(data.data || []);
-        setTotalPages(data.pages || 1);
-        setTotalCount(data.total || 0);
-      } else {
-        console.error("Failed to fetch participants:", data);
-      }
-    } catch (err) {
-      console.error("Error:", err);
+      const data = res.data;
+      setParticipants(data.data || []);
+      setTotalPages(data.pages || 1);
+      setTotalCount(data.total || 0);
+    } catch {
+      // fetch error handled silently
     } finally {
       setLoading(false);
     }
-  }, [competitionId, token, userId, role]);
+  }, [competitionId]);
 
   const fetchTeams = useCallback(async (pageNum = 1, kw = "", order = "asc") => {
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiClient.get(
         `/registrations/public/${competitionId}/teams?page=${pageNum}&size=10&keyword=${kw}&sortBy=createdAt&order=${order}`
       );
-      const data = await res.json();
-      if (res.ok) {
-        setTeams(data.data || []);
-        setTotalPages(data.pages || 1);
-        setTotalCount(data.total || 0);
-      } else {
-        console.error("Failed to fetch teams:", data);
-      }
-    } catch (err) {
-      console.error("Error fetching teams:", err);
+      const data = res.data;
+      setTeams(data.data || []);
+      setTotalPages(data.pages || 1);
+      setTotalCount(data.total || 0);
+    } catch {
+      // fetch error handled silently
     } finally {
       setLoading(false);
     }
@@ -142,27 +120,12 @@ function ParticipantList() {
   const handleDeleteTeam = async (teamId) => {
     if (!window.confirm("Are you sure you want to remove this team?")) return;
     try {
-      const res = await fetch(
-        `/registrations/teams/${competitionId}/team/${teamId}/by-organizer`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      await apiClient.delete(
+        `/registrations/teams/${competitionId}/team/${teamId}/by-organizer`
       );
-      if (res.ok) {
-        alert("✅ Team removed successfully");
-        fetchTeams(page, keyword, sortOrder);
-      } else {
-        const errorData = await res.json();
-        console.error("Failed to delete team:", errorData);
-        alert("❌ Failed to delete team");
-      }
-    } catch (err) {
-      console.error("Error deleting team:", err);
+      alert("✅ Team removed successfully");
+      fetchTeams(page, keyword, sortOrder);
+    } catch {
       alert("❌ Error occurred during team deletion");
     }
   };
@@ -236,27 +199,12 @@ function ParticipantList() {
   const handleDeleteParticipant = async (participantUserId) => {
     if (!window.confirm("Are you sure you want to remove this participant?")) return;
     try {
-      const res = await fetch(
-        `/registrations/${competitionId}/participants/${participantUserId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      await apiClient.delete(
+        `/registrations/${competitionId}/participants/${participantUserId}`
       );
-      if (res.ok) {
-        alert("✅ Participant removed successfully");
-        fetchParticipants(page, keyword, sortOrder);
-      } else {
-        const errorData = await res.json();
-        console.error("Failed to delete participant:", errorData);
-        alert("❌ Failed to delete participant");
-      }
-    } catch (err) {
-      console.error("Error deleting participant:", err);
+      alert("✅ Participant removed successfully");
+      fetchParticipants(page, keyword, sortOrder);
+    } catch {
       alert("❌ Error occurred during deletion");
     }
   };

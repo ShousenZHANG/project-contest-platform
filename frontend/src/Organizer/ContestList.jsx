@@ -47,36 +47,24 @@ function OrganizerContestList() {
   const [selectedParticipationType, setSelectedParticipationType] = useState("");
 
   const navigate = useNavigate();
-  const userId = localStorage.getItem("userId");
-  const token = localStorage.getItem("token");
   const email = localStorage.getItem("email");
 
   useEffect(() => {
     const fetchCompetitions = async () => {
       try {
-        const response = await fetch(`/competitions/achieve/my`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": "ORGANIZER",
-          },
-        });
-
-        const data = await response.json();
-        if (response.ok && Array.isArray(data.data)) {
+        const response = await apiClient.get(`/competitions/achieve/my`);
+        const data = response.data;
+        if (Array.isArray(data.data)) {
           setCompetitions(data.data);
           setFilteredCompetitions(data.data);
-        } else {
-          console.error("Failed to fetch competitions", data);
         }
-      } catch (err) {
-        console.error("Error fetching competitions:", err);
+      } catch {
+        // fetch error handled silently
       }
     };
 
     fetchCompetitions();
-  }, [userId, token]);
+  }, []);
 
   useEffect(() => {
     const filtered = competitions.filter((comp) => {
@@ -110,25 +98,9 @@ function OrganizerContestList() {
     if (!window.confirm("Are you sure you want to delete this competition?")) return;
 
     try {
-      const response = await fetch(`/competitions/delete/${competitionId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-ID": userId,
-          "User-Role": "ORGANIZER",
-        },
-      });
-
-      if (response.ok) {
-        setCompetitions((prev) => prev.filter((comp) => comp.id !== competitionId));
-      } else {
-        const errorData = await response.json();
-        console.error("Failed to delete competition:", errorData);
-        alert("Failed to delete competition.");
-      }
-    } catch (err) {
-      console.error("Error deleting competition:", err);
+      await apiClient.delete(`/competitions/delete/${competitionId}`);
+      setCompetitions((prev) => prev.filter((comp) => comp.id !== competitionId));
+    } catch {
       alert("An error occurred while deleting the competition.");
     }
   };

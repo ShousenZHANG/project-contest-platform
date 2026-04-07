@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import ParticipantList from "../../Organizer/ParticipantList";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockNavigate = jest.fn();
 
@@ -27,44 +30,37 @@ beforeEach(() => {
     return null;
   });
 
-  global.fetch = jest.fn((url) => {
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/test-competition")) {
       return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            name: "Test Competition",
-            category: "Art",
-            startDate: "2025-05-01",
-            endDate: "2025-05-10",
-            status: "Ongoing",
-            selectedParticipationType: "INDIVIDUAL",
-          }),
+        data: {
+          name: "Test Competition",
+          category: "Art",
+          startDate: "2025-05-01",
+          endDate: "2025-05-10",
+          status: "Ongoing",
+          selectedParticipationType: "INDIVIDUAL",
+        },
       });
     }
     if (url.includes("/registrations/test-competition/participants")) {
       return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            data: [
-              {
-                userId: "user123",
-                name: "Alice",
-                email: "alice@example.com",
-                description: "Participant",
-                registeredAt: new Date().toISOString(),
-              },
-            ],
-            pages: 1,
-            total: 1,
-          }),
+        data: {
+          data: [
+            {
+              userId: "user123",
+              name: "Alice",
+              email: "alice@example.com",
+              description: "Participant",
+              registeredAt: new Date().toISOString(),
+            },
+          ],
+          pages: 1,
+          total: 1,
+        },
       });
     }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    return Promise.resolve({ data: {} });
   });
 
   window.URL.createObjectURL = jest.fn();
@@ -103,9 +99,8 @@ describe("ParticipantList", () => {
     fireEvent.change(searchInput, { target: { value: "Alice" } });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/participants?page=1&size=10&keyword=Alice"),
-        expect.anything()
+      expect(apiClient.get).toHaveBeenCalledWith(
+        expect.stringContaining("/participants?page=1&size=10&keyword=Alice")
       );
     });
   });

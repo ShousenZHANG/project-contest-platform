@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerContest from "../../Organizer/Contest";
 import { BrowserRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockNavigate = jest.fn();
 
@@ -21,12 +24,7 @@ beforeEach(() => {
     return null;
   });
 
-  global.fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ message: "Contest created" }),
-    })
-  );
+  apiClient.post.mockResolvedValue({ data: { message: "Contest created" } });
 
   mockNavigate.mockClear();
 });
@@ -81,7 +79,7 @@ describe("OrganizerContest", () => {
     fireEvent.click(screen.getByText("Create Contest"));
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalled();
+      expect(apiClient.post).toHaveBeenCalled();
       expect(mockNavigate).toHaveBeenCalledWith("/OrganizerContestList/test@example.com");
     });
   });

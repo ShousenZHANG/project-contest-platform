@@ -62,9 +62,7 @@ function MyTeamsDialog({ open, myTeams, onClose, onDelete, userData, onUpdate })
         try {
           const creator = await getTeamCreator(teamId, userData);
           newMap[teamId] = creator.id;
-          console.log(`✅ Creator of team ${team.name}:`, creator.name, `(id: ${creator.id})`);
         } catch (err) {
-          console.error(`❌ Failed to fetch creator of team ${team.name}`, err.message);
           newMap[teamId] = null;
         }
       }
@@ -113,8 +111,6 @@ function MyTeamsDialog({ open, myTeams, onClose, onDelete, userData, onUpdate })
               {myTeams.map(team => {
                 const creatorId = creatorMap[team.id];
                 const isCreator = creatorId === userData.userId;
-
-                console.log(`🔍 [${team.name}] created by ${creatorId}, current user = ${userData.userId}, isCreator = ${isCreator}`);
 
                 return (
                   <ListItem

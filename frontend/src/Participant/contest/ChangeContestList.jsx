@@ -46,12 +46,11 @@ function ChangeContestList({ contest, onClick }) {
     if (event) {
       event.stopPropagation();
     }
-    setSnackbar({ ...snackbar, open: false });
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   const handleJoinClick = async (e) => {
     e.stopPropagation();
-    console.log("Join clicked:", contest);
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -59,82 +58,27 @@ function ChangeContestList({ contest, onClick }) {
       return;
     }
 
-    const userId = localStorage.getItem("userId");
-    const userRole = localStorage.getItem("userRole");
-
     try {
-      const response = await fetch(
-        `/registrations/${contest.id}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-ID": userId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-          },
-          body: "",
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.text();
-        console.log("Registration successful:", data);
-        showSnackbar("Registration successful!", "success");
-      } else {
-        const errText = await response.text();
-        console.error("Failed to register:", errText);
-        try {
-          const errData = JSON.parse(errText);
-          if (errData.error === "You have already registered for this competition") {
-            console.log("You have already registered.");
-            setOpenDialog(true); // Open confirmation dialog
-          } else {
-            showSnackbar("Registration failed. Please check the console.", "error");
-          }
-        } catch (parseError) {
-          showSnackbar("Registration failed. Please check the console.", "error");
-        }
-      }
+      await apiClient.post(`/registrations/${contest.id}`);
+      showSnackbar("Registration successful!", "success");
     } catch (error) {
-      console.error("Error registering:", error);
-      showSnackbar("Registration failed due to network or server error.", "error");
+      const errData = error.response?.data;
+      if (errData?.error === "You have already registered for this competition") {
+        setOpenDialog(true);
+      } else {
+        showSnackbar("Registration failed due to network or server error.", "error");
+      }
     }
   };
 
   const handleCancelRegistration = async (e) => {
     if (e) e.stopPropagation();
 
-    const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("userId");
-    const userRole = localStorage.getItem("userRole");
-
     try {
-      const response = await fetch(
-        `/registrations/${contest.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-ID": userId,
-            "User-Role": userRole,
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.text();
-        console.log("Cancellation successful:", data);
-        showSnackbar("Registration cancelled successfully!", "success");
-        setOpenDialog(false);
-      } else {
-        const errorText = await response.text();
-        console.error("Cancellation failed:", errorText);
-        showSnackbar("Cancellation failed!", "error");
-      }
+      await apiClient.delete(`/registrations/${contest.id}`);
+      showSnackbar("Registration cancelled successfully!", "success");
+      setOpenDialog(false);
     } catch (error) {
-      console.error("Error cancelling registration:", error);
       showSnackbar("Cancellation failed due to network or server error.", "error");
     }
   };

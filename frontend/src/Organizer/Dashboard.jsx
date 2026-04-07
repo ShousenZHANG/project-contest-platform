@@ -62,35 +62,17 @@ function OrganizerDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const token = localStorage.getItem("token");
-        const userId = localStorage.getItem("userId");
-        const role = localStorage.getItem("role");
-
-        const res = await fetch(
-          "/competitions/achieve/my?page=1&size=100",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "User-ID": userId,
-              "User-Role": role,
-            },
-          }
-        );
-        const { data: competitions = [] } = await res.json();
+        const res = await apiClient.get("/competitions/achieve/my?page=1&size=100");
+        const { data: competitions = [] } = res.data;
 
         const list = await Promise.all(
           competitions.map(async (c) => {
             const [statRes, detailRes] = await Promise.all([
-              fetch(
-                `/dashboard/public/statistics?competitionId=${c.id}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              ),
-              fetch(`/competitions/${c.id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              }),
+              apiClient.get(`/dashboard/public/statistics?competitionId=${c.id}`),
+              apiClient.get(`/competitions/${c.id}`),
             ]);
-            const stat = await statRes.json();
-            const detail = await detailRes.json();
+            const stat = statRes.data;
+            const detail = detailRes.data;
 
             const totalSubs = stat.submissionCount || 0;
             const approved = stat.approvedSubmissionCount || 0;
@@ -117,8 +99,8 @@ function OrganizerDashboard() {
         );
 
         setStats(list);
-      } catch (e) {
-        console.error("Dashboard fetch error:", e);
+      } catch {
+        // fetch error handled silently
       } finally {
         setLoading(false);
       }

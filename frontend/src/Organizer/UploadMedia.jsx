@@ -33,23 +33,15 @@ function UploadMedia() {
 
   const fetchCurrentMedia = useCallback(async () => {
     try {
-      const res = await fetch(`/competitions/${id}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+      const res = await apiClient.get(`/competitions/${id}`);
+      const data = res.data;
+      setContestName(data.name || "");
+      setExistingMedia({
+        video: data.introVideoUrl || null,
+        images: data.imageUrls || [],
       });
-      const data = await res.json();
-      if (res.ok) {
-        setContestName(data.name || "");
-        setExistingMedia({
-          video: data.introVideoUrl || null,
-          images: data.imageUrls || [],
-        });
-      } else {
-        console.error("Failed to fetch competition media", data);
-      }
-    } catch (err) {
-      console.error("Error fetching media:", err);
+    } catch {
+      // fetch error handled silently
     }
   }, [id]);
 
@@ -68,23 +60,11 @@ function UploadMedia() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role").toUpperCase(),
-        },
-      });
-      const result = await res.json();
-      if (res.ok) {
-        alert("✅ Image deleted successfully");
-        fetchCurrentMedia();
-      } else {
-        alert("❌ Failed to delete image: " + (result.message || "Unknown error"));
-      }
-    } catch (err) {
-      console.error("Delete error:", err);
+      await apiClient.delete(`/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`);
+      alert("✅ Image deleted successfully");
+      fetchCurrentMedia();
+    } catch (error) {
+      alert("❌ Failed to delete image: " + (error.response?.data?.message || "Unknown error"));
     }
   };
 
@@ -93,24 +73,11 @@ function UploadMedia() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`/competitions/${id}/media/video`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role").toUpperCase(),
-        },
-      });
-
-      const result = await res.json();
-      if (res.ok) {
-        alert("✅ Video deleted successfully");
-        fetchCurrentMedia();
-      } else {
-        alert("❌ Failed to delete video: " + (result.message || "Unknown error"));
-      }
-    } catch (err) {
-      console.error("Delete video error:", err);
+      await apiClient.delete(`/competitions/${id}/media/video`);
+      alert("✅ Video deleted successfully");
+      fetchCurrentMedia();
+    } catch (error) {
+      alert("❌ Failed to delete video: " + (error.response?.data?.message || "Unknown error"));
     }
   };
 
@@ -124,18 +91,8 @@ function UploadMedia() {
         formData.append("file", file);
         formData.append("mediaType", file.type.startsWith("video/") ? "VIDEO" : "IMAGE");
 
-        const res = await fetch(`/competitions/${id}/media`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "User-ID": localStorage.getItem("userId"),
-            "User-Role": localStorage.getItem("role").toUpperCase(),
-          },
-          body: formData,
-        });
-
-        const result = await res.json();
-        if (!res.ok || !result) throw new Error(result.message || "Upload failed");
+        const res = await apiClient.post(`/competitions/${id}/media`, formData);
+        if (!res.data) throw new Error("Upload failed");
       }
 
       alert("✅ All media uploaded successfully!");
@@ -143,8 +100,7 @@ function UploadMedia() {
       setPreviews([]);
       fetchCurrentMedia();
       navigate(`/OrganizerContestList/${email}`);
-    } catch (error) {
-      console.error("Upload error:", error);
+    } catch {
       alert("❌ Upload failed.");
     } finally {
       setUploading(false);

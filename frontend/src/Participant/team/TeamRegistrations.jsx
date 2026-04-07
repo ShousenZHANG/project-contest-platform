@@ -1,10 +1,10 @@
 /**
  * TeamRegistrations.js
- * 
+ *
  * Lists all competitions registered by the user's teams.
  * Allows the team creator to submit or update team submissions.
  * Supports viewing submission details and paginated team competition records.
- * 
+ *
  * Role: Participant (Team Leader)
  * Developer: Beiqi Dai
  */
@@ -50,48 +50,34 @@ function TeamRegistrations({ userData }) {
     setLoading(true);
     setError('');
     try {
-      const teamsUrl = new URL('/teams/my-joined');
-      teamsUrl.searchParams.set('page', page);
-      teamsUrl.searchParams.set('size', pagination.size);
-      const teamsRes = await fetch(teamsUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-ID': userData.userId,
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
+      const teamsRes = await apiClient.get('/teams/my-joined', {
+        params: { page, size: pagination.size }
       });
-      const teamsData = await teamsRes.json();
-      if (!teamsRes.ok) throw new Error(teamsData.error || `Error ${teamsRes.status}`);
+      const teamsData = teamsRes.data;
       const teamsList = Array.isArray(teamsData.data) ? teamsData.data : [];
 
       const regs = [];
       for (const team of teamsList) {
-        const compUrl = new URL(`/registrations/teams/${team.id}/competitions`);
-        compUrl.searchParams.set('page', 1);
-        compUrl.searchParams.set('size', 100);
-        const compRes = await fetch(compUrl.toString(), {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-ID': userData.userId,
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        const compData = await compRes.json();
-        if (!compRes.ok) continue;
-        const compList = Array.isArray(compData.data) ? compData.data : [];
-        compList.forEach(c => {
-          regs.push({
-            competitionId: c.competitionId || c.id,
-            competitionName: c.competitionName || c.name || '',
-            teamId: team.id,
-            teamName: team.name,
-            hasSubmitted: c.hasSubmitted,
-            fileName: c.fileName || '',
-            reviewStatus: c.reviewStatus || ''
+        try {
+          const compRes = await apiClient.get(`/registrations/teams/${team.id}/competitions`, {
+            params: { page: 1, size: 100 }
           });
-        });
+          const compData = compRes.data;
+          const compList = Array.isArray(compData.data) ? compData.data : [];
+          compList.forEach(c => {
+            regs.push({
+              competitionId: c.competitionId || c.id,
+              competitionName: c.competitionName || c.name || '',
+              teamId: team.id,
+              teamName: team.name,
+              hasSubmitted: c.hasSubmitted,
+              fileName: c.fileName || '',
+              reviewStatus: c.reviewStatus || ''
+            });
+          });
+        } catch (compErr) {
+          // Skip teams where competition fetch fails
+        }
       }
 
       setRegistrations(regs);
@@ -103,7 +89,7 @@ function TeamRegistrations({ userData }) {
       });
     } catch (err) {
       console.error('[TeamRegistrations] fetchAllTeamRegistrations error:', err);
-      setError(err.message || 'Failed to load team registrations.');
+      setError(err.response?.data?.error || err.message || 'Failed to load team registrations.');
       setRegistrations([]);
     } finally {
       setLoading(false);
@@ -121,13 +107,10 @@ function TeamRegistrations({ userData }) {
     registrations.forEach(async reg => {
       if (reg.hasSubmitted && !reg.fileName) {
         try {
-          const subUrl = `/submissions/public/teams/${reg.competitionId}/${reg.teamId}`;
-          const res = await fetch(subUrl, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-          });
-          if (res.status === 404) return;
-          if (!res.ok) throw new Error(`Status ${res.status}`);
-          const sub = await res.json();
+          const res = await apiClient.get(
+            `/submissions/public/teams/${reg.competitionId}/${reg.teamId}`
+          );
+          const sub = res.data;
           setRegistrations(prev =>
             prev.map(r =>
               r.teamId === reg.teamId && r.competitionId === reg.competitionId
@@ -136,7 +119,7 @@ function TeamRegistrations({ userData }) {
             )
           );
         } catch (err) {
-          console.error('[TeamRegistrations] fetch submission detail error:', err);
+          // 404 or other errors are silently ignored for enrichment
         }
       }
     });
@@ -145,52 +128,25 @@ function TeamRegistrations({ userData }) {
 
   // Submission dialog control
   const openSubmissionDialog = async (competitionId, teamId) => {
-    console.log('[openSubmissionDialog] Current userData:', userData);
-
     // Fallback: ensure userId exists
     const userId = userData?.userId || localStorage.getItem('userId');
     if (!userId) {
-      console.warn('[openSubmissionDialog] No userId found. Abort.');
       setError('You are not logged in or user ID is missing.');
       return;
     }
 
-    console.log('[openSubmissionDialog] Checking if user is creator...');
     try {
-      const url = new URL('/teams/public/created');
-      url.searchParams.set('userId', userId);
-      url.searchParams.set('page', 1);
-      url.searchParams.set('size', 100);
-
-      console.log('[openSubmissionDialog] Requesting:', url.toString());
-
-      const res = await fetch(url.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
+      const res = await apiClient.get('/teams/public/created', {
+        params: { userId, page: 1, size: 100 }
       });
 
-      console.log('[openSubmissionDialog] Response status:', res.status);
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error('[openSubmissionDialog] Failed response:', text);
-        throw new Error('Failed to verify team creator');
-      }
-
-      const data = await res.json();
-      console.log('[openSubmissionDialog] Received created teams:', data);
-
-      const isCreator = (data.data || []).some(team => team.id === teamId);
-      console.log('[openSubmissionDialog] Is current user creator of team:', isCreator);
+      const isCreator = (res.data.data || []).some(team => team.id === teamId);
 
       if (!isCreator) {
-        console.warn('You are not the team leader. Submission not allowed.');
         setError('You are not the team leader. Please ask the leader to submit.');
         return;
       }
 
-      console.log('[openSubmissionDialog] User is creator, opening dialog...');
       setSelectedTeam({ competitionId, teamId });
       setOpenTeamDialog(true);
     } catch (err) {
@@ -211,28 +167,18 @@ function TeamRegistrations({ userData }) {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      const userId = userData.userId;
-      const userRole = userData.role || '';
       const { competitionId, teamId } = selectedTeam;
 
       const params = new URLSearchParams({ competitionId, teamId, title, description });
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch(
+      await apiClient.post(
         `/submissions/teams/upload?${params.toString()}`,
-        {
-          method: 'POST',
-          headers: {
-            'User-ID': userId,
-            'User-Role': userRole,
-            Authorization: `Bearer ${token}`
-          },
-          body: formData
-        }
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-      if (!res.ok) throw new Error(`Upload failed ${res.status}`);
+
       setRegistrations(prev =>
         prev.map(r =>
           r.teamId === teamId && r.competitionId === competitionId

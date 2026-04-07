@@ -48,16 +48,10 @@ function ViewSubmission() {
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
-        const res = await fetch(`/submissions/public/approved?competitionId=${competitionId}`);
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "Failed to fetch submissions");
-        }
-        const result = await res.json();
-        setSubmissions(result.data || []);
+        const res = await apiClient.get(`/submissions/public/approved?competitionId=${competitionId}`);
+        setSubmissions(res.data.data || []);
       } catch (error) {
-        console.error("Error fetching submissions:", error);
-        setErrorMessage(error.message || "Network error fetching submissions");
+        setErrorMessage(error.response?.data || error.message || "Network error fetching submissions");
       } finally {
         setLoading(false);
       }

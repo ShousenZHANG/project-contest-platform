@@ -2,10 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import EditContest from "../../Organizer/EditContest";
+import apiClient from '../../api/apiClient';
 
-if (!global.fetch) {
-  global.fetch = jest.fn();
-}
+jest.mock("../../api/apiClient");
 
 jest.mock("react-router-dom", () => {
   const actual = jest.requireActual("react-router-dom");
@@ -20,11 +19,12 @@ jest.mock("react-router-dom", () => {
 });
 
 beforeEach(() => {
-  global.fetch.mockImplementation((url) => {
+  window.alert = jest.fn();
+
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/test-id")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
+        data: {
           id: "test-id",
           name: "Test Contest",
           description: "This is a test description",
@@ -35,14 +35,13 @@ beforeEach(() => {
           scoringCriteria: ["Creativity", "Impact"],
           allowedSubmissionTypes: ["PDF", "Image"],
           participationType: "INDIVIDUAL",
-        }),
+        },
       });
     }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    return Promise.resolve({ data: {} });
   });
+
+  apiClient.put.mockResolvedValue({ data: {} });
 });
 
 afterEach(() => {
@@ -102,7 +101,7 @@ describe("EditContest", () => {
     fireEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiClient.put).toHaveBeenCalledWith(
         expect.stringContaining("/update/"),
         expect.anything()
       );

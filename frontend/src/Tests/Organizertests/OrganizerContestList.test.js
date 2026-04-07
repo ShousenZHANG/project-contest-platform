@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerContestList from "../../Organizer/ContestList";
 import { BrowserRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockNavigate = jest.fn();
 jest.mock("react-router-dom", () => {
@@ -12,25 +15,29 @@ jest.mock("react-router-dom", () => {
   };
 });
 
-global.fetch = jest.fn(() =>
-  Promise.resolve({
-    ok: true,
-    json: () =>
-      Promise.resolve({
-        data: [
-          {
-            id: "1",
-            name: "Mock Contest",
-            category: "Art",
-            status: "UPCOMING",
-            startDate: "2025-05-01T00:00:00Z",
-            endDate: "2025-05-10T00:00:00Z",
-            participationType: "INDIVIDUAL",
-          },
-        ],
-      }),
-  })
-);
+beforeEach(() => {
+  apiClient.get.mockResolvedValue({
+    data: {
+      data: [
+        {
+          id: "1",
+          name: "Mock Contest",
+          category: "Art",
+          status: "UPCOMING",
+          startDate: "2025-05-01T00:00:00Z",
+          endDate: "2025-05-10T00:00:00Z",
+          participationType: "INDIVIDUAL",
+        },
+      ],
+    },
+  });
+
+  mockNavigate.mockClear();
+});
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
 
 const renderWithRouter = () => {
   render(
@@ -41,11 +48,6 @@ const renderWithRouter = () => {
 };
 
 describe("OrganizerContestList", () => {
-  beforeEach(() => {
-    fetch.mockClear();
-    mockNavigate.mockClear();
-  });
-
   it("renders contest list after fetch", async () => {
     renderWithRouter();
     await waitFor(() => {

@@ -28,10 +28,8 @@ function TopBar() {
   useEffect(() => {
     const fetchProjectName = async () => {
       try {
-        const response = await fetch('/api/project/info', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
+        const res = await apiClient.get('/api/project/info');
+        const data = res.data;
         if (data.success && data.projectName) {
           localStorage.setItem("projectName", `Welcome To ${data.projectName}`);
           setProjectName(`Welcome To ${data.projectName}`);
@@ -57,15 +55,12 @@ function TopBar() {
   useEffect(() => {
     const fetchUserAvatar = async () => {
       try {
-        const response = await fetch('/users/profile', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
-        if (response.ok && data.avatarUrl) {
-          setAvatarUrl(data.avatarUrl);
+        const res = await apiClient.get('/users/profile');
+        if (res.data?.avatarUrl) {
+          setAvatarUrl(res.data.avatarUrl);
         }
       } catch (error) {
-        console.error("Failed to fetch user avatar:", error);
+        // Avatar fetch failed silently
       }
     };
 
@@ -77,14 +72,14 @@ function TopBar() {
 
   const handleConfirmLogout = async () => {
     try {
-      await fetch("/users/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
+      await apiClient.post("/users/logout");
     } catch (err) {
-      console.error("Logout error:", err);
+      // Logout API call failed silently
     }
-    localStorage.clear();
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("email");
+    localStorage.removeItem("role");
     setOpen(false);
     window.location.href = "/";
   };

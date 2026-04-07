@@ -31,12 +31,10 @@ function TeamPublicDetail() {
   useEffect(() => {
     const fetchSubmission = async () => {
       try {
-        const res = await fetch(`/submissions/public/teams/${competitionId}/${teamId}`);
-        if (!res.ok) throw new Error("No submission found for this team.");
-        const data = await res.json();
-        setSubmission(data);
+        const res = await apiClient.get(`/submissions/public/teams/${competitionId}/${teamId}`);
+        setSubmission(res.data);
       } catch (err) {
-        setError(err.message);
+        setError(err.response?.data?.message || "No submission found for this team.");
       } finally {
         setLoading(false);
       }

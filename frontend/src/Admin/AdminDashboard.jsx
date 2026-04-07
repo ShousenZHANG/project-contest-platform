@@ -55,8 +55,8 @@ function AdminDashboard() {
       try {
         const res = await apiClient.get("/dashboard/public/platform-overview");
         setOverview(res.data || null);
-      } catch (e) {
-        console.error("Dashboard fetch error:", e);
+      } catch {
+        // fetch error handled silently
       } finally {
         setLoading(false);
       }

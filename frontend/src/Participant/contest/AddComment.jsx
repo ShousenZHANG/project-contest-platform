@@ -1,6 +1,6 @@
 /**
  * @file AddComment.js
- * @description 
+ * @description
  * This component allows participants to add comments on a specific submission.
  * It provides a text input area for users to write and submit their comments.
  * Core functionalities include:
@@ -8,7 +8,7 @@
  *  - Posting comments to the backend with appropriate authentication headers.
  *  - Displaying success or error feedback via Material-UI Snackbar and Alert components.
  *  - Invoking a callback to refresh the comment list after successful posting.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -16,16 +16,13 @@
 
 import React, { useState } from "react";
 import { Button, TextField, Typography, Snackbar, Alert } from "@mui/material";
-import axios from "axios";
+import apiClient from "../../api/apiClient";
 
 function AddComment({ submissionId, onCommentPosted }) {
   const [newComment, setNewComment] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
-
-  const currentUserId = localStorage.getItem("userId");
-  const token = localStorage.getItem("token");
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbarMessage(message);
@@ -37,29 +34,15 @@ function AddComment({ submissionId, onCommentPosted }) {
     if (!newComment.trim()) {
       return showSnackbar("Comment cannot be empty.", "error");
     }
-    if (!currentUserId || !token) {
-      return showSnackbar("Please log in.", "error");
-    }
 
-    axios
-      .post(
-        `/interactions/comments`,
-        { submissionId, content: newComment },
-        {
-          headers: {
-            "User-ID": currentUserId,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      )
+    apiClient
+      .post(`/interactions/comments`, { submissionId, content: newComment })
       .then(() => {
         setNewComment("");
         onCommentPosted();
         showSnackbar("Comment added successfully!");
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(() => {
         showSnackbar("Failed to add comment.", "error");
       });
   };
@@ -84,23 +67,23 @@ function AddComment({ submissionId, onCommentPosted }) {
         variant="outlined"
         sx={{
           mb: 3,
-          bgcolor: "#fff8e1",         // pale yellow background
-          borderRadius: "8px",        // rounded corners
+          bgcolor: "#fff8e1",
+          borderRadius: "8px",
           "& .MuiOutlinedInput-root": {
             "& fieldset": {
-              borderColor: "#FFB74D", // light orange border
+              borderColor: "#FFB74D",
             },
             "&:hover fieldset": {
               borderColor: "#FFA726",
             },
             "&.Mui-focused fieldset": {
-              borderColor: "#FB8C00", // darker orange when focused
+              borderColor: "#FB8C00",
               borderWidth: "2px",
             },
           },
           "& .MuiInputLabel-root": {
             color: "#FB8C00",
-            fontWeight: "bold",       // bold label
+            fontWeight: "bold",
           },
           "& .MuiInputLabel-root.Mui-focused": {
             color: "#E65100",

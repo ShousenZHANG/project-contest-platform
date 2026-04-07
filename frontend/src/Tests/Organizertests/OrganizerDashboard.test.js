@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import OrganizerDashboard from "../../Organizer/Dashboard";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 global.ResizeObserver = class {
   observe() { }
@@ -10,23 +13,15 @@ global.ResizeObserver = class {
 };
 
 beforeEach(() => {
-  global.fetch = jest.fn((url) => {
-    if (url.includes("/user/avatar")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ avatarUrl: "https://example.com/avatar.jpg" }),
-      });
-    }
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/achieve/my")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ data: [{ id: "comp1", name: "Test Competition" }] }),
+        data: { data: [{ id: "comp1", name: "Test Competition" }] },
       });
     }
     if (url.includes("/dashboard/public/statistics")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
+        data: {
           submissionCount: 10,
           approvedSubmissionCount: 7,
           individualParticipantCount: 5,
@@ -37,27 +32,15 @@ beforeEach(() => {
             "2025-01-01": 1,
             "2025-01-02": 2,
           },
-        }),
+        },
       });
     }
-    if (url.includes("/competitions/") || url.includes("/api/competitions/")) {
+    if (url.includes("/competitions/")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ status: "open" }),
+        data: { status: "open" },
       });
     }
-    if (url.includes("/organizer/upload-media/")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ mediaList: [] }),
-      });
-    }
-
-    console.error("Unknown API called:", url);
-    return Promise.resolve({
-      ok: false,
-      json: () => Promise.reject(new Error("Unknown API")),
-    });
+    return Promise.reject(new Error("Unknown API: " + url));
   });
 });
 

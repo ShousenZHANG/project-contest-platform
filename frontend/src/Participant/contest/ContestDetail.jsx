@@ -61,20 +61,9 @@ function ContestDetail() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`/competitions/${id}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setContestDetail(data);
+      const res = await apiClient.get(`/competitions/${id}`);
+      setContestDetail(res.data);
     } catch (err) {
-      console.error("Error fetching contest details:", err);
       setError("Failed to load contest details.");
     } finally {
       setLoading(false);

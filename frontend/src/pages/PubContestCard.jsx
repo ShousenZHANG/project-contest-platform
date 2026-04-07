@@ -1,11 +1,11 @@
 /**
  * ContestCard.js
- * 
+ *
  * This component represents a public contest card view.
  * It displays the contest's image, title, organizer, date, category, and description.
  * Users can vote for a contest or join it by clicking the corresponding buttons.
  * Voting and joining actions require user authentication and interact with the server API.
- * 
+ *
  * Developer: Beiqi Dai
  */
 
@@ -22,16 +22,15 @@ import {
   IconButton,
 } from "@mui/material";
 import { Favorite, HowToVote, Flag, Category } from "@mui/icons-material";
+import apiClient from '../api/apiClient';
 
 function ContestCard({ contest, onCardClick, onLoginRequest }) {
   const handleCardClick = () => {
-    console.log("Card clicked:", contest);
     onCardClick && onCardClick(contest);
   };
 
   const handleVoteClick = async (e) => {
     e.stopPropagation();
-    console.log("Vote clicked:", contest);
 
     try {
       const token = localStorage.getItem("token");
@@ -40,44 +39,22 @@ function ContestCard({ contest, onCardClick, onLoginRequest }) {
         return;
       }
 
-      const response = await fetch(
-        `http://localhost:5000/api/contest/${contest.id}/votes`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Vote success:", data);
-        alert("Vote success!");
-      } else {
-        const errData = await response.json();
-        console.error("Failed to vote:", errData);
-
-        if (errData.error === "Already voted") {
-          alert("You have already voted!");
-        } else {
-          alert("Vote failed, please check the console.");
-        }
-      }
+      await apiClient.post(`/api/contest/${contest.id}/votes`);
+      alert("Vote success!");
     } catch (error) {
-      console.error("Error voting:", error);
-      alert("Vote failed, network or server error.");
+      const errData = error.response?.data;
+      if (errData?.error === "Already voted") {
+        alert("You have already voted!");
+      } else {
+        alert("Vote failed, network or server error.");
+      }
     }
   };
 
   const handleJoinClick = async (e) => {
     e.stopPropagation();
-    console.log("Join clicked:", contest);
 
     const token = null;
-
-    console.log("Token from localStorage:", token);
 
     if (!token) {
       if (onLoginRequest) {
@@ -89,34 +66,15 @@ function ContestCard({ contest, onCardClick, onLoginRequest }) {
     }
 
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/contest/${contest.id}/join`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Join success:", data);
-        alert("Join success!");
-      } else {
-        const errData = await response.json();
-        console.error("Failed to join contest:", errData);
-
-        if (errData.error === "Already JOIN!") {
-          alert("You have already joined!");
-        } else {
-          alert("Join failed, please check the console.");
-        }
-      }
+      await apiClient.post(`/api/contest/${contest.id}/join`);
+      alert("Join success!");
     } catch (error) {
-      console.error("Error joining contest:", error);
-      alert("Join failed, network or server error.");
+      const errData = error.response?.data;
+      if (errData?.error === "Already JOIN!") {
+        alert("You have already joined!");
+      } else {
+        alert("Join failed, network or server error.");
+      }
     }
   };
 

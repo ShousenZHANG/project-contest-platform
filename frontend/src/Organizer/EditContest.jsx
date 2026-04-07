@@ -58,13 +58,9 @@ function EditContest() {
 
   useEffect(() => {
     if (competitionId) {
-      fetch(`/competitions/${competitionId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      })
-        .then((res) => res.json())
-        .then((data) => {
+      apiClient.get(`/competitions/${competitionId}`)
+        .then((res) => {
+          const data = res.data;
           if (data && data.id) {
             setContestData({
               contestName: data.name,
@@ -79,7 +75,7 @@ function EditContest() {
             });
           }
         })
-        .catch((err) => console.error("Failed to load contest details:", err));
+        .catch(() => {});
     }
   }, [competitionId]);
 
@@ -143,26 +139,11 @@ function EditContest() {
         introVideoUrl: "",
       };
 
-      const response = await fetch(`/competitions/update/${competitionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role"),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        alert("✅ Contest updated successfully!");
-        navigate(`/OrganizerContestList/${email}`);
-      } else {
-        alert("❌ Failed to update contest: " + (data.message || "Unknown error"));
-      }
-    } catch (err) {
-      console.error("Error updating contest:", err);
+      await apiClient.put(`/competitions/update/${competitionId}`, payload);
+      alert("✅ Contest updated successfully!");
+      navigate(`/OrganizerContestList/${email}`);
+    } catch (error) {
+      alert("❌ Failed to update contest: " + (error.response?.data?.message || "Unknown error"));
     }
   };
 

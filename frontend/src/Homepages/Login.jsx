@@ -36,7 +36,7 @@ const LoginModal = ({ onClose, onShowRegister, role }) => {
       const res = await apiClient.post("/users/login", {
         email,
         password,
-        role: email === "admin@gmail.com" ? "Admin" : role.toUpperCase(),
+        role: role.toUpperCase(),
       });
 
       const data = res.data;

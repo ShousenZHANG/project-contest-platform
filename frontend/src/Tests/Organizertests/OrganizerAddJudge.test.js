@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerAddJudge from "../../Organizer/OrganizerAddJudge";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockNavigate = jest.fn();
 jest.mock("react-router-dom", () => {
@@ -24,38 +27,31 @@ beforeEach(() => {
 
   window.confirm = jest.fn(() => true);
 
-  global.fetch = jest.fn((url, options) => {
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/test-competition/judges")) {
-      if (options?.method === "DELETE") {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve("Judge deleted") });
-      }
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ data: [{ id: 1, email: "judge1@example.com" }], pages: 1 }),
+        data: { data: [{ id: 1, email: "judge1@example.com" }], pages: 1 },
       });
     }
     if (url.includes("/registrations/test-competition/participants")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ data: [{ email: "participant@example.com" }] }),
+        data: { data: [{ email: "participant@example.com" }] },
       });
-    }
-    if (url.includes("/competitions/test-competition/assign-judges")) {
-      return Promise.resolve({ ok: true, text: () => Promise.resolve("Judge added") });
     }
     if (url.includes("/competitions/test-competition")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ name: "Test Competition" }),
+        data: { name: "Test Competition" },
       });
     }
-    return Promise.resolve({ ok: false });
+    return Promise.reject(new Error("Unknown URL"));
   });
+
+  apiClient.post.mockResolvedValue({ data: "Judge added" });
+  apiClient.delete.mockResolvedValue({ data: "Judge deleted" });
 
   mockNavigate.mockClear();
 });
 
-// 渲染器
 const renderWithRouter = () => {
   render(
     <MemoryRouter initialEntries={["/organizer-add-judge/test-competition"]}>
@@ -81,10 +77,10 @@ describe("OrganizerAddJudge", () => {
     fireEvent.click(screen.getByText(/Add Judge/i));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiClient.post).toHaveBeenCalledWith(
         expect.stringContaining("/assign-judges"),
         expect.objectContaining({
-          method: "POST",
+          judgeEmails: ["newjudge@example.com"],
         })
       );
     });
@@ -97,11 +93,8 @@ describe("OrganizerAddJudge", () => {
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/judges/1"),
-        expect.objectContaining({
-          method: "DELETE",
-        })
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        expect.stringContaining("/judges/1")
       );
     });
   });

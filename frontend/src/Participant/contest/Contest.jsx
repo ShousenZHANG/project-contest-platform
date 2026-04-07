@@ -1,6 +1,6 @@
 /**
  * @file Contest.js
- * @description 
+ * @description
  * This component provides a participant-facing view to explore available competitions.
  * Participants can:
  *  - Search competitions by keywords.
@@ -11,7 +11,7 @@
  *  - Join competitions directly if allowed.
  * The component integrates with a backend API for fetching competition data,
  * manages pagination and client-side filtering, and uses Material-UI for UI design.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -53,12 +53,6 @@ function Contest() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      console.error("No token found. Please login first.");
-      return;
-    }
-
     const fetchContests = async () => {
       try {
         const params = new URLSearchParams();
@@ -66,21 +60,10 @@ function Contest() {
         if (selectedCategories.length > 0) params.append("category", selectedCategories.join(","));
         if (selectedStatus) params.append("status", selectedStatus);
 
-        const url = `/competitions/list?${params.toString()}`;
-
-        const response = await fetch(url, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        setContests(result.data || []);
+        const res = await apiClient.get(`/competitions/list?${params.toString()}`);
+        setContests(res.data.data || []);
       } catch (error) {
-        console.error("Error fetching contests:", error);
+        // Failed to fetch contests
       }
     };
 
@@ -126,9 +109,9 @@ function Contest() {
 
   return (
     <>
-      
+
       <div className="participant-contest-container">
-        
+
         <div className="participant-contest-content">
           {/* Top search bar */}
           <div className="participant-contest-header">

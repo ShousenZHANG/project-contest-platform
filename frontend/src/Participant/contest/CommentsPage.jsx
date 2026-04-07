@@ -1,6 +1,6 @@
 /**
  * @file CommentsPage.js
- * @description 
+ * @description
  * This component manages the comments and replies section for a submission.
  * It allows participants to:
  *  - View a paginated list of comments and their replies.
@@ -8,9 +8,9 @@
  *  - Edit their own comments and replies.
  *  - Delete their own comments and replies.
  *  - Expand and collapse reply lists for better readability.
- * It integrates with a backend API for CRUD operations, handles pagination, 
+ * It integrates with a backend API for CRUD operations, handles pagination,
  * provides success/error feedback via Snackbars, and uses Material-UI for layout and styling.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -30,7 +30,7 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
-import axios from "axios";
+import apiClient from "../../api/apiClient";
 import AddComment from "./AddComment";
 import DeleteComment from "./DeleteComment";
 import "./CommentsPage.css";
@@ -57,7 +57,7 @@ function CommentsPage() {
 
   const fetchComments = useCallback(async (pageToFetch = 1, reset = false) => {
     try {
-      const res = await axios.get(
+      const res = await apiClient.get(
         `/interactions/comments/list`,
         {
           params: {
@@ -67,7 +67,6 @@ function CommentsPage() {
             sortBy: "createdAt",
             order: "desc",
           },
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
         }
       );
       const fetched = res.data.data || [];
@@ -81,7 +80,6 @@ function CommentsPage() {
         setPage(pageToFetch);
       }
     } catch (error) {
-      console.error("Failed to fetch comments:", error);
       showSnackbar("Failed to fetch comments.", "error");
     }
   }, [submissionId]);
@@ -99,21 +97,11 @@ function CommentsPage() {
   const handleReplySubmit = (parentCommentId) => {
     if (!replyContent.trim())
       return showSnackbar("Reply cannot be empty.", "error");
-    const userId = currentUserId;
-    const token = localStorage.getItem("token");
-    if (!userId || !token) return showSnackbar("Please log in.", "error");
 
-    axios
+    apiClient
       .post(
         `/interactions/comments`,
-        { submissionId, content: replyContent, parentId: parentCommentId },
-        {
-          headers: {
-            "User-ID": userId,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
+        { submissionId, content: replyContent, parentId: parentCommentId }
       )
       .then(() => {
         setReplyContent("");
@@ -121,8 +109,7 @@ function CommentsPage() {
         fetchComments(1, true);
         showSnackbar("Reply added successfully!");
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(() => {
         showSnackbar("Failed to add reply.", "error");
       });
   };
@@ -135,20 +122,11 @@ function CommentsPage() {
   const handleSaveEdit = (commentId) => {
     if (!editingContent.trim())
       return showSnackbar("Content cannot be empty.", "error");
-    const userId = currentUserId;
-    const token = localStorage.getItem("token");
 
-    axios
+    apiClient
       .put(
         `/interactions/comments/${commentId}`,
-        { submissionId, content: editingContent },
-        {
-          headers: {
-            "User-ID": userId,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
+        { submissionId, content: editingContent }
       )
       .then(() => {
         setEditingCommentId(null);
@@ -156,8 +134,7 @@ function CommentsPage() {
         fetchComments(1, true);
         showSnackbar("Comment updated successfully!");
       })
-      .catch((err) => {
-        console.error(err);
+      .catch(() => {
         showSnackbar("Failed to update comment.", "error");
       });
   };
@@ -179,9 +156,9 @@ function CommentsPage() {
 
   return (
     <div className="comments-page-container">
-      
+
       <div className="comments-page-content">
-        
+
         <div className="comments-section">
           <div className="Right-comment-place">
             <div className="comments-container">

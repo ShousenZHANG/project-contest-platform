@@ -1,9 +1,9 @@
 /**
  * RatingDetail.js
- * 
+ *
  * Allows judges to rate submissions for a competition. The component displays scoring criteria as sliders, collects feedback from the judge, and submits the ratings and feedback to the backend.
  * It handles the retrieval of scoring criteria, submission details, and provides a confirmation of the rating submission.
- * 
+ *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
@@ -38,31 +38,17 @@ function RatingDetail() {
 
   useEffect(() => {
     const fetchScoringCriteria = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       try {
-        const res = await fetch(`/competitions/${competitionId}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          const criteria = data.scoringCriteria || [];
-          setScoringCriteria(criteria);
-          const defaultScores = criteria.reduce((acc, criterion) => {
-            acc[criterion] = 5;
-            return acc;
-          }, {});
-          setScores(defaultScores);
-        } else {
-          console.error('Failed to fetch competition details:', data);
-        }
+        const res = await apiClient.get(`/competitions/${competitionId}`);
+        const criteria = res.data.scoringCriteria || [];
+        setScoringCriteria(criteria);
+        const defaultScores = criteria.reduce((acc, criterion) => {
+          acc[criterion] = 5;
+          return acc;
+        }, {});
+        setScores(defaultScores);
       } catch (err) {
-        console.error('Error fetching competition details:', err);
+        // Failed to fetch competition details
       } finally {
         setLoading(false);
       }
@@ -76,50 +62,32 @@ function RatingDetail() {
   };
 
   const handleSubmitRating = async () => {
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-    if (!token || !userId) return;
-
     const ratingsArray = scoringCriteria.map((criterion) => ({
       criterion,
       score: scores[criterion],
-      weight: 1.0 / scoringCriteria.length, // Default average weight allocation
+      weight: 1.0 / scoringCriteria.length,
     }));
 
     try {
-      const res = await fetch(`/judges/score`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-ID': userId,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          competitionId,
-          submissionId,
-          judgeComments: feedback,
-          scores: ratingsArray,
-        }),
+      await apiClient.post(`/judges/score`, {
+        competitionId,
+        submissionId,
+        judgeComments: feedback,
+        scores: ratingsArray,
       });
-
-      if (res.ok) {
-        setSnackbar({ open: true, message: 'Rating submitted successfully ✅', severity: 'success' });
-        setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
-      } else {
-        const data = await res.json();
-        setSnackbar({ open: true, message: `Failed to submit: ${data.error}`, severity: 'error' });
-      }
+      setSnackbar({ open: true, message: 'Rating submitted successfully', severity: 'success' });
+      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
     } catch (err) {
-      console.error('Error submitting rating:', err);
-      setSnackbar({ open: true, message: 'Error submitting rating ❌', severity: 'error' });
+      const errorMsg = err.response?.data?.error || 'Error submitting rating';
+      setSnackbar({ open: true, message: errorMsg, severity: 'error' });
     }
   };
 
   return (
     <>
-      
+
       <div className="rating-container">
-        
+
         <div className="rating-content">
           <Typography variant="h5" gutterBottom>
             Rate This Submission

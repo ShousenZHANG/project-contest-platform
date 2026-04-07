@@ -57,15 +57,10 @@ function Contest() {
           params.append("category", selectedCategories.join(","));
         if (selectedStatus) params.append("status", selectedStatus);
 
-        const url = `/competitions/list?${params.toString()}`;
-        console.log("🔍 Fetching contests from:", url);
-
-        const response = await fetch(url);
-        const result = await response.json();
-        console.log("📦 Raw contests:", result.data?.length, result.data?.[0]);
-        setContests(result.data || []);
+        const response = await apiClient.get(`/competitions/list`, { params });
+        setContests(response.data.data || []);
       } catch (error) {
-        console.error("Error fetching contests:", error);
+        // fetch failed silently — contests remain empty
       }
     };
 
@@ -108,9 +103,6 @@ function Contest() {
     }
     return true;
   });
-
-  console.log("🧮 Filter: participationType =", selectedParticipationType);
-  console.log("📋 Filtered contests:", filteredContests.length);
 
   return (
     <>

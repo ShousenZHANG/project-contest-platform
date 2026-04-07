@@ -1,26 +1,25 @@
 /**
  * @file RegisterModal.js
- * @description 
+ * @description
  * This component renders the user registration modal for the platform.
  * It allows users to:
  *  - Register a new account by providing name, email, password, and confirming password.
  *  - Validate password strength and matching before submitting.
  *  - Register via OAuth providers (GitHub and Google) with role-specific authorization.
- * 
+ *
  * Upon successful registration:
- *  - User information is stored locally.
- *  - Users are redirected to their corresponding profile page based on their role (Participant or Organizer).
- * 
- * The component handles error feedback, input validations, and communication with backend APIs.
- * Layout and styling are managed via RegisterModal.css.
- * 
- * Developer: Beiqi Dai,Zhaoyi Yang, Ziqi Yi
+ *  - User information is stored via AuthContext.
+ *  - Users are redirected to their corresponding profile page based on their role.
+ *
+ * Developer: Beiqi Dai, Zhaoyi Yang, Ziqi Yi
  */
 
 
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./RegisterModal.css";
 import apiClient from '../api/apiClient';
+import { useAuth } from "../context/AuthContext";
 
 const RegisterModal = ({ onClose, role }) => {
   const [name, setName] = useState("");
@@ -28,54 +27,48 @@ const RegisterModal = ({ onClose, role }) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      setError("❌ Passwords do not match, please re-enter!");
+      setError("Passwords do not match, please re-enter!");
       return;
     }
 
     const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
     if (!passwordRegex.test(password)) {
-      setError("❌ Password must be at least 8 characters and include at least one uppercase letter.");
+      setError("Password must be at least 8 characters and include at least one uppercase letter.");
       return;
     }
 
     setError("");
 
     try {
-      const res = await fetch("/users/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
+      const res = await apiClient.post("/users/register", { name, email, password, role });
+      const data = res.data;
+
+      login({
+        userId: data.userId,
+        email: data.email,
+        role: data.role,
+        accessToken: data.accessToken,
       });
 
-      const data = await res.json();
-
-      if (res.ok) {
-        localStorage.setItem("userId", data.userId);
-        localStorage.setItem("email", data.email);
-        localStorage.setItem("token", data.accessToken);
-        localStorage.setItem("role", data.role);
-
-        if (data.role === "Participant") {
-          window.location.href = `/profile/${data.email}`;
-        } else if (data.role === "Organizer") {
-          window.location.href = `/OrganizerProfile/${data.email}`;
-        } else {
-          window.location.href = "/";
-        }
-
-        alert("✅ Registration successful!");
-        onClose();
+      if (data.role === "Participant") {
+        navigate(`/profile/${data.email}`);
+      } else if (data.role === "Organizer") {
+        navigate(`/OrganizerProfile/${data.email}`);
       } else {
-        setError(data.message || "Registration failed.");
+        navigate("/");
       }
+
+      onClose();
     } catch (err) {
-      console.error("❌ Registration error", err);
-      setError("🚨 Server error. Please try again later.");
+      const msg = err.response?.data?.message || "Server error. Please try again later.";
+      setError(msg);
     }
   };
 
@@ -115,7 +108,7 @@ const RegisterModal = ({ onClose, role }) => {
             <input
               type="password"
               id="password"
-              placeholder="••••••••"
+              placeholder="********"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -127,7 +120,7 @@ const RegisterModal = ({ onClose, role }) => {
             <input
               type="password"
               id="confirmPassword"
-              placeholder="••••••••"
+              placeholder="********"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

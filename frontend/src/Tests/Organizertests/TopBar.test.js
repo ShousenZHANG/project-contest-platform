@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import TopBar from "../../Organizer/TopBar";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 const mockNavigate = jest.fn();
 const mockLocationReload = jest.fn();
@@ -12,17 +15,11 @@ jest.mock("react-router-dom", () => ({
 }));
 
 beforeAll(() => {
-  global.fetch = jest.fn((url) => {
-    if (url.includes("/users/profile")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ avatarUrl: "/mock-avatar.jpg" }),
-      });
-    } else if (url.includes("/users/logout")) {
-      return Promise.resolve({ ok: true });
-    }
-    return Promise.reject(new Error("Unknown endpoint"));
+  apiClient.get.mockResolvedValue({
+    data: { avatarUrl: "/mock-avatar.jpg" },
   });
+
+  apiClient.post.mockResolvedValue({ data: {} });
 
   Object.defineProperty(window, "location", {
     writable: true,
@@ -30,14 +27,16 @@ beforeAll(() => {
   });
 });
 
-afterAll(() => {
-  global.fetch.mockRestore();
-});
-
 beforeEach(() => {
   localStorage.setItem("email", "test@example.com");
   localStorage.setItem("token", "fake-token");
   jest.clearAllMocks();
+
+  apiClient.get.mockResolvedValue({
+    data: { avatarUrl: "/mock-avatar.jpg" },
+  });
+
+  apiClient.post.mockResolvedValue({ data: {} });
 });
 
 afterEach(() => {

@@ -74,27 +74,12 @@ function AdminCompetitionsManage() {
         ...(category && { category }),
       });
 
-      const response = await fetch(
-        `/competitions/list?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "User-ID": localStorage.getItem("userId"),
-            "User-Role": localStorage.getItem("role"),
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-      if (response.ok) {
-        setCompetitions(data.data || []);
-        setTotalPages(data.pages || 1);
-      } else {
-        alert(data.message || "Failed to fetch competitions");
-      }
+      const response = await apiClient.get(`/competitions/list?${params.toString()}`);
+      const data = response.data;
+      setCompetitions(data.data || []);
+      setTotalPages(data.pages || 1);
     } catch (error) {
-      console.error("Error fetching competitions:", error);
+      alert(error.response?.data?.message || "Failed to fetch competitions");
     } finally {
       setLoading(false);
     }
@@ -104,47 +89,21 @@ function AdminCompetitionsManage() {
     if (!window.confirm("Are you sure you want to delete this competition?")) return;
 
     try {
-      const response = await fetch(`/competitions/delete/${compId}`, {
-        method: "DELETE",
-        headers: {
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role"),
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      if (response.ok) {
-        alert("Competition deleted successfully.");
-        setCompetitions((prev) => prev.filter((c) => c.id !== compId));
-      } else {
-        const data = await response.json();
-        alert(data.message || "Failed to delete competition");
-      }
+      await apiClient.delete(`/competitions/delete/${compId}`);
+      alert("Competition deleted successfully.");
+      setCompetitions((prev) => prev.filter((c) => c.id !== compId));
     } catch (error) {
-      console.error("Error deleting competition:", error);
+      alert(error.response?.data?.message || "Failed to delete competition");
     }
   };
 
   const fetchCompetitionDetail = async (id) => {
     try {
-      const response = await fetch(`/competitions/${id}`, {
-        method: "GET",
-        headers: {
-          "User-ID": localStorage.getItem("userId"),
-          "User-Role": localStorage.getItem("role"),
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setSelectedComp(data);
-        setDialogOpen(true);
-      } else {
-        alert(data.message || "Failed to fetch competition detail");
-      }
+      const response = await apiClient.get(`/competitions/${id}`);
+      setSelectedComp(response.data);
+      setDialogOpen(true);
     } catch (error) {
-      console.error("Error fetching competition detail:", error);
+      alert(error.response?.data?.message || "Failed to fetch competition detail");
     }
   };
 

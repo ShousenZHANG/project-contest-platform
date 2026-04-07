@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import AdminCompetitionsManage from "../../Admin/AdminCompetitionsManage";
 import { BrowserRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 beforeAll(() => {
   window.alert = jest.fn();
@@ -15,11 +18,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  global.fetch = jest.fn((url, options) => {
+  apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/list")) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
+        data: {
           data: [
             {
               id: "comp-1",
@@ -31,19 +33,12 @@ beforeEach(() => {
             },
           ],
           pages: 1,
-        }),
-      });
-    }
-    if (url.includes("/competitions/delete/")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ message: "Competition deleted" }),
+        },
       });
     }
     if (url.match(/\/competitions\/[^/]+$/)) {
       return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
+        data: {
           id: "comp-1",
           name: "Awesome Competition",
           description: "A great competition",
@@ -56,14 +51,13 @@ beforeEach(() => {
           scoringCriteria: ["Creativity", "Impact"],
           allowedSubmissionTypes: ["PDF", "Video"],
           imageUrls: [],
-        }),
+        },
       });
     }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    return Promise.resolve({ data: {} });
   });
+
+  apiClient.delete.mockResolvedValue({ data: { message: "Competition deleted" } });
 });
 
 afterEach(() => {
@@ -107,7 +101,7 @@ describe("AdminCompetitionsManage", () => {
     fireEvent.change(searchInput, { target: { value: "new competition" } });
 
     await screen.findByLabelText(/Search/i);
-    expect(global.fetch).toHaveBeenCalled();
+    expect(apiClient.get).toHaveBeenCalled();
   });
 
   it("opens competition detail dialog on click", async () => {
@@ -140,11 +134,8 @@ describe("AdminCompetitionsManage", () => {
     const deleteButton = screen.getByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/competitions/delete/comp-1"),
-      expect.objectContaining({
-        method: "DELETE",
-      })
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      expect.stringContaining("/competitions/delete/comp-1")
     );
   });
 });

@@ -31,17 +31,10 @@ function TeamPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/users/profile', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'User-ID': localStorage.getItem('userId')
-          }
-        });
-        const data = await res.json();
-        console.log('[Debug] User data:', data);
-        setUserData(data);
+        const res = await apiClient.get('/users/profile');
+        setUserData(res.data);
       } catch (error) {
-        console.error('[Debug] Failed to fetch user data:', error);
+        console.error('Failed to fetch user data:', error);
       }
     })();
   }, []);

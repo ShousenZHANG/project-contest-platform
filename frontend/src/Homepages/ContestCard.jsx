@@ -32,100 +32,54 @@ import apiClient from '../api/apiClient';
 function ContestCard({ contest, onCardClick }) {
   // Click event for the entire card
   const handleCardClick = () => {
-    console.log("Card clicked:", contest);
     onCardClick && onCardClick(contest);
   };
 
   // Click event for Vote button: call backend API
   const handleVoteClick = async (e) => {
-    e.stopPropagation(); // Prevent event bubbling
-    console.log("Vote clicked:", contest);
+    e.stopPropagation();
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please log in first!");
+      return;
+    }
 
     try {
-      // Get token from localStorage (replace as needed)
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Please log in first!");
-        return;
-      }
-
-      // Send POST request to /api/contest/:id/votes
-      const response = await fetch(
-        `/api/contest/${contest.id}/votes`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        // If the response is 2xx
-        const data = await response.json();
-        console.log("Vote success:", data);
-        alert("Vote successful!");
-      } else {
-        // If not a 2xx response, parse error message
-        const errData = await response.json();
-        console.error("Failed to vote:", errData);
-
-        // If backend returns { error: "Already voted" }
-        if (errData.error === "Already voted") {
-          alert("You have already voted!");
-        } else {
-          // Other errors
-          alert("Voting failed, please check the console");
-        }
-      }
+      await apiClient.post(`/interactions/votes/count`, null, {
+        params: { submissionId: contest.id },
+      });
+      alert("Vote successful!");
     } catch (error) {
-      console.error("Error voting:", error);
-      alert("Voting failed due to network or server error");
+      const errMsg = error.response?.data?.error || error.response?.data?.message;
+      if (errMsg === "Already voted") {
+        alert("You have already voted!");
+      } else {
+        alert("Voting failed due to network or server error");
+      }
     }
   };
 
   // Click event for Join button: call backend API
   const handleJoinClick = async (e) => {
-    e.stopPropagation(); // Prevent event bubbling
-    console.log("Join clicked:", contest);
+    e.stopPropagation();
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please log in first!");
+      return;
+    }
 
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Please log in first!");
-        return;
-      }
-
-      const response = await fetch(
-        `/api/contest/${contest.id}/join`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Join success:", data);
-        alert("Joined successfully!");
-      } else {
-        const errData = await response.json();
-        console.error("Failed to join contest:", errData);
-
-        // If backend returns { error: "Already JOIN!" }
-        if (errData.error === "Already JOIN!") {
-          alert("You have already joined!");
-        } else {
-          alert("Joining failed, please check the console");
-        }
-      }
+      await apiClient.post(`/registrations/${contest.id}`);
+      alert("Joined successfully!");
     } catch (error) {
-      console.error("Error joining contest:", error);
-      alert("Joining failed due to network or server error");
+      const errMsg = error.response?.data?.error || error.response?.data?.message;
+      if (errMsg === "Already JOIN!") {
+        alert("You have already joined!");
+      } else {
+        alert("Joining failed due to network or server error");
+      }
     }
   };
 

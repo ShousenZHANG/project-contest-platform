@@ -1,9 +1,9 @@
 /**
  * ViewVote.js
- * 
+ *
  * Displays vote count for a submission and allows participants to vote or cancel their vote.
  * Fetches initial vote data and handles vote actions with backend API.
- * 
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
@@ -11,56 +11,39 @@
 
 import React, { useState, useEffect } from "react";
 import { Button, Typography, Box, Snackbar, Alert } from "@mui/material";
-import axios from "axios";
+import apiClient from "../api/apiClient";
 
 function ViewVote({ submissionId }) {
   const [votes, setVotes] = useState(0);
-  const [hasVoted, setHasVoted] = useState(false); // Whether the user has already voted
+  const [hasVoted, setHasVoted] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("info");
 
-  // Fetch initial vote count and voting status
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
-    
+
     if (!submissionId || !userId || !token) return;
 
-    // Get vote count
-    axios
-      .get(`/interactions/votes/count`, {
-        params: { submissionId },
-      })
+    apiClient
+      .get("/interactions/votes/count", { params: { submissionId } })
       .then((res) => {
         setVotes(res.data || 0);
       })
-      .catch((err) => {
-        console.error("Failed to fetch vote count:", err);
-      });
+      .catch(() => {});
 
-    // Check if already voted
-    axios
-      .get(`/interactions/votes/status`, {
-        params: { submissionId },
-        headers: {
-          "User-ID": userId,
-          "Authorization": `Bearer ${token}`,
-        },
-      })
+    apiClient
+      .get("/interactions/votes/status", { params: { submissionId } })
       .then((res) => {
         setHasVoted(res.data === true);
       })
-      .catch((err) => {
-        console.error("Failed to check vote status:", err);
-      });
+      .catch(() => {});
   }, [submissionId]);
 
-  // Handle vote or cancel vote
   const handleVote = () => {
     const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
-    console.log("提交投票参数：", { submissionId, userId, token });
 
     if (!userId || !token) {
       setSnackbarMessage("User not logged in.");
@@ -70,19 +53,8 @@ function ViewVote({ submissionId }) {
     }
 
     if (!hasVoted) {
-      // Cast vote
-      axios
-        .post(
-          `/interactions/votes?submissionId=${submissionId}`,
-           null,
-          {
-            headers: {
-              "User-ID": userId,
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-          }
-        )
+      apiClient
+        .post(`/interactions/votes?submissionId=${submissionId}`)
         .then(() => {
           setVotes((prev) => prev + 1);
           setHasVoted(true);
@@ -90,22 +62,14 @@ function ViewVote({ submissionId }) {
           setSnackbarSeverity("success");
           setSnackbarOpen(true);
         })
-        .catch((err) => {
-          console.error("Vote failed:", err);
+        .catch(() => {
           setSnackbarMessage("Vote failed.");
           setSnackbarSeverity("error");
           setSnackbarOpen(true);
         });
     } else {
-      // Cancel vote
-      axios
-        .delete(`/interactions/votes`, {
-          params: { submissionId },
-          headers: {
-            "User-ID": userId,
-            "Authorization": `Bearer ${token}`,
-          },
-        })
+      apiClient
+        .delete("/interactions/votes", { params: { submissionId } })
         .then(() => {
           setVotes((prev) => Math.max(prev - 1, 0));
           setHasVoted(false);
@@ -113,8 +77,7 @@ function ViewVote({ submissionId }) {
           setSnackbarSeverity("info");
           setSnackbarOpen(true);
         })
-        .catch((err) => {
-          console.error("Cancel vote failed:", err);
+        .catch(() => {
           setSnackbarMessage("Cancel vote failed.");
           setSnackbarSeverity("error");
           setSnackbarOpen(true);
@@ -138,14 +101,13 @@ function ViewVote({ submissionId }) {
           backgroundColor: "#FF9800",
           color: "white",
           ":hover": {
-            backgroundColor: "#FB8C00", // Darker orange for hover effect
+            backgroundColor: "#FB8C00",
           },
         }}
       >
         {hasVoted ? "Cancel Vote" : "Vote"}
       </Button>
 
-      {/* Snackbar notification */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}

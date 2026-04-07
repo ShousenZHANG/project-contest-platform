@@ -42,35 +42,23 @@ function SubmissionRatings() {
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: "totalScore", direction: "desc" });
-  const userId = localStorage.getItem("userId");
-  const role = localStorage.getItem("role");
-  const token = localStorage.getItem("token");
 
   const fetchRatings = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `/winners/scored-list?competitionId=${competitionId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
+      const res = await apiClient.get(
+        `/winners/scored-list?competitionId=${competitionId}`
       );
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.data)) {
+      const data = res.data;
+      if (Array.isArray(data.data)) {
         setSubmissions(data.data);
-      } else {
-        console.error("Failed to fetch ratings:", data);
       }
-    } catch (err) {
-      console.error("Error fetching ratings:", err);
+    } catch {
+      // fetch error handled silently
     } finally {
       setLoading(false);
     }
-  }, [competitionId, token, userId, role]);
+  }, [competitionId]);
 
   useEffect(() => {
     fetchRatings();
@@ -118,31 +106,18 @@ function SubmissionRatings() {
 
   const handleAutoAward = async () => {
     try {
-      const res = await fetch(
-        `/winners/auto-award?competitionId=${competitionId}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "User-ID": userId,
-            "User-Role": role.toUpperCase(),
-          },
-        }
-      );
-
-      if (res.status === 200) {
-        alert("🎉 Auto-award completed successfully!");
-        fetchRatings(); // refresh the data
-      } else if (res.status === 400) {
+      await apiClient.post(`/winners/auto-award?competitionId=${competitionId}`);
+      alert("🎉 Auto-award completed successfully!");
+      fetchRatings();
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 400) {
         alert("⚠️ No scored submissions found.");
-      } else if (res.status === 403) {
+      } else if (status === 403) {
         alert("❌ You are not authorized to award.");
       } else {
-        alert("❌ Unexpected error during auto-award.");
+        alert("❌ Failed to connect to server.");
       }
-    } catch (err) {
-      console.error("Auto award failed:", err);
-      alert("❌ Failed to connect to server.");
     }
   };
 

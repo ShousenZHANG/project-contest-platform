@@ -34,14 +34,9 @@ function PublicContestDetail() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/competitions/${contestId}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setContestDetail(data);
+        const response = await apiClient.get(`/competitions/${contestId}`);
+        setContestDetail(response.data);
       } catch (err) {
-        console.error("Error fetching contest details:", err);
         setError("Failed to load contest details.");
       } finally {
         setLoading(false);

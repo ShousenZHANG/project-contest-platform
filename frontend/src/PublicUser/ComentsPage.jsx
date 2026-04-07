@@ -25,7 +25,7 @@ import {
   IconButton,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import axios from "axios";
+import apiClient from "../api/apiClient";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
 import "./ComentsPage.css";
@@ -45,16 +45,13 @@ function CommentsPage() {
 
   const fetchComments = useCallback(async (pageToFetch = 1, reset = false) => {
     try {
-      const res = await axios.get(`/interactions/comments/list`, {
+      const res = await apiClient.get(`/interactions/comments/list`, {
         params: {
           submissionId,
           page: pageToFetch,
           size: 10,
           sortBy: "createdAt",
           order: "desc",
-        },
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
         },
       });
       const fetchedComments = res.data.data || [];
@@ -70,7 +67,6 @@ function CommentsPage() {
         setPage(pageToFetch);
       }
     } catch (error) {
-      console.error("Failed to fetch comments:", error);
       showSnackbar("Failed to fetch comments.", "error");
     }
   }, [submissionId]);
