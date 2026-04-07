@@ -2,32 +2,26 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import AdminProfile from "../../Admin/AdminProfile";
 import { MemoryRouter } from "react-router-dom";
+import apiClient from '../../api/apiClient';
+
+jest.mock("../../api/apiClient");
 
 beforeEach(() => {
   localStorage.setItem("token", "fake-token");
   localStorage.setItem("userId", "fake-user-id");
   localStorage.setItem("role", "admin");
 
-  global.fetch = jest.fn((url, options) => {
-    if (url.endsWith("/users/profile") && (!options || options.method === "GET")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          name: "Test Admin",
-          email: "admin@example.com",
-          description: "Admin of the platform",
-          avatarUrl: "/test-avatar.png",
-        }),
-      });
-    }
-    if (url.endsWith("/users/profile") && options?.method === "PUT") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-    if (url.endsWith("/users/profile/avatar") && options?.method === "POST") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ avatarUrl: "/new-avatar.png" }) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  apiClient.get.mockResolvedValue({
+    data: {
+      name: "Test Admin",
+      email: "admin@example.com",
+      description: "Admin of the platform",
+      avatarUrl: "/test-avatar.png",
+    },
   });
+
+  apiClient.put.mockResolvedValue({ data: {} });
+  apiClient.post.mockResolvedValue({ data: { avatarUrl: "/new-avatar.png" } });
 
   window.alert = jest.fn();
   window.URL.createObjectURL = jest.fn(() => "blob:fake-url");

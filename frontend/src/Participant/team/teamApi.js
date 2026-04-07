@@ -1,3 +1,4 @@
+import apiClient from '../../api/apiClient';
 /**
  * @file teamApi.js
  * @description
@@ -21,7 +22,7 @@
  *  - buildHeaders: Build standard headers for requests with User-ID and Authorization token.
  * 
  * Base URL:
- *  - All endpoints are prefixed with 'http://localhost:8080'
+ *  - All endpoints are prefixed with ''
  * 
  * Role: Participant
  * Developer: Beiqi Dai
@@ -29,7 +30,7 @@
 
 
 // ParticipantTeam/teamApi.js
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = '';
 
 export const fetchJoinedTeams = async (userData, setState) => {
   try {
@@ -172,7 +173,7 @@ const buildHeaders = (userData, token) => ({
 export const updateTeam = async (teamId, { name, description }, userData, { onSuccess, onError }) => {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(`http://localhost:8080/teams/${teamId}`, {
+    const res = await fetch(`/teams/${teamId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -228,7 +229,7 @@ export const getTeamCreator = async (teamId, userData) => {
 
 export const removeTeamMember = async (teamId, memberId, userData) => {
   const token = localStorage.getItem('token');
-  const res = await fetch(`http://localhost:8080/teams/${teamId}/members/${memberId}`, {
+  const res = await fetch(`/teams/${teamId}/members/${memberId}`, {
     method: 'DELETE',
     headers: {
       'User-ID': userData?.userId || '',
@@ -244,7 +245,7 @@ export const removeTeamMember = async (teamId, memberId, userData) => {
 };
 
 export const getTeamDetail = async (teamId) => {
-  const res = await fetch(`http://localhost:8080/teams/public/${teamId}`);
+  const res = await fetch(`/teams/public/${teamId}`);
   if (!res.ok) throw new Error(`Failed to fetch team detail: ${res.status}`);
   return await res.json();
 };

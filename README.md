@@ -1,243 +1,325 @@
-# 🏆 Project Contest Platform
+<p align="center">
+  <img src="frontend/public/logo192.png" alt="Questora" width="80" />
+</p>
 
-An enterprise-grade **Competition Management Platform** enabling individuals and teams to create, register, manage, and participate in competitions.  
-It supports **multi-judge scoring**, **dynamic participation modes** (individual/team), and is ideal for real-world scenarios such as innovation challenges, hackathons, academic contests, and open competitions.  
-Designed with **scalability**, **modularity**, and **high extensibility** to meet complex competition management needs.
+<h1 align="center">Questora — Competition Management Platform</h1>
 
----
+<p align="center">
+  <strong>Enterprise-grade microservices platform for hackathons, innovation challenges, and academic contests</strong>
+</p>
 
-## 🚀 Quick Start
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &nbsp;&bull;&nbsp;
+  <a href="#architecture">Architecture</a> &nbsp;&bull;&nbsp;
+  <a href="#features">Features</a> &nbsp;&bull;&nbsp;
+  <a href="#tech-stack">Tech Stack</a> &nbsp;&bull;&nbsp;
+  <a href="#api-docs">API Docs</a> &nbsp;&bull;&nbsp;
+  <a href="#license">License</a>
+</p>
 
-Follow these steps to quickly set up and run the full platform:
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/ShousenZHANG/project-contest-platform.git
-   cd project-contest-platform
-   ```
-
-2. **Prepare environment variables**  
-   Create a .env file in the project root with your required secrets and credentials (e.g. JWT, email account for notifications):
-   ```bash
-   MAIL_USERNAME=your-email@example.com
-   MAIL_PASSWORD=your-smtp-app-password
-   JWT_SECRET=your-jwt-secret
-   GITHUB_CLIENT_ID=your-github-client-id
-   GITHUB_CLIENT_SECRET=your-github-client-secret
-   GOOGLE_CLIENT_ID=your-google-client-id
-   GOOGLE_CLIENT_SECRET=your-google-client-secret
-   ```
-
-3. **One-command full stack startup**  
-   Build and start all backend, frontend, database, and infrastructure services with one command:
-   ```bash
-   docker-compose up --build -d
-   ```
-   ⏳ The first startup may take several minutes for image build and initialization.
-
-4. **Manually verify database connection (IMPORTANT!)**
-
-   After all services have started, **use Navicat**, **DataGrip**, or **any MySQL client** to **manually connect** to the database.  
-   Open the `project_contest_platform` database and verify the tables are properly initialized.
-
-   > ⚡ **This step is essential.**  
-   > If you do not manually connect and verify the database connection at least once,  
-   > accessing the frontend or APIs may result in errors like **Internal Server Error: Could not open JDBC Connection for transaction**.
-
-   Example connection information:
-   - **Host:** `localhost`
-   - **Port:** `3306`
-   - **Username:** `root`
-   - **Password:** `root`
-   - **Database:** `project_contest_platform`
-
-5. **Access the platform**
-  - Swagger API Docs: [http://localhost:8080/doc.html#/home](http://localhost:8080/doc.html#/home)
-  - Frontend Web App: [http://localhost:3000](http://localhost:3000)
-
-## ⚙️ Jenkins CI/CD (Continuous Integration & Deployment)
-
-This project includes built-in support for **automated CI/CD pipelines with Jenkins**.
-
-- **Jenkins service is included** in `docker-compose.yml` (`jenkins` container).
-- On every code push, Jenkins can automatically:
-    - Pull the latest code from GitHub
-    - Build all backend/frontend Docker images
-    - Run tests and start or update the platform stack
-
-**Quick Start:**
-1. Start Jenkins:
-   ```bash
-   docker-compose up -d jenkins
-    ```
-2. Access Jenkins Dashboard: [http://localhost:8888](http://localhost:8888)
-3. Get the initial password:
-   ```bash
-   docker logs -f jenkins
-   ```
-4. Set up your pipeline job (see sample Jenkinsfile in the repo) and connect your GitHub repository.
-5. On each commit, Jenkins will automatically build and deploy the latest platform stack.
-Jenkins enables true one-click automated build, test, and deployment for this microservices project.
----
-
-## 🔑 Default Admin Account
-
-| Role  | Email               | Password    |
-|-------|---------------------|-------------|
-| Admin | admin@gmail.com      | TestJwt1234 |
-
-> ⚠️ **Note:**  
-> When logging in, you need to select a role (Participant or Organizer).  
-> As long as you use the email and password provided above, you will be successfully logged in and redirected to the Admin Homepage.  
-> The selected role does not affect the login outcome.
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-23-orange?logo=openjdk&logoColor=white" alt="Java 23" />
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white" alt="MySQL" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
+</p>
 
 ---
 
-## 🌐 Service Management URLs
+## Overview
 
-| Service               | URL                                         | Username | Password |
-|-----------------------|---------------------------------------------|----------|----------|
-| RabbitMQ Dashboard    | [http://localhost:15672](http://localhost:15672) | guest    | guest    |
-| Nacos Console         | [http://localhost:8848/nacos](http://localhost:8848/nacos) | nacos    | nacos    |
-| MinIO Console         | [http://localhost:9001](http://localhost:9001) | minio    | minio123 |
+Questora is a full-stack competition management platform that enables organizations to create, manage, and run competitions at scale. It supports **multi-judge scoring**, **individual and team participation**, **real-time notifications**, and **OAuth authentication** — all powered by a production-ready microservices backend.
+
+**Use cases:** hackathons, innovation challenges, academic contests, open competitions, internal company events.
 
 ---
 
-> **Note:**
-> - Database schema is auto-generated — no need to manually import SQL.
-> - First-time startup may take a few minutes as containers initialize.
+## Quick Start
 
-## 🎯 Project Highlights
+### Prerequisites
 
-- 🚀 Fully modular and scalable microservices architecture
-- 🛡️ Enterprise-grade authentication and role-based authorization
-- ⚡ Asynchronous event-driven design using RabbitMQ
-- 🎯 Full multi-judge review, scoring aggregation, and winner selection
-- 📦 Centralized file storage with MinIO integration
-- 🖥️ Complete frontend-backend separation with React and API Gateway
-- 📚 Well-documented APIs with OpenAPI 3.0 (Swagger UI)
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- Git
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/ShousenZHANG/project-contest-platform.git
+cd project-contest-platform
+```
+
+Create a `.env` file in the project root:
+
+```env
+JWT_SECRET=your-jwt-secret
+
+MAIL_USERNAME=your-email@example.com
+MAIL_PASSWORD=your-smtp-app-password
+
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
+### 2. Launch
+
+```bash
+docker-compose up --build -d
+```
+
+> First startup takes a few minutes for image builds and database initialization.
+
+### 3. Verify Database
+
+After all containers are running, connect to MySQL with any client to confirm tables are initialized:
+
+| Parameter | Value |
+|-----------|-------|
+| Host | `localhost` |
+| Port | `3306` |
+| User | `root` |
+| Password | `root` |
+| Database | `project_contest_platform` |
+
+> This verification step ensures JDBC connections are established before accessing the platform.
+
+### 4. Access
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | http://localhost:3000 |
+| **API Docs** (Swagger) | http://localhost:8080/doc.html |
+| **RabbitMQ** Dashboard | http://localhost:15672 (guest / guest) |
+| **Nacos** Console | http://localhost:8848/nacos (nacos / nacos) |
+| **MinIO** Console | http://localhost:9001 (minio / minio123) |
+
+### Default Admin Credentials
+
+| Email | Password |
+|-------|----------|
+| admin@gmail.com | TestJwt1234 |
+
+> Select any role during login — the system recognizes the admin account automatically.
 
 ---
 
-## 🚀 Features
+## Architecture
 
-### 🧑‍💻 User Management
-- Secure user registration and login (JWT-based)
-- OAuth login integration (GitHub, Google)
-- Role-based access control: `Admin`, `Organizer`, `Participant`, `Judge`
-- Profile editing and avatar upload (MinIO)
+```
+                         ┌─────────────────┐
+                         │   React + Vite   │
+                         │   Frontend :3000  │
+                         └────────┬─────────┘
+                                  │
+                         ┌────────▼─────────┐
+                         │   API Gateway     │
+                         │   :8080 (JWT)     │
+                         └────────┬─────────┘
+                                  │
+          ┌───────────┬───────────┼───────────┬───────────┬───────────┐
+          │           │           │           │           │           │
+   ┌──────▼──┐ ┌──────▼──┐ ┌─────▼───┐ ┌─────▼───┐ ┌─────▼───┐ ┌────▼────┐
+   │  User   │ │  Comp.  │ │  Reg.   │ │  Judge  │ │  File   │ │ Inter.  │
+   │ Service │ │ Service │ │ Service │ │ Service │ │ Service │ │ Service │
+   │  :8081  │ │  :8082  │ │  :8083  │ │  :8084  │ │  :8085  │ │  :8086  │
+   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘
+        │           │           │           │           │           │
+   ┌────▼───────────▼───────────▼───────────▼───────────▼───────────▼────┐
+   │                        Infrastructure                               │
+   │  MySQL 8.0  ·  Redis 7  ·  RabbitMQ  ·  Nacos  ·  MinIO            │
+   └─────────────────────────────────────────────────────────────────────┘
+```
 
-### 🏁 Competition Management
-- Create, update, and manage competitions
-- Set participation type: `INDIVIDUAL` or `TEAM`
-- Upload intro videos and promotional images
-- Configure public or private competition visibility
-- Manage competition lifecycle with full status control:
-    - `UPCOMING`: Competition is announced but not started
-    - `ONGOING`: Competition is currently active
-    - `COMPLETED`: Submission phase is closed
-    - `AWARDED`: Winners have been announced
-    - `CANCELED`: Competition has been canceled
+### Services
 
-### 📝 Registration System
-- Individual and Team registration (role-checked)
-- Organizer view of registered participants/teams with search & sorting
-- Cancel or remove registration with notifications
-- Pagination, search, and sort support in all endpoints
-
-### 🧠 Submission & Review System
-- Upload submissions (PDF, ZIP, images, etc.)
-- Assign multiple judges per submission
-- Judges can review, comment, and score independently
-- Final results aggregated based on multiple judges’ scores
-- Public voting and commenting available for approved submissions
-
-### 👥 Team System
-- Create, update, delete, or disband teams
-- Join/leave team requests
-- Manage team members (leader-exclusive)
-- Browse, search, and paginate all teams
-
-### 📦 File Storage System
-- Centralized file storage using **MinIO**
-- Supports avatars, videos, and submission files
-- Unified file-service APIs for upload/download/delete
-### 📡 Notification System
-- Asynchronous event messaging via **RabbitMQ**
-- Email notifications for registration, deregistration, and submission updates
+| Service | Port | Responsibility |
+|---------|------|----------------|
+| **API Gateway** | 8080 | JWT auth filter, request routing, CORS |
+| **User Service** | 8081 | Users, roles, OAuth (GitHub/Google), teams |
+| **Competition Service** | 8082 | Competition CRUD, organizer/judge assignment |
+| **Registration Service** | 8083 | Registrations, submissions, file uploads |
+| **Judge Service** | 8084 | Scoring, reviews, winner selection, dashboards |
+| **File Service** | 8085 | MinIO-based file upload/download/delete |
+| **Interaction Service** | 8086 | Voting, commenting on submissions |
 
 ---
-## 📚 User Guide
 
-### Registration and Login
-- New users can register via email/password or sign in using GitHub/Google OAuth.
-- Admin can log in using the provided default credentials.
-- During admin login, the system allows selecting any available role to access the corresponding management interface.
-- Simply enter the admin email and password to proceed.
+## Features
 
-### Competition Management
-- Organizers can create and configure competitions, setting participation type and uploading promotional materials.
+### Authentication & Authorization
+- JWT-based registration and login
+- OAuth 2.0 login (GitHub, Google)
+- Role-based access control: **Admin**, **Organizer**, **Participant**, **Judge**
+- Profile management with avatar upload
 
-### Registration for Competitions
-- Participants or teams can register for competitions through the registration page.
-- Organizers can approve or remove participants as needed.
+### Competition Lifecycle
+- Full CRUD for competitions with lifecycle states: `UPCOMING` → `ONGOING` → `COMPLETED` → `AWARDED`
+- Participation modes: **Individual** or **Team**
+- Media uploads (intro videos, promotional images)
+- Public / private visibility control
 
-### Submission and Review
-- Participants can upload their submissions before the competition deadline.
-- Judges review assigned submissions, score independently, and provide feedback.
-- Winners are automatically calculated based on aggregated scores.
+### Submissions & Judging
+- Multi-format submission uploads (PDF, ZIP, images)
+- Multi-judge assignment and independent scoring
+- Score aggregation and automated winner selection
+- Public voting and commenting on approved submissions
 
 ### Team Management
-- Users can create teams, invite members, manage membership, and participate in team-based competitions.
+- Create, join, leave, and disband teams
+- Leader-managed member controls
+- Team-based competition registration
+
+### Notifications
+- Asynchronous event messaging via RabbitMQ
+- Email notifications for registration, deregistration, and submission events
 
 ---
 
-## 🧱 Microservices Architecture
+## Tech Stack
 
-```text
-api-gateway
-│
-├── user-service           # User management, roles, OAuth login, team management
-├── competition-service    # Competition creation, updates, and organizer controls
-├── registration-service   # Individual and team registrations, and submission management
-├── judge-service          # Judge assignment, submission reviews, and scoring workflows
-├── file-service           # Centralized file storage service using MinIO
-├── interaction-service    # Public voting and commenting on approved submissions
-│
-└── coverage-report        # (Internal) Test coverage reports, not a production service
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | Java 23, Spring Boot 3.4, Spring Cloud 2024, MyBatis-Plus, OpenFeign |
+| **Frontend** | React 19, Vite 8, MUI 6, Tailwind CSS 4, React Router 6, Framer Motion |
+| **Auth** | JWT (Hutool), Redis, OAuth 2.0 (GitHub, Google) |
+| **Gateway** | Spring Cloud Gateway |
+| **Database** | MySQL 8.0 |
+| **Cache** | Redis 7 |
+| **Messaging** | RabbitMQ |
+| **Storage** | MinIO (S3-compatible) |
+| **Discovery** | Nacos |
+| **API Docs** | Knife4j / SpringDoc OpenAPI 3.0 |
+| **CI/CD** | Docker Compose, Jenkins |
+| **Testing** | JUnit 5, Mockito, Jest, Playwright |
+
+---
+
+## Project Structure
+
+```
+project-contest-platform/
+├── backend/
+│   ├── api-gateway/              # Request routing + JWT filter
+│   ├── common-lib/               # Shared DTOs, exceptions, utilities
+│   ├── user-service/             # Users, roles, OAuth, teams
+│   ├── competition-service/      # Competition management
+│   ├── registration-service/     # Registrations + submissions
+│   ├── judge-service/            # Scoring + winner selection
+│   ├── file-service/             # MinIO file operations
+│   ├── interaction-service/      # Votes + comments
+│   └── coverage-report/          # JaCoCo aggregated coverage
+├── frontend/
+│   ├── src/
+│   │   ├── theme/                # MUI design tokens + theme
+│   │   ├── layouts/              # DashboardLayout, PublicLayout
+│   │   ├── services/             # API service modules
+│   │   ├── shared/components/    # ErrorBoundary, Toast, EmptyState
+│   │   ├── context/              # AuthContext
+│   │   ├── Admin/                # Admin pages
+│   │   ├── Organizer/            # Organizer pages
+│   │   ├── Participant/          # Participant pages
+│   │   ├── PublicUser/           # Public pages
+│   │   └── Homepages/            # Landing + auth pages
+│   └── vite.config.js
+├── mysql-init/                   # Database schema auto-init
+├── docker-compose.yml
+└── pom.xml                       # Maven parent POM
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Database Schema
 
-| Layer         | Technology                                          |
-|---------------|------------------------------------------------------|
-| Backend       | Java 23, Spring Boot 3.x, Spring Cloud, MyBatis-Plus, OpenFeign |
-| Auth          | JWT, Redis, OAuth2 (GitHub, Google)                  |
-| Gateway       | Spring Cloud Gateway                                |
-| Storage       | MinIO (S3-compatible object storage)                |
-| Database      | MySQL 8.x                                            |
-| Messaging     | RabbitMQ                                             |
-| Frontend      | React, React Router, MUI                 |
-| DevOps        | Docker, Nacos (service discovery), Swagger (OpenAPI 3.0) |
+Core tables organized by domain:
 
----
+| Domain | Tables |
+|--------|--------|
+| **Users** | `users`, `roles`, `user_roles` |
+| **Competitions** | `competitions`, `competition_participants`, `competition_organizers`, `competition_teams`, `competition_judges` |
+| **Teams** | `team`, `team_members` |
+| **Submissions** | `submission_records`, `submission_comments`, `submission_votes`, `submission_winners` |
+| **Judging** | `submission_judges`, `submission_judge_scores` |
 
-## 📂 Database Structure (Core Tables)
-
-- `users`, `roles`, `user_roles`
-- `competitions`, `competition_participants`, `competition_organizers`, `competition_teams`, `competition_judges`
-- `team`, `team_members`
-- `submission_records`, `submission_comments`, `submission_votes`, `submission_winners`
-- `submission_judges`, `submission_judge_scores`
-
-> Supports both **individual** and **team** submissions,  
-> with full support for **multi-judge reviews**, **scoring aggregation**, and **winner selection**.  
-> Enforces strict validation, constraint integrity, and role-based data access.
+> Schema is auto-created from `mysql-init/create_table.sql` on first startup.
 
 ---
 
-## 📧 License & Contact
+## API Docs
 
-MIT License © 2025
+Interactive API documentation is available via Knife4j (Swagger UI):
+
+```
+http://localhost:8080/doc.html
+```
+
+All endpoints are organized by service with request/response examples.
+
+---
+
+## CI/CD
+
+Jenkins is included in the Docker Compose stack for automated builds:
+
+```bash
+docker-compose up -d jenkins
+```
+
+- **Dashboard:** http://localhost:8888
+- **Initial password:** `docker logs -f jenkins`
+- Supports automated build, test, and deploy on every push
+
+---
+
+## Development
+
+### Backend
+
+```bash
+./mvnw clean install                              # Build all modules
+./mvnw test                                       # Run all tests
+./mvnw test -pl backend/user-service              # Test single module
+./mvnw test -pl backend/user-service -Dtest=JwtUtilTest  # Single test class
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                                       # Dev server on :3000
+npm test                                          # Jest tests
+npm run build                                     # Production build
+```
+
+---
+
+## License
+
+```
+MIT License
+
+Copyright (c) 2025 Questora Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

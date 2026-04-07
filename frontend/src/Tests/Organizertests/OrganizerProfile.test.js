@@ -9,7 +9,7 @@ beforeEach(() => {
   localStorage.setItem("role", "organizer");
 
   global.fetch = jest.fn((url, options) => {
-    if (url.endsWith("/users/profile") && (!options || options.method === "GET")) {
+    if (url.endsWith("/users/profile") && (!options || options.method === "GET" || !options.method)) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
