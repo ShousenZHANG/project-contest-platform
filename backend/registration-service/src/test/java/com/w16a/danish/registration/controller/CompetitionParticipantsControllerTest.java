@@ -2,6 +2,7 @@ package com.w16a.danish.registration.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -18,6 +19,7 @@ import java.util.List;
  * @author Eddy
  * @since 2025-04-18
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionJudgeScoresServiceImpl extends ServiceImpl<SubmissionJudgeScoresMapper, SubmissionJudgeScores> implements ISubmissionJudgeScoresService {

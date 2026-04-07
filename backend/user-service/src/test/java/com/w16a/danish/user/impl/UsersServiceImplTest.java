@@ -10,7 +10,9 @@ import com.w16a.danish.user.domain.po.Roles;
 import com.w16a.danish.user.domain.po.UserRoles;
 import com.w16a.danish.user.domain.po.Users;
 import com.w16a.danish.user.domain.vo.*;
-import com.w16a.danish.user.exception.BusinessException;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.user.feign.*;
 import com.w16a.danish.user.mapper.UsersMapper;
 import com.w16a.danish.user.service.IRolesService;
@@ -27,6 +29,9 @@ import org.mockito.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mail.javamail.JavaMailSender;
+
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.*;
 
@@ -354,9 +359,9 @@ class UsersServiceImplTest {
     @Test
     @DisplayName("✅ Should list admin users successfully")
     void testListUsersAdminSuccess() {
-        when(usersService.lambdaQuery()).thenReturn(mock(LambdaQueryChainWrapper.class));
-        when(userRolesService.list()).thenReturn(List.of(new UserRoles().setUserId("uid").setRoleId(1)));
-        when(rolesService.getById(anyInt())).thenReturn(new Roles().setName("PARTICIPANT"));
+        IPage<Users> emptyPage = new Page<>();
+        emptyPage.setRecords(Collections.emptyList());
+        when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
         PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, "createdAt", "asc");
 
@@ -579,9 +584,9 @@ class UsersServiceImplTest {
     @Test
     @DisplayName("✅ Should list users admin with empty filters")
     void testListUsersAdmin_EmptyFilters() {
-        when(usersService.lambdaQuery()).thenReturn(mock(LambdaQueryChainWrapper.class));
-        when(userRolesService.list()).thenReturn(List.of(new UserRoles().setUserId("uid").setRoleId(1)));
-        when(rolesService.getById(anyInt())).thenReturn(new Roles().setName("PARTICIPANT"));
+        IPage<Users> emptyPage = new Page<>();
+        emptyPage.setRecords(Collections.emptyList());
+        when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
         PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, null, null);
 
@@ -591,9 +596,9 @@ class UsersServiceImplTest {
     @Test
     @DisplayName("✅ Should list users admin sorted descending")
     void testListUsersAdmin_SortDesc() {
-        when(usersService.lambdaQuery()).thenReturn(mock(LambdaQueryChainWrapper.class));
-        when(userRolesService.list()).thenReturn(List.of(new UserRoles().setUserId("uid").setRoleId(1)));
-        when(rolesService.getById(anyInt())).thenReturn(new Roles().setName("PARTICIPANT"));
+        IPage<Users> emptyPage = new Page<>();
+        emptyPage.setRecords(Collections.emptyList());
+        when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
         PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, "createdAt", "desc");
 

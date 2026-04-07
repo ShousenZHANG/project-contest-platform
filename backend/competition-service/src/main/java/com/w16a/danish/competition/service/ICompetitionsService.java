@@ -6,8 +6,8 @@ import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
 import com.w16a.danish.competition.domain.po.Competitions;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.competition.domain.vo.PageResponse;
-import com.w16a.danish.competition.domain.vo.UserBriefVO;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

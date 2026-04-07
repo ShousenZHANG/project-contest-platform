@@ -38,4 +38,4 @@ CMD /wait-for-it.sh mysql:3306 -- \
     /wait-for-it.sh rabbitmq:5672 -- \
     /wait-for-it.sh nacos:8848 -- \
     /wait-for-it.sh minio:9000 -- \
-    java -jar /app/registration-service.jar
+    java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -jar /app/registration-service.jar

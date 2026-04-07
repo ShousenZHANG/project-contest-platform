@@ -2,7 +2,7 @@ package com.w16a.danish.interaction.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.interaction.domain.po.SubmissionVotes;
-import com.w16a.danish.interaction.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.mapper.SubmissionVotesMapper;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @author Eddy ZHANG
  * @date 2025/04/08
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMapper, SubmissionVotes> implements ISubmissionVotesService {

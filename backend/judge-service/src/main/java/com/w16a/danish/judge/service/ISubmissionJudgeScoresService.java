@@ -2,7 +2,6 @@ package com.w16a.danish.judge.service;
 
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.w16a.danish.judge.domain.po.SubmissionRecords;
 
 import java.util.List;
 

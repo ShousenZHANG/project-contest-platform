@@ -4,14 +4,13 @@ import cn.hutool.core.collection.CollUtil;
 import com.w16a.danish.judge.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
-import com.w16a.danish.judge.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.InteractionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.w16a.danish.judge.service.IDashboardService;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Implementation of the Dashboard Service, retrieving statistics via Feign clients.
@@ -29,6 +29,7 @@ import java.util.Optional;
  * @author Eddy
  * @date 2025/04/20
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements IDashboardService {
@@ -37,7 +38,6 @@ public class DashboardServiceImpl implements IDashboardService {
     private final SubmissionServiceClient registrationServiceClient;
     private final InteractionServiceClient interactionServiceClient;
     private final ICompetitionJudgesService competitionJudgesService;
-    private final ISubmissionRecordsService submissionRecordsService;
     private final UserServiceClient userServiceClient;
 
     @Override
@@ -78,7 +78,8 @@ public class DashboardServiceImpl implements IDashboardService {
         int judgeCount = competitionJudgesService.countJudgesByCompetitionId(competitionId);
         dashboard.setJudgeCount(judgeCount);
 
-        var scoreStats = submissionRecordsService.getSubmissionScoreStatistics(competitionId);
+        var scoreStatsResp = registrationServiceClient.getScoreStatistics(competitionId);
+        var scoreStats = scoreStatsResp.getBody();
         if (scoreStats != null) {
             dashboard.setAverageScore(scoreStats.getAverageScore());
             dashboard.setHighestScore(scoreStats.getHighestScore());
@@ -104,7 +105,7 @@ public class DashboardServiceImpl implements IDashboardService {
 
             ParticipationType participationType = competition.getParticipationType();
             if (participationType == ParticipationType.INDIVIDUAL) {
-                var mySubmission = submissionRecordsService.getMySubmissionBasic(competitionId, userId);
+                var mySubmission = registrationServiceClient.getMySubmissionBasic(competitionId, userId).getBody();
                 if (mySubmission != null) {
                     hasSubmitted = true;
                     dashboard.setMyTotalScore(mySubmission.getTotalScore());
@@ -116,7 +117,7 @@ public class DashboardServiceImpl implements IDashboardService {
 
                 if (CollUtil.isNotEmpty(teamIds)) {
                     for (String teamId : teamIds) {
-                        var teamSubmission = submissionRecordsService.getTeamSubmissionBasic(competitionId, teamId);
+                        var teamSubmission = registrationServiceClient.getTeamSubmissionBasic(competitionId, teamId).getBody();
                         if (teamSubmission != null) {
                             hasSubmitted = true;
                             dashboard.setMyTotalScore(teamSubmission.getTotalScore());

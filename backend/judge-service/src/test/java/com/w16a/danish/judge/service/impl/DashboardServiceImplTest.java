@@ -3,13 +3,12 @@ package com.w16a.danish.judge.service.impl;
 import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.*;
-import com.w16a.danish.judge.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.InteractionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +37,6 @@ class DashboardServiceImplTest {
     @Mock private SubmissionServiceClient registrationServiceClient;
     @Mock private InteractionServiceClient interactionServiceClient;
     @Mock private ICompetitionJudgesService competitionJudgesService;
-    @Mock private ISubmissionRecordsService submissionRecordsService;
     @Mock private UserServiceClient userServiceClient;
 
     @BeforeEach
@@ -89,15 +87,15 @@ class DashboardServiceImplTest {
         scoreStats.setAverageScore(BigDecimal.valueOf(80));
         scoreStats.setHighestScore(BigDecimal.valueOf(100));
         scoreStats.setLowestScore(BigDecimal.valueOf(60));
-        when(submissionRecordsService.getSubmissionScoreStatistics(any()))
-                .thenReturn(scoreStats);
+        when(registrationServiceClient.getScoreStatistics(any()))
+                .thenReturn(ResponseEntity.ok(scoreStats));
 
         // Arrange - Mock user's own submission
         SubmissionInfoVO mySubmission = new SubmissionInfoVO();
         mySubmission.setTotalScore(BigDecimal.valueOf(88));
         mySubmission.setReviewStatus("APPROVED");
-        when(submissionRecordsService.getMySubmissionBasic(any(), any()))
-                .thenReturn(mySubmission);
+        when(registrationServiceClient.getMySubmissionBasic(any(), any()))
+                .thenReturn(ResponseEntity.ok(mySubmission));
 
         // Arrange - Mock trends
         when(registrationServiceClient.getParticipantTrend(any()))
@@ -139,8 +137,8 @@ class DashboardServiceImplTest {
         teamSubmission.setTotalScore(BigDecimal.valueOf(92));
         teamSubmission.setReviewStatus("APPROVED");
 
-        when(submissionRecordsService.getTeamSubmissionBasic(any(), any()))
-                .thenReturn(teamSubmission);
+        when(registrationServiceClient.getTeamSubmissionBasic(any(), any()))
+                .thenReturn(ResponseEntity.ok(teamSubmission));
 
         // 🛠 Mock registration stats
         RegistrationStatisticsVO registrationStats = new RegistrationStatisticsVO();
@@ -167,6 +165,13 @@ class DashboardServiceImplTest {
 
         when(interactionServiceClient.getInteractionStatistics(any()))
                 .thenReturn(ResponseEntity.ok(interactionStats));
+
+        SubmissionScoreStatisticsVO scoreStats = new SubmissionScoreStatisticsVO();
+        scoreStats.setAverageScore(BigDecimal.valueOf(85));
+        when(registrationServiceClient.getScoreStatistics(any()))
+                .thenReturn(ResponseEntity.ok(scoreStats));
+
+        when(competitionJudgesService.countJudgesByCompetitionId(any())).thenReturn(3);
 
         // Act
         CompetitionDashboardVO dashboard = dashboardService.getCompetitionStatistics("competitionId", "userId");

@@ -1,6 +1,6 @@
 package com.w16a.danish.competition.domain.enums;
 
-import com.w16a.danish.competition.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;

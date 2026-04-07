@@ -6,16 +6,17 @@ import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
-import com.w16a.danish.judge.domain.po.SubmissionRecords;
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
-import com.w16a.danish.judge.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionWinnersMapper;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import com.w16a.danish.judge.service.ISubmissionWinnersService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -36,12 +38,13 @@ import java.util.stream.Collectors;
  * @author Eddy
  * @since 2025-04-18
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersMapper, SubmissionWinners> implements ISubmissionWinnersService {
 
     private final CompetitionServiceClient competitionServiceClient;
-    private final ISubmissionRecordsService submissionRecordsService;
+    private final SubmissionServiceClient submissionServiceClient;
     private final ISubmissionJudgeScoresService submissionJudgeScoresService;
     private final ISubmissionJudgesService submissionJudgesService;
     private final UserServiceClient userServiceClient;
@@ -64,17 +67,16 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can view scored submissions.");
         }
 
-        List<SubmissionRecords> submissions = submissionRecordsService.lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .isNotNull(SubmissionRecords::getTotalScore)
-                .list();
+        List<SubmissionInfoVO> submissions = Optional.ofNullable(
+                submissionServiceClient.getScoredSubmissions(competitionId).getBody())
+                .orElse(Collections.emptyList());
 
         if (submissions.isEmpty()) {
             return emptyPageResponse(page, size);
         }
 
         List<String> submissionIds = submissions.stream()
-                .map(SubmissionRecords::getId)
+                .map(SubmissionInfoVO::getId)
                 .toList();
 
         Map<String, Map<String, BigDecimal>> submissionCriteriaScoreMap = submissionJudgeScoresService
@@ -157,16 +159,15 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can auto-award submissions.");
         }
 
-        List<SubmissionRecords> submissions = submissionRecordsService.lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .isNotNull(SubmissionRecords::getTotalScore)
-                .list();
+        List<SubmissionInfoVO> submissions = Optional.ofNullable(
+                submissionServiceClient.getScoredSubmissions(competitionId).getBody())
+                .orElse(Collections.emptyList());
         if (submissions.isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "No scored submissions found for this competition.");
         }
 
         List<String> submissionIds = submissions.stream()
-                .map(SubmissionRecords::getId)
+                .map(SubmissionInfoVO::getId)
                 .toList();
 
         Map<String, Map<String, BigDecimal>> submissionCriteriaScoreMap =
@@ -181,11 +182,11 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
                                 )
                         ));
 
-        List<SubmissionRecords> sortedSubmissions = submissions.stream()
+        List<SubmissionInfoVO> sortedSubmissions = submissions.stream()
                 .sorted(Comparator
-                        .comparing((SubmissionRecords s) -> Optional.ofNullable(s.getTotalScore()).orElse(BigDecimal.ZERO))
+                        .comparing((SubmissionInfoVO s) -> Optional.ofNullable(s.getTotalScore()).orElse(BigDecimal.ZERO))
                         .reversed()
-                        .thenComparing(SubmissionRecords::getId)
+                        .thenComparing(SubmissionInfoVO::getId)
                 )
                 .toList();
 
@@ -195,7 +196,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
         int assignedRanks = 0;
         int maxRanks = 3;
 
-        for (SubmissionRecords submission : sortedSubmissions) {
+        for (SubmissionInfoVO submission : sortedSubmissions) {
             BigDecimal score = Optional.ofNullable(submission.getTotalScore()).orElse(BigDecimal.ZERO);
 
             if (prevScore == null || score.compareTo(prevScore) < 0) {
@@ -259,7 +260,6 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
         submissions.forEach(submission -> {
             boolean hasAnyAward = winners.stream()
                     .anyMatch(w -> w.getSubmissionId().equals(submission.getId()));
-
             if (hasAnyAward) {
                 sendAwardNotification(submission, competitionId, winners);
             }
@@ -281,9 +281,9 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
 
         List<String> submissionIds = winnersGroupedBySubmission.keySet().stream().toList();
 
-        List<SubmissionRecords> submissions = submissionRecordsService.lambdaQuery()
-                .in(SubmissionRecords::getId, submissionIds)
-                .list();
+        List<SubmissionInfoVO> submissions = Optional.ofNullable(
+                submissionServiceClient.getSubmissionsByIds(submissionIds).getBody())
+                .orElse(Collections.emptyList());
 
         if (submissions.isEmpty()) {
             return new PageResponse<>(List.of(), 0, page, size, 0);
@@ -292,7 +292,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
         Set<String> userIds = new HashSet<>();
         Set<String> teamIds = new HashSet<>();
 
-        for (SubmissionRecords submission : submissions) {
+        for (SubmissionInfoVO submission : submissions) {
             if (StrUtil.isNotBlank(submission.getUserId())) {
                 userIds.add(submission.getUserId());
             }
@@ -354,7 +354,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
                 .setAwardDescription(null);
     }
 
-    private void sendAwardNotification(SubmissionRecords submission, String competitionId, List<SubmissionWinners> winners) {
+    private void sendAwardNotification(SubmissionInfoVO submission, String competitionId, List<SubmissionWinners> winners) {
         CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
         if (competition == null) {
             return;
@@ -399,7 +399,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
         }
     }
 
-    private AwardWinnerMessage buildAwardMessage(String userName, String userEmail, SubmissionRecords submission, CompetitionResponseVO competition, boolean isWinner, List<SubmissionWinners> winners) {
+    private AwardWinnerMessage buildAwardMessage(String userName, String userEmail, SubmissionInfoVO submission, CompetitionResponseVO competition, boolean isWinner, List<SubmissionWinners> winners) {
         AwardWinnerMessage message = new AwardWinnerMessage();
         message.setUserName(userName);
         message.setUserEmail(userEmail);

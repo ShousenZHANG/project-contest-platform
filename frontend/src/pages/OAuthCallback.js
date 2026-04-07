@@ -13,10 +13,12 @@
 
 import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { login } = useAuth();
   const token = searchParams.get('token');
   const email = searchParams.get('email');
   const role = searchParams.get('role');
@@ -24,10 +26,7 @@ function OAuthCallback() {
 
   useEffect(() => {
     if (token && email && role) {
-      localStorage.setItem("userId", userId);
-      localStorage.setItem('token', token);
-      localStorage.setItem('email', email);
-      localStorage.setItem('role', role);
+      login({ userId, email, role, accessToken: token });
 
       if (role === 'Participant') {
         navigate(`/profile/${email}`);
@@ -40,7 +39,7 @@ function OAuthCallback() {
       alert('Missing required info from OAuth redirect.');
       navigate('/');
     }
-  }, [token, email, role, userId, navigate]);
+  }, [token, email, role, userId, navigate, login]);
 
   return <p>Logging you in via OAuth...</p>;
 }

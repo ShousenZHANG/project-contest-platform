@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.feign;
 
 import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author Eddy
  * @date 2025/04/18
  */
-@FeignClient(name = "competition-service")
+@FeignClient(name = "competition-service", fallback = com.w16a.danish.judge.feign.fallback.CompetitionServiceClientFallback.class)
 public interface CompetitionServiceClient {
 
     /**

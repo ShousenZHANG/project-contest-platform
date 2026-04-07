@@ -27,6 +27,9 @@ public class SubmissionInfoVO {
     @Schema(description = "Participant user ID", example = "user-789")
     private String userId;
 
+    @Schema(description = "Team ID (for team submissions)", example = "team-123")
+    private String teamId;
+
     @Schema(description = "Submission title", example = "Awesome AI Bot")
     private String title;
 

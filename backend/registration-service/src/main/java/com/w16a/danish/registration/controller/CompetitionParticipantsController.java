@@ -1,6 +1,8 @@
 package com.w16a.danish.registration.controller;
 
 
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -23,6 +26,7 @@ import java.util.Map;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
+@Slf4j
 @RestController
 @RequestMapping("/registrations")
 @RequiredArgsConstructor

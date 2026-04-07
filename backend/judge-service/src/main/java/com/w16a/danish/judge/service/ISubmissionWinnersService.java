@@ -2,7 +2,7 @@ package com.w16a.danish.judge.service;
 
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
 

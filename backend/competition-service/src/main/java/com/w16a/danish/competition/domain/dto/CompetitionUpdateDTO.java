@@ -29,11 +29,11 @@ public class CompetitionUpdateDTO {
     private String category;
 
     @Schema(description = "New start time", example = "2025-05-01T10:00:00Z", nullable = true)
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssX", timezone = "UTC")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;
 
     @Schema(description = "New end time", example = "2025-06-01T18:00:00Z", nullable = true)
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssX", timezone = "UTC")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endDate;
 
     @Schema(description = "Whether the competition is public", example = "false", nullable = true)

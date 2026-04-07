@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Eddy ZHANG
  * @date 2025/04/08
  */
-@FeignClient(name = "registration-service", path = "/submissions")
+@FeignClient(name = "registration-service", path = "/submissions", fallback = com.w16a.danish.interaction.feign.fallback.RegistrationServiceClientFallback.class)
 public interface RegistrationServiceClient {
 
     @GetMapping("/is-organizer")

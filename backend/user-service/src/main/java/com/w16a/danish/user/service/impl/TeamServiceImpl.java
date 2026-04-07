@@ -7,8 +7,10 @@ import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.po.Team;
 import com.w16a.danish.user.domain.po.TeamMembers;
 import com.w16a.danish.user.domain.po.Users;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.vo.*;
-import com.w16a.danish.user.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.user.feign.SubmissionServiceClient;
 import com.w16a.danish.user.mapper.TeamMapper;
 import com.w16a.danish.user.service.ITeamMembersService;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -32,6 +35,7 @@ import java.util.stream.Collectors;
  * @author Eddy
  * @since 2025-04-16
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements ITeamService {

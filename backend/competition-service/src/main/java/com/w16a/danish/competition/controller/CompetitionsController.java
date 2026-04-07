@@ -5,8 +5,8 @@ import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
 import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.competition.domain.vo.PageResponse;
-import com.w16a.danish.competition.domain.vo.UserBriefVO;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.competition.service.ICompetitionsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Eddy ZHANG
@@ -30,6 +32,7 @@ import java.util.List;
  * @description This class is used to handle HTTP requests related to competitions.
  */
 @Tag(name = "Competition Management", description = "APIs for managing competitions")
+@Slf4j
 @RestController
 @RequestMapping("/competitions")
 @RequiredArgsConstructor
@@ -57,7 +60,7 @@ public class CompetitionsController {
     public ResponseEntity<CompetitionResponseVO> createCompetition(
             @RequestHeader("User-Role") String currentUserRole,
             @RequestHeader("User-ID") String currentUserId,
-            @RequestBody CompetitionCreateDTO competitionDTO) {
+            @Valid @RequestBody CompetitionCreateDTO competitionDTO) {
 
         CompetitionResponseVO response = competitionService.createCompetition(competitionDTO, currentUserRole, currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -154,7 +157,7 @@ public class CompetitionsController {
             @PathVariable String id,
             @RequestHeader("User-ID") String userId,
             @RequestHeader("User-Role") String userRole,
-            @RequestBody CompetitionUpdateDTO updateDTO) {
+            @Valid @RequestBody CompetitionUpdateDTO updateDTO) {
 
         CompetitionResponseVO updated = competitionService.updateCompetition(id, userId, userRole, updateDTO);
         return ResponseEntity.ok(updated);

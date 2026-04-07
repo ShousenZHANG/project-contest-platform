@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
 import com.w16a.danish.judge.service.ISubmissionWinnersService;

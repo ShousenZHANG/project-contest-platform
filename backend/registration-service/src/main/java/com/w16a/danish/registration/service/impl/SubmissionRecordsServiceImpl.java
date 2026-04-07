@@ -10,9 +10,11 @@ import com.w16a.danish.registration.domain.mq.SubmissionUploadedMessage;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.registration.enums.CompetitionStatus;
-import com.w16a.danish.registration.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import com.w16a.danish.registration.feign.FileServiceClient;
 import com.w16a.danish.registration.feign.UserServiceClient;
@@ -35,6 +37,7 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -43,6 +46,7 @@ import java.util.stream.Collectors;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsMapper, SubmissionRecords> implements ISubmissionRecordsService {
@@ -770,128 +774,56 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .exists();
     }
 
+    // ── Internal API implementations (called by judge-service) ─────────────
+
     @Override
-    public SubmissionStatisticsVO getSubmissionStatistics(String competitionId) {
-        if (StrUtil.isBlank(competitionId)) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition ID must not be blank.");
+    public void updateTotalScore(String submissionId, BigDecimal totalScore) {
+        boolean updated = this.lambdaUpdate()
+                .eq(SubmissionRecords::getId, submissionId)
+                .set(SubmissionRecords::getTotalScore, totalScore)
+                .set(SubmissionRecords::getUpdatedAt, LocalDateTime.now())
+                .update();
+        if (!updated) {
+            log.warn("updateTotalScore: no submission found with id={}", submissionId);
         }
+    }
 
-        long totalSubmissions = this.lambdaQuery()
+    @Override
+    public SubmissionInfoVO getMySubmissionBasic(String competitionId, String userId) {
+        SubmissionRecords record = this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .count();
+                .eq(SubmissionRecords::getUserId, userId)
+                .one();
+        return record == null ? null : toSubmissionInfoVO(record);
+    }
 
-        long approvedCount = this.lambdaQuery()
+    @Override
+    public SubmissionInfoVO getTeamSubmissionBasic(String competitionId, String teamId) {
+        SubmissionRecords record = this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .eq(SubmissionRecords::getReviewStatus, "APPROVED")
-                .count();
+                .eq(SubmissionRecords::getTeamId, teamId)
+                .one();
+        return record == null ? null : toSubmissionInfoVO(record);
+    }
 
-        long pendingCount = this.lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .eq(SubmissionRecords::getReviewStatus, "PENDING")
-                .count();
-
-        long rejectedCount = this.lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .eq(SubmissionRecords::getReviewStatus, "REJECTED")
-                .count();
-
-        SubmissionStatisticsVO vo = new SubmissionStatisticsVO();
-        vo.setTotalSubmissions((int) totalSubmissions);
-        vo.setApprovedSubmissions((int) approvedCount);
-        vo.setPendingSubmissions((int) pendingCount);
-        vo.setRejectedSubmissions((int) rejectedCount);
-
+    private SubmissionInfoVO toSubmissionInfoVO(SubmissionRecords r) {
+        SubmissionInfoVO vo = new SubmissionInfoVO();
+        vo.setId(r.getId());
+        vo.setCompetitionId(r.getCompetitionId());
+        vo.setUserId(r.getUserId());
+        vo.setTeamId(r.getTeamId());
+        vo.setTitle(r.getTitle());
+        vo.setDescription(r.getDescription());
+        vo.setFileName(r.getFileName());
+        vo.setFileUrl(r.getFileUrl());
+        vo.setFileType(r.getFileType());
+        vo.setReviewStatus(r.getReviewStatus());
+        vo.setReviewComments(r.getReviewComments());
+        vo.setReviewedBy(r.getReviewedBy());
+        vo.setReviewedAt(r.getReviewedAt());
+        vo.setTotalScore(r.getTotalScore());
+        vo.setCreatedAt(r.getCreatedAt());
         return vo;
-    }
-
-    @Override
-    public Map<String, Integer> getSubmissionTrend(String competitionId) {
-        if (StrUtil.isBlank(competitionId)) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition ID must not be blank.");
-        }
-
-        var competitionResp = competitionServiceClient.getCompetitionById(competitionId);
-        var competition = competitionResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-        }
-
-        List<SubmissionRecords> submissions = this.lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .select(SubmissionRecords::getCreatedAt)
-                .list();
-
-        Map<String, Integer> trend = new TreeMap<>();
-        for (SubmissionRecords submission : submissions) {
-            if (submission.getCreatedAt() != null) {
-                String date = submission.getCreatedAt().toLocalDate().toString();
-                trend.merge(date, 1, Integer::sum);
-            }
-        }
-
-        return trend;
-    }
-
-    @Override
-    public PlatformSubmissionStatisticsVO getPlatformSubmissionStatistics() {
-        List<SubmissionRecords> allSubmissions = this.lambdaQuery()
-                .select(SubmissionRecords::getId, SubmissionRecords::getReviewStatus, SubmissionRecords::getTeamId)
-                .list();
-
-        if (CollUtil.isEmpty(allSubmissions)) {
-            PlatformSubmissionStatisticsVO empty = new PlatformSubmissionStatisticsVO();
-            empty.setTotalSubmissions(0);
-            empty.setApprovedSubmissions(0);
-            empty.setIndividualSubmissions(0);
-            empty.setTeamSubmissions(0);
-            return empty;
-        }
-
-        int totalSubmissions = allSubmissions.size();
-        int approvedSubmissions = 0;
-        int individualSubmissions = 0;
-        int teamSubmissions = 0;
-
-        for (SubmissionRecords submission : allSubmissions) {
-            if ("APPROVED".equalsIgnoreCase(submission.getReviewStatus())) {
-                approvedSubmissions++;
-            }
-            if (StrUtil.isBlank(submission.getTeamId())) {
-                individualSubmissions++;
-            } else {
-                teamSubmissions++;
-            }
-        }
-
-        PlatformSubmissionStatisticsVO vo = new PlatformSubmissionStatisticsVO();
-        vo.setTotalSubmissions(totalSubmissions);
-        vo.setApprovedSubmissions(approvedSubmissions);
-        vo.setIndividualSubmissions(individualSubmissions);
-        vo.setTeamSubmissions(teamSubmissions);
-
-        return vo;
-    }
-
-    @Override
-    public Map<String, Integer> getPlatformSubmissionTrend() {
-        List<SubmissionRecords> submissions = this.lambdaQuery()
-                .select(SubmissionRecords::getCreatedAt)
-                .list();
-
-        if (CollUtil.isEmpty(submissions)) {
-            return Collections.emptyMap();
-        }
-
-        Map<String, Integer> trend = new TreeMap<>();
-
-        for (SubmissionRecords submission : submissions) {
-            if (submission.getCreatedAt() != null) {
-                String date = submission.getCreatedAt().toLocalDate().toString();
-                trend.merge(date, 1, Integer::sum);
-            }
-        }
-
-        return trend;
     }
 
     private void deleteFileByUrl(String fileUrl) {

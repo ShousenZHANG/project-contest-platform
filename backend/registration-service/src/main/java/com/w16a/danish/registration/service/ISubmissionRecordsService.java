@@ -3,12 +3,15 @@ package com.w16a.danish.registration.service;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+
 
 /**
  *
@@ -96,22 +99,22 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
 
     Boolean existsByTeamId(String teamId);
 
-    SubmissionStatisticsVO getSubmissionStatistics(String competitionId);
+    // ── Internal API (called by judge-service only) ──────────────────────────
 
     /**
-     * Get daily submission trend for a competition.
-     *
-     * @param competitionId ID of the competition
-     * @return Map of date -> number of submissions
+     * Update the aggregated total score on a submission record.
+     * Called by judge-service after all judges submit scores.
      */
-    Map<String, Integer> getSubmissionTrend(String competitionId);
-
-    PlatformSubmissionStatisticsVO getPlatformSubmissionStatistics();
+    void updateTotalScore(String submissionId, BigDecimal totalScore);
 
     /**
-     * Get the platform-wide daily submission upload trend.
-     * @return Map of date → number of submissions
+     * Get basic submission info for an individual participant.
      */
-    Map<String, Integer> getPlatformSubmissionTrend();
+    SubmissionInfoVO getMySubmissionBasic(String competitionId, String userId);
+
+    /**
+     * Get basic submission info for a team.
+     */
+    SubmissionInfoVO getTeamSubmissionBasic(String competitionId, String teamId);
 
 }

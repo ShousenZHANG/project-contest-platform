@@ -23,6 +23,7 @@
     </developers>
 
     <modules>
+        <module>backend/common-lib</module>
         <module>backend/api-gateway</module>
         <module>backend/user-service</module>
         <module>backend/competition-service</module>
@@ -94,6 +95,11 @@
                     <artifactId>commons-fileupload</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
         </dependency>
 
         <dependency>
@@ -170,6 +176,27 @@
             <artifactId>wiremock-standalone</artifactId>
             <version>3.13.0</version>
             <scope>test</scope>
+        </dependency>
+
+        <!-- Observability: Actuator + Distributed Tracing (Zipkin) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
     </dependencies>

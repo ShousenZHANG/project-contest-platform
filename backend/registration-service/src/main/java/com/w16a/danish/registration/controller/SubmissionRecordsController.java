@@ -2,7 +2,10 @@ package com.w16a.danish.registration.controller;
 
 
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,9 +17,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -25,6 +32,7 @@ import java.util.Map;
  * @author Eddy ZHANG
  * @date 2025/04/05
  */
+@Slf4j
 @RestController
 @RequestMapping("/submissions")
 @RequiredArgsConstructor
@@ -32,6 +40,7 @@ import java.util.Map;
 public class SubmissionRecordsController {
 
     private final ISubmissionRecordsService submissionService;
+    private final ISubmissionAnalyticsService analyticsService;
 
     @Operation(
             summary = "Upload submission work",
@@ -383,7 +392,7 @@ public class SubmissionRecordsController {
     public ResponseEntity<SubmissionStatisticsVO> getSubmissionStatistics(
             @RequestParam String competitionId) {
 
-        SubmissionStatisticsVO statistics = submissionService.getSubmissionStatistics(competitionId);
+        SubmissionStatisticsVO statistics = analyticsService.getSubmissionStatistics(competitionId);
         return ResponseEntity.ok(statistics);
     }
 
@@ -403,7 +412,7 @@ public class SubmissionRecordsController {
     public ResponseEntity<Map<String, Integer>> getSubmissionTrend(
             @PathVariable("competitionId") String competitionId) {
 
-        Map<String, Integer> trend = submissionService.getSubmissionTrend(competitionId);
+        Map<String, Integer> trend = analyticsService.getSubmissionTrend(competitionId);
         return ResponseEntity.ok(trend);
     }
 
@@ -417,7 +426,7 @@ public class SubmissionRecordsController {
     )
     @GetMapping("/public/platform/submission-statistics")
     public ResponseEntity<PlatformSubmissionStatisticsVO> getPlatformSubmissionStatistics() {
-        PlatformSubmissionStatisticsVO statistics = submissionService.getPlatformSubmissionStatistics();
+        PlatformSubmissionStatisticsVO statistics = analyticsService.getPlatformSubmissionStatistics();
         return ResponseEntity.ok(statistics);
     }
 
@@ -431,8 +440,56 @@ public class SubmissionRecordsController {
     )
     @GetMapping("/public/platform/submission-trend")
     public ResponseEntity<Map<String, Integer>> getPlatformSubmissionTrend() {
-        Map<String, Integer> trend = submissionService.getPlatformSubmissionTrend();
+        Map<String, Integer> trend = analyticsService.getPlatformSubmissionTrend();
         return ResponseEntity.ok(trend);
+    }
+
+    // ── Internal endpoints (called by judge-service only, not exposed via gateway) ──
+
+    @Operation(hidden = true)
+    @PutMapping("/internal/{id}/total-score")
+    public ResponseEntity<Void> updateTotalScore(
+            @PathVariable("id") String submissionId,
+            @RequestParam("score") BigDecimal totalScore) {
+        submissionService.updateTotalScore(submissionId, totalScore);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/score-statistics")
+    public ResponseEntity<SubmissionScoreStatisticsVO> getScoreStatistics(
+            @RequestParam("competitionId") String competitionId) {
+        return ResponseEntity.ok(analyticsService.getScoreStatistics(competitionId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/my-submission")
+    public ResponseEntity<SubmissionInfoVO> getMySubmissionBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("userId") String userId) {
+        return ResponseEntity.ok(submissionService.getMySubmissionBasic(competitionId, userId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/team-submission")
+    public ResponseEntity<SubmissionInfoVO> getTeamSubmissionBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("teamId") String teamId) {
+        return ResponseEntity.ok(submissionService.getTeamSubmissionBasic(competitionId, teamId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/scored")
+    public ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(
+            @RequestParam("competitionId") String competitionId) {
+        return ResponseEntity.ok(analyticsService.getScoredSubmissions(competitionId));
+    }
+
+    @Operation(hidden = true)
+    @PostMapping("/internal/by-ids")
+    public ResponseEntity<List<SubmissionInfoVO>> getSubmissionsByIds(
+            @RequestBody List<String> submissionIds) {
+        return ResponseEntity.ok(analyticsService.getSubmissionsByIds(submissionIds));
     }
 
 }

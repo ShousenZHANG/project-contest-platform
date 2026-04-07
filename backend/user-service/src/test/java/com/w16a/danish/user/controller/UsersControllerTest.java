@@ -6,6 +6,8 @@ import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.GoogleOAuthProperties;
 import com.w16a.danish.user.domain.dto.*;
 import com.w16a.danish.user.domain.vo.*;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.feign.FileServiceClient;
 import com.w16a.danish.user.service.IUsersService;
 import org.junit.jupiter.api.DisplayName;
@@ -113,6 +115,7 @@ class UsersControllerTest {
         LoginRequestDTO loginRequestDTO = new LoginRequestDTO();
         loginRequestDTO.setEmail("test@example.com");
         loginRequestDTO.setPassword("password123");
+        loginRequestDTO.setRole("PARTICIPANT");
 
         UserResponseVO mockResponse = new UserResponseVO(
                 "123e4567-e89b-12d3-a456-426614174000",

@@ -16,11 +16,15 @@
 
 
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import "./Login.css";
+import apiClient from "../api/apiClient";
+import { useAuth } from "../context/AuthContext";
 
 const LoginModal = ({ onClose, onShowRegister, role }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,42 +33,37 @@ const LoginModal = ({ onClose, onShowRegister, role }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch("http://localhost:8080/users/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          role: email === "admin@gmail.com" ? "Admin" : role.toUpperCase(),
-        }),
-
+      const res = await apiClient.post("/users/login", {
+        email,
+        password,
+        role: email === "admin@gmail.com" ? "Admin" : role.toUpperCase(),
       });
 
-      const data = await res.json();
+      const data = res.data;
+      login({
+        userId: data.userId,
+        email: data.email,
+        role: data.role,
+        accessToken: data.accessToken,
+      });
 
-      if (res.ok) {
-        localStorage.setItem("userId", data.userId);
-        localStorage.setItem("email", data.email);
-        localStorage.setItem("token", data.accessToken);
-        localStorage.setItem("role", data.role);
-
-        if (data.role === "Admin") {
-          navigate("/AdminDashboard");
-        } else if (data.role === "Organizer") {
-          navigate(`/OrganizerDashboard/${email}`);
-        } else if (data.role === "Participant") {
-          navigate(`/profile/${data.email}`);
-        } else {
-          navigate("/");
-        }
-        onClose();
+      // Redirect to intended page or default by role
+      const from = location.state?.from?.pathname;
+      if (from && from !== "/login") {
+        navigate(from, { replace: true });
+      } else if (data.role === "Admin") {
+        navigate("/AdminDashboard");
+      } else if (data.role === "Organizer") {
+        navigate(`/OrganizerDashboard/${data.email}`);
+      } else if (data.role === "Participant") {
+        navigate(`/profile/${data.email}`);
       } else {
-        console.error("Login failure", data.error || data.message);
-        setError(data.error || data.message || "Login failed");
+        navigate("/");
       }
+      if (onClose) onClose();
     } catch (err) {
-      console.error("Login request error", err);
-      setError("Server error.");
+      const msg = err.response?.data?.error || err.response?.data?.message || "Login failed";
+      setError(msg);
     }
   };
 
@@ -75,19 +74,12 @@ const LoginModal = ({ onClose, onShowRegister, role }) => {
     }
 
     try {
-      const res = await fetch(`http://localhost:8080/users/forgot-password?email=${encodeURIComponent(email)}`, {
-        method: "POST",
+      await apiClient.post(`/users/forgot-password?email=${encodeURIComponent(email)}`, null, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
-
-      if (res.ok) {
-        setResetMessage("📧 Reset link sent to your email.");
-      } else {
-        setResetMessage("⚠️ Unable to send reset link. Please check the email.");
-      }
+      setResetMessage("Reset link sent to your email.");
     } catch (err) {
-      console.error("Forgot the password and the request failed", err);
-      setResetMessage("🚨 Server error. Please try again later.");
+      setResetMessage("Unable to send reset link. Please check the email.");
     }
   };
 

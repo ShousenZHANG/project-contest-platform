@@ -1,6 +1,6 @@
 package com.w16a.danish.judge.controller;
 
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
 import com.w16a.danish.judge.service.ISubmissionWinnersService;
@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * @author Eddy ZHANG
  * @date 2025/04/19
  */
+@Slf4j
 @RestController
 @RequestMapping("/winners")
 @RequiredArgsConstructor

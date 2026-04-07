@@ -1,6 +1,6 @@
 package com.w16a.danish.competition.feign;
 
-import com.w16a.danish.competition.domain.vo.UserBriefVO;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service")
+@FeignClient(name = "user-service", fallback = com.w16a.danish.competition.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
     @PostMapping("/users/query-by-emails")

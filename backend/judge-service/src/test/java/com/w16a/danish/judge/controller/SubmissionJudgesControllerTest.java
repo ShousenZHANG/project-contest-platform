@@ -3,7 +3,7 @@ package com.w16a.danish.judge.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
 import org.junit.jupiter.api.BeforeEach;

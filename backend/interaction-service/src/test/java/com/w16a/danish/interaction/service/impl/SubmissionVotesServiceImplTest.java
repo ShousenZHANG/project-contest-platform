@@ -3,7 +3,7 @@ package com.w16a.danish.interaction.service.impl;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import com.w16a.danish.interaction.domain.po.SubmissionVotes;
-import com.w16a.danish.interaction.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.mapper.SubmissionVotesMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

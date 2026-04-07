@@ -9,10 +9,12 @@ import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.CompetitionTeams;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.registration.enums.CompetitionStatus;
 import com.w16a.danish.registration.enums.ParticipationType;
-import com.w16a.danish.registration.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.CompetitionParticipantsMapper;
@@ -31,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -39,6 +42,7 @@ import java.util.stream.Collectors;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionParticipantsMapper, CompetitionParticipants> implements ICompetitionParticipantsService {

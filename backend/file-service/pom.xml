@@ -19,6 +19,12 @@
     </properties>
 
     <dependencies>
+        <!-- Shared common library -->
+        <dependency>
+            <groupId>w16a.danish</groupId>
+            <artifactId>common-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

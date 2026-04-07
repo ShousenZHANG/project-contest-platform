@@ -1,6 +1,6 @@
 package com.w16a.danish.fileService.util;
 
-import com.w16a.danish.fileService.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;

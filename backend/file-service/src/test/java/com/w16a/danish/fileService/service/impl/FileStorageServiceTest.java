@@ -1,7 +1,7 @@
 package com.w16a.danish.fileService.service.impl;
 
 import com.w16a.danish.fileService.config.MinioPropertiesConfig;
-import com.w16a.danish.fileService.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.fileService.util.FileValidator;
 import io.minio.*;
 import org.junit.jupiter.api.BeforeEach;

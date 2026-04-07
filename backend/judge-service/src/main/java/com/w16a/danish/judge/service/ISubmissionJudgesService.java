@@ -4,7 +4,7 @@ import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionBriefVO;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
 

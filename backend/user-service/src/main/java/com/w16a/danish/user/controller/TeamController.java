@@ -1,5 +1,7 @@
 package com.w16a.danish.user.controller;
 
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.vo.*;
@@ -17,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -25,6 +28,7 @@ import java.util.List;
  * @author Eddy ZHANG
  * @date 2025/04/16
  */
+@Slf4j
 @RestController
 @RequestMapping("/teams")
 @RequiredArgsConstructor

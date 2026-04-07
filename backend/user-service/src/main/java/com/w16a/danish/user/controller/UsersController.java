@@ -1,6 +1,8 @@
 package com.w16a.danish.user.controller;
 
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.config.FrontendProperties;
 import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.GoogleOAuthProperties;
@@ -15,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Objects;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -37,6 +41,7 @@ import java.util.Objects;
  * @description User Management Controller
  */
 @Tag(name = "User Management", description = "APIs for user account management including registration, login, profile updates, and account deletion.")
+@Slf4j
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -68,7 +73,7 @@ public class UsersController {
             }
     )
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequestDTO registerDTO) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequestDTO registerDTO) {
         UserResponseVO response = userService.register(registerDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -93,7 +98,7 @@ public class UsersController {
             }
     )
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequestDTO loginDTO) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO loginDTO) {
         UserResponseVO response = userService.login(loginDTO);
         return ResponseEntity.ok(response);
     }
@@ -117,7 +122,7 @@ public class UsersController {
             }
     )
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+    public ResponseEntity<String> logout(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
         if (StrUtil.isBlank(authHeader) || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
         }

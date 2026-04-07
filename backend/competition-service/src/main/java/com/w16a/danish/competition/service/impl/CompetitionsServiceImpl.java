@@ -19,9 +19,9 @@ import com.w16a.danish.competition.domain.po.CompetitionJudges;
 import com.w16a.danish.competition.domain.po.CompetitionOrganizers;
 import com.w16a.danish.competition.domain.po.Competitions;
 import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.competition.domain.vo.PageResponse;
-import com.w16a.danish.competition.domain.vo.UserBriefVO;
-import com.w16a.danish.competition.exception.BusinessException;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.competition.feign.FileServiceClient;
 import com.w16a.danish.competition.feign.UserServiceClient;
 import com.w16a.danish.competition.mapper.CompetitionsMapper;
@@ -43,6 +43,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -50,6 +51,7 @@ import java.util.stream.Collectors;
  * @date 2025/03/18
  * @description ServiceImpl class for Competitions
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Competitions> implements ICompetitionsService {
@@ -66,6 +68,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public CompetitionResponseVO createCompetition(CompetitionCreateDTO competitionDTO, String currentUserRole, String currentUserId) {
+        log.info("Creating competition: name='{}', userId={}, role={}", competitionDTO.getName(), currentUserId, currentUserRole);
         // validate user role
         if (!"ADMIN".equalsIgnoreCase(currentUserRole) && !"ORGANIZER".equalsIgnoreCase(currentUserRole)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to create a competition");
@@ -77,6 +80,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
                 .exists();
 
         if (exists) {
+            log.warn("Competition creation rejected - name already exists: '{}'", competitionDTO.getName());
             throw new BusinessException(HttpStatus.CONFLICT, "A competition with the same name already exists");
         }
 
@@ -102,6 +106,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         competitionOrganizers.setUserId(currentUserId);
         competitionOrganizersService.save(competitionOrganizers);
 
+        log.info("Competition created: id={}, name='{}', organizerId={}", competition.getId(), competition.getName(), currentUserId);
         CompetitionResponseVO responseVO = new CompetitionResponseVO();
         BeanUtils.copyProperties(competition, responseVO);
         return responseVO;

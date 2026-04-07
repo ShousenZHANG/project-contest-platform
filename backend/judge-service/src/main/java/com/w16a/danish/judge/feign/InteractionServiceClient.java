@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Eddy
  * @date 2025/04/21
  */
-@FeignClient(name = "interaction-service")
+@FeignClient(name = "interaction-service", fallback = com.w16a.danish.judge.feign.fallback.InteractionServiceClientFallback.class)
 public interface InteractionServiceClient {
 
     /**

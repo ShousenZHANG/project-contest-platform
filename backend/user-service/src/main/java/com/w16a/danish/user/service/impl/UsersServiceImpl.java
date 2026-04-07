@@ -7,6 +7,8 @@ import cn.hutool.core.lang.RegexPool;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.w16a.danish.user.config.FrontendProperties;
 import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.GoogleOAuthProperties;
@@ -15,8 +17,10 @@ import com.w16a.danish.user.domain.dto.*;
 import com.w16a.danish.user.domain.po.Roles;
 import com.w16a.danish.user.domain.po.UserRoles;
 import com.w16a.danish.user.domain.po.Users;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.vo.*;
-import com.w16a.danish.user.exception.*;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.user.feign.*;
 import com.w16a.danish.user.mapper.UsersMapper;
 import com.w16a.danish.user.service.IRolesService;
@@ -42,6 +46,7 @@ import java.net.URI;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -49,6 +54,7 @@ import java.util.stream.Collectors;
  * @date 2025/03/16
  * @description UsersServiceImpl
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements IUsersService {
@@ -80,12 +86,15 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         String password = registerDTO.getPassword();
         String roleName = registerDTO.getRole();
 
+        log.info("Registration attempt: email={}, role={}", email, roleName);
+
         if (!ReUtil.isMatch(RegexPool.EMAIL, email)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid email format");
         }
 
         boolean exists = lambdaQuery().eq(Users::getEmail, email).exists();
         if (exists) {
+            log.warn("Registration rejected - email already registered: {}", email);
             throw new BusinessException(HttpStatus.CONFLICT, "Email already registered");
         }
 
@@ -153,6 +162,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         }
 
         String token = jwtUtil.generateAndStoreToken(createClaims(user.getId(), role.getName()), jwtConfig.getSecret(), jwtConfig.getExpiration());
+        log.info("Login successful: userId={}, role={}", user.getId(), role.getName());
         return new UserResponseVO(user.getId(), user.getName(), user.getEmail(), role.getName(), token, jwtConfig.getExpiration() / 1000);
     }
 
@@ -500,12 +510,48 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only ADMINs can access this resource.");
         }
 
-        List<Users> usersList = this.lambdaQuery().list();
-        if (CollUtil.isEmpty(usersList)) {
+        // Step 1: resolve user IDs matching the role filter (DB-level pre-filter)
+        List<String> filteredUserIds = null;
+        if (StrUtil.isNotBlank(role)) {
+            Roles targetRole = rolesService.lambdaQuery().eq(Roles::getName, role.toUpperCase()).one();
+            if (targetRole == null) {
+                return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
+            }
+            filteredUserIds = userRolesService.lambdaQuery()
+                    .eq(UserRoles::getRoleId, targetRole.getId())
+                    .list()
+                    .stream().map(UserRoles::getUserId).toList();
+            if (filteredUserIds.isEmpty()) {
+                return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
+            }
+        }
+
+        // Step 2: DB-level query with keyword and role filters + pagination
+        boolean isAsc = !"desc".equalsIgnoreCase(order);
+        LambdaQueryWrapper<Users> wrapper = new LambdaQueryWrapper<>();
+        if (StrUtil.isNotBlank(keyword)) {
+            wrapper.and(w -> w.like(Users::getName, keyword).or().like(Users::getEmail, keyword));
+        }
+        if (filteredUserIds != null) {
+            wrapper.in(Users::getId, filteredUserIds);
+        }
+        switch (sortBy == null ? "createdAt" : sortBy) {
+            case "name" -> wrapper.orderBy(true, isAsc, Users::getName);
+            case "email" -> wrapper.orderBy(true, isAsc, Users::getEmail);
+            default -> wrapper.orderBy(true, isAsc, Users::getCreatedAt);
+        }
+
+        IPage<Users> usersPage = this.page(new Page<>(page, size), wrapper);
+
+        if (usersPage.getRecords().isEmpty()) {
             return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
         }
 
-        Map<String, String> userIdToRoleMap = userRolesService.list()
+        // Step 3: batch-load roles for only the paged user IDs
+        List<String> pageUserIds = usersPage.getRecords().stream().map(Users::getId).toList();
+        Map<String, String> userIdToRoleMap = userRolesService.lambdaQuery()
+                .in(UserRoles::getUserId, pageUserIds)
+                .list()
                 .stream()
                 .collect(Collectors.toMap(
                         UserRoles::getUserId,
@@ -515,7 +561,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                         (existing, replacement) -> existing
                 ));
 
-        List<AdminUserVO> adminUsers = usersList.stream()
+        List<AdminUserVO> pagedList = usersPage.getRecords().stream()
                 .map(user -> AdminUserVO.builder()
                         .id(user.getId())
                         .name(user.getName())
@@ -527,37 +573,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                         .build())
                 .toList();
 
-        if (StrUtil.isNotBlank(role)) {
-            adminUsers = adminUsers.stream()
-                    .filter(u -> role.equalsIgnoreCase(u.getRole()))
-                    .toList();
-        }
-
-        if (StrUtil.isNotBlank(keyword)) {
-            adminUsers = adminUsers.stream()
-                    .filter(u -> StrUtil.containsIgnoreCase(u.getName(), keyword)
-                            || StrUtil.containsIgnoreCase(u.getEmail(), keyword))
-                    .toList();
-        }
-
-        Comparator<AdminUserVO> comparator = switch (sortBy) {
-            case "name" -> Comparator.comparing(AdminUserVO::getName, String.CASE_INSENSITIVE_ORDER);
-            case "email" -> Comparator.comparing(AdminUserVO::getEmail, String.CASE_INSENSITIVE_ORDER);
-            case "createdAt" -> Comparator.comparing(AdminUserVO::getCreatedAt);
-            default -> Comparator.comparing(AdminUserVO::getCreatedAt);
-        };
-        if ("desc".equalsIgnoreCase(order)) {
-            comparator = comparator.reversed();
-        }
-        adminUsers = adminUsers.stream().sorted(comparator).toList();
-
-        int total = adminUsers.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
-
-        List<AdminUserVO> pagedList = adminUsers.subList(fromIndex, toIndex);
-
-        return new PageResponse<>(pagedList, total, page, size, (int) Math.ceil((double) total / size));
+        return new PageResponse<>(pagedList, (int) usersPage.getTotal(), page, size, (int) usersPage.getPages());
     }
 
 

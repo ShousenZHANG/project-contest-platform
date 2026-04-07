@@ -3,14 +3,16 @@ package com.w16a.danish.interaction.service.impl;
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
-import com.w16a.danish.interaction.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
-import com.w16a.danish.interaction.domain.vo.UserBriefVO;
-import com.w16a.danish.interaction.exception.BusinessException;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.feign.RegistrationServiceClient;
 import com.w16a.danish.interaction.feign.UserServiceClient;
 import com.w16a.danish.interaction.mapper.SubmissionCommentsMapper;
 import com.w16a.danish.interaction.service.ISubmissionCommentsService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
  * @author Eddy ZHANG
  * @date 2025/04/08
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionCommentsMapper, SubmissionComments> implements ISubmissionCommentsService {
@@ -85,16 +89,15 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
         }
         boolean isAsc = "asc".equalsIgnoreCase(order);
 
-        List<SubmissionComments> topLevelComments = this.lambdaQuery()
+        IPage<SubmissionComments> mpPage = new Page<>(page, size);
+        mpPage = this.lambdaQuery()
                 .eq(SubmissionComments::getSubmissionId, submissionId)
                 .isNull(SubmissionComments::getParentId)
                 .orderBy(true, isAsc, "createdAt".equalsIgnoreCase(sortBy) ? SubmissionComments::getCreatedAt : SubmissionComments::getUpdatedAt)
-                .list();
+                .page(mpPage);
 
-        int total = topLevelComments.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
-        List<SubmissionComments> paged = topLevelComments.subList(fromIndex, toIndex);
+        long total = mpPage.getTotal();
+        List<SubmissionComments> paged = mpPage.getRecords();
 
         List<SubmissionComments> childComments = Collections.emptyList();
         List<String> parentIds = paged.stream().map(SubmissionComments::getId).toList();
@@ -150,7 +153,7 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
             return vo;
         }).toList();
 
-        return new PageResponse<>(result, total, page, size, (int) Math.ceil((double) total / size));
+        return new PageResponse<>(result, (int) total, page, size, (int) mpPage.getPages());
     }
 
     @Override

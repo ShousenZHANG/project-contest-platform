@@ -1,6 +1,6 @@
 package com.w16a.danish.interaction.feign;
 
-import com.w16a.danish.interaction.domain.vo.UserBriefVO;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,7 +16,7 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service", path = "/users")
+@FeignClient(name = "user-service", path = "/users", fallback = com.w16a.danish.interaction.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
     @PostMapping("/query-by-ids")

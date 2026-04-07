@@ -3,7 +3,9 @@ package com.w16a.danish.registration.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
+import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,9 @@ class SubmissionRecordsControllerTest {
 
     @MockitoBean
     private ISubmissionRecordsService submissionService;
+
+    @MockitoBean
+    private ISubmissionAnalyticsService analyticsService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -218,7 +223,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Get competition submission statistics successfully")
     void testGetSubmissionStatistics() throws Exception {
-        when(submissionService.getSubmissionStatistics(any()))
+        when(analyticsService.getSubmissionStatistics(any()))
                 .thenReturn(new SubmissionStatisticsVO());
 
         mockMvc.perform(get("/submissions/statistics")
@@ -229,7 +234,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Get public competition submission trend successfully")
     void testGetSubmissionTrend() throws Exception {
-        when(submissionService.getSubmissionTrend(any()))
+        when(analyticsService.getSubmissionTrend(any()))
                 .thenReturn(Map.of());
 
         mockMvc.perform(get("/submissions/public/{competitionId}/submission-trend", "comp-1"))
@@ -239,7 +244,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Get platform submission statistics successfully")
     void testGetPlatformSubmissionStatistics() throws Exception {
-        when(submissionService.getPlatformSubmissionStatistics())
+        when(analyticsService.getPlatformSubmissionStatistics())
                 .thenReturn(new PlatformSubmissionStatisticsVO());
 
         mockMvc.perform(get("/submissions/public/platform/submission-statistics"))
@@ -249,7 +254,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Get platform submission trend successfully")
     void testGetPlatformSubmissionTrend() throws Exception {
-        when(submissionService.getPlatformSubmissionTrend())
+        when(analyticsService.getPlatformSubmissionTrend())
                 .thenReturn(Map.of());
 
         mockMvc.perform(get("/submissions/public/platform/submission-trend"))

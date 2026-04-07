@@ -8,9 +8,10 @@ import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
-import com.w16a.danish.judge.domain.po.SubmissionRecords;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
-import com.w16a.danish.judge.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
@@ -18,7 +19,6 @@ import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -39,6 +40,7 @@ import java.util.stream.Collectors;
  * @author Eddy
  * @since 2025-04-18
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMapper, SubmissionJudges> implements ISubmissionJudgesService {
@@ -47,7 +49,6 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
     private final ISubmissionJudgeScoresService submissionJudgeScoresService;
     private final CompetitionServiceClient competitionServiceClient;
     private final SubmissionServiceClient submissionServiceClient;
-    private final ISubmissionRecordsService submissionRecordsService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -418,15 +419,8 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(allScores.size()), 2, RoundingMode.HALF_UP);
 
-        boolean updatedSubmission = submissionRecordsService.lambdaUpdate()
-                .eq(SubmissionRecords::getId, submissionId)
-                .set(SubmissionRecords::getTotalScore, averageScore)
-                .set(SubmissionRecords::getUpdatedAt, LocalDateTime.now())
-                .update();
-
-        if (!updatedSubmission) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update submission total score.");
-        }
+        submissionServiceClient.updateTotalScore(submissionId, averageScore);
+        log.info("[Judge] Updated total score for submission={} score={}", submissionId, averageScore);
     }
 
 }

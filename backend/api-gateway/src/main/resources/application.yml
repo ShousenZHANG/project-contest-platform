@@ -82,7 +82,9 @@ jwt:
     - /users/login
     - /users/forgot-password
     - /users/reset-password
-    - /competitions/*
+    - GET:/competitions/list
+    - GET:/competitions/public/**
+    - GET:/competitions/*
     - /submissions/public/approved
     - /submissions/is-organizer
     - /interactions/comments/list
@@ -117,3 +119,20 @@ knife4j:
         url: /judge-service/v3/api-docs
         service-name: judge-service
         order: 5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans

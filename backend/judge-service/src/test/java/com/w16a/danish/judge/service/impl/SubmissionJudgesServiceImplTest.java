@@ -1,6 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -10,14 +11,12 @@ import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
-import com.w16a.danish.judge.domain.po.SubmissionRecords;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +46,6 @@ class SubmissionJudgesServiceImplTest {
     @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
     @Mock private CompetitionServiceClient competitionServiceClient;
     @Mock private SubmissionServiceClient submissionServiceClient;
-    @Mock private ISubmissionRecordsService submissionRecordsService;
     @Mock private SubmissionJudgesMapper submissionJudgesMapper;
 
 
@@ -86,12 +84,8 @@ class SubmissionJudgesServiceImplTest {
         // Mock saving judge scores
         when(submissionJudgeScoresService.saveBatch(any())).thenReturn(true);
 
-        // Mock updating submission total score
-        LambdaUpdateChainWrapper<SubmissionRecords> updateWrapper = mock(LambdaUpdateChainWrapper.class);
-        when(submissionRecordsService.lambdaUpdate()).thenReturn(updateWrapper);
-        when(updateWrapper.eq(any(), any())).thenReturn(updateWrapper);
-        when(updateWrapper.set(any(), any())).thenReturn(updateWrapper);
-        when(updateWrapper.update()).thenReturn(true);
+        // Mock updating submission total score via Feign
+        when(submissionServiceClient.updateTotalScore(any(), any())).thenReturn(null);
 
         LambdaQueryChainWrapper<SubmissionJudges> scoreQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(scoreQuery).when(submissionJudgesService).lambdaQuery();

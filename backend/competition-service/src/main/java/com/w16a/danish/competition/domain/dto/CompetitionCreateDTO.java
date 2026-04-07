@@ -33,12 +33,12 @@ public class CompetitionCreateDTO {
 
     @Schema(description = "Competition start date", example = "2025-05-01T10:00:00Z")
     @NotNull(message = "Start date is required")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssX", timezone = "UTC")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;
 
     @Schema(description = "Competition end date", example = "2025-06-01T18:00:00Z")
     @NotNull(message = "End date is required")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssX", timezone = "UTC")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endDate;
 
     @Schema(description = "Whether the competition is public", example = "true", nullable = true)

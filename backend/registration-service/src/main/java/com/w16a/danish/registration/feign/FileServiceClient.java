@@ -17,7 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @author Eddy ZHANG
  * @date 2025/03/28
  */
-@FeignClient(name = "file-service", path = "/files", configuration = FeignMultipartSupportConfig.class)
+@FeignClient(name = "file-service", path = "/files", configuration = FeignMultipartSupportConfig.class, fallback = com.w16a.danish.registration.feign.fallback.FileServiceClientFallback.class)
 public interface FileServiceClient {
 
     @PostMapping(value = "/upload/submission", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

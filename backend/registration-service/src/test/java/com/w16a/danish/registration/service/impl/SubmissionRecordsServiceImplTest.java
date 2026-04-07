@@ -8,14 +8,17 @@ import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.enums.CompetitionStatus;
-import com.w16a.danish.registration.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import com.w16a.danish.registration.feign.FileServiceClient;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
+import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,10 @@ class SubmissionRecordsServiceImplTest {
     @Spy
     @InjectMocks
     private SubmissionRecordsServiceImpl submissionService;
+
+    @Spy
+    @InjectMocks
+    private SubmissionAnalyticsServiceImpl analyticsService;
 
     @Mock private SubmissionRecordsMapper submissionRecordsMapper;
     @Mock private CompetitionServiceClient competitionServiceClient;
@@ -82,6 +89,15 @@ class SubmissionRecordsServiceImplTest {
         when(submissionQuery.isNotNull(any())).thenReturn(submissionQuery);
         when(submissionQuery.list()).thenReturn(Collections.emptyList());
         when(submissionQuery.one()).thenReturn(null);
+
+        // Setup analyticsService baseMapper and competitionServiceClient
+        Field analyticsMapperField = SubmissionAnalyticsServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
+        analyticsMapperField.setAccessible(true);
+        analyticsMapperField.set(analyticsService, submissionRecordsMapper);
+
+        Field analyticsCompField = SubmissionAnalyticsServiceImpl.class.getDeclaredField("competitionServiceClient");
+        analyticsCompField.setAccessible(true);
+        analyticsCompField.set(analyticsService, competitionServiceClient);
     }
 
     @Test
@@ -435,14 +451,14 @@ class SubmissionRecordsServiceImplTest {
     void testGetSubmissionStatistics_Success() {
         // Arrange
         LambdaQueryChainWrapper<SubmissionRecords> queryMock = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(queryMock);
+        doReturn(queryMock).when(analyticsService).lambdaQuery();
 
         // Mock chainable methods:
         when(queryMock.eq(any(), any())).thenReturn(queryMock); // Allow eq() chaining
         when(queryMock.count()).thenReturn(0L); // Return a dummy count to avoid NPE
 
         // Act & Assert
-        assertThatCode(() -> submissionService.getSubmissionStatistics("comp-1"))
+        assertThatCode(() -> analyticsService.getSubmissionStatistics("comp-1"))
                 .doesNotThrowAnyException();
     }
 
@@ -464,13 +480,13 @@ class SubmissionRecordsServiceImplTest {
     @DisplayName("✅ Should get platform submission trend successfully")
     void testGetPlatformSubmissionTrend_Success() {
         LambdaQueryChainWrapper<SubmissionRecords> queryMock = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(queryMock);
+        doReturn(queryMock).when(analyticsService).lambdaQuery();
 
         // Mock for select() and list()
         when(queryMock.select((SFunction<SubmissionRecords, ?>[]) any())).thenReturn(queryMock);
         when(queryMock.list()).thenReturn(Collections.emptyList());
 
-        assertThatCode(() -> submissionService.getPlatformSubmissionTrend())
+        assertThatCode(() -> analyticsService.getPlatformSubmissionTrend())
                 .doesNotThrowAnyException();
     }
 
@@ -749,7 +765,7 @@ class SubmissionRecordsServiceImplTest {
     @DisplayName("❌ getSubmissionTrend blank id")
     void testGetSubmissionTrend_Blank() {
         assertThatThrownBy(() ->
-                submissionService.getSubmissionTrend(" ")
+                analyticsService.getSubmissionTrend(" ")
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("must not be blank");
     }
@@ -759,7 +775,7 @@ class SubmissionRecordsServiceImplTest {
     void testGetSubmissionTrend_CompNotFound() {
         when(competitionServiceClient.getCompetitionById("c1")).thenReturn(ResponseEntity.ok(null));
         assertThatThrownBy(() ->
-                submissionService.getSubmissionTrend("c1")
+                analyticsService.getSubmissionTrend("c1")
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Competition not found");
     }
@@ -777,7 +793,7 @@ class SubmissionRecordsServiceImplTest {
         // 3) Mock the lambdaQuery chain
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
 
         // 4) Stub eq(...) to return the same mock
         when(q.eq(any(), eq("c1"))).thenReturn(q);
@@ -790,7 +806,7 @@ class SubmissionRecordsServiceImplTest {
         when(q.list()).thenReturn(List.of(r));
 
         // 7) Exercise and verify
-        Map<String, Integer> trend = submissionService.getSubmissionTrend("c1");
+        Map<String, Integer> trend = analyticsService.getSubmissionTrend("c1");
         String dateKey = r.getCreatedAt().toLocalDate().toString();
         assertThat(trend).containsKey(dateKey);
     }
@@ -800,11 +816,11 @@ class SubmissionRecordsServiceImplTest {
     void testGetPlatformSubmissionStatistics_Empty() {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(Collections.emptyList());
 
-        var stats = submissionService.getPlatformSubmissionStatistics();
+        var stats = analyticsService.getPlatformSubmissionStatistics();
         assertThat(stats.getTotalSubmissions()).isZero();
         assertThat(stats.getApprovedSubmissions()).isZero();
         assertThat(stats.getIndividualSubmissions()).isZero();
@@ -821,14 +837,14 @@ class SubmissionRecordsServiceImplTest {
 
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(List.of(a, b, c));
 
-        var stats = submissionService.getPlatformSubmissionStatistics();
+        var stats = analyticsService.getPlatformSubmissionStatistics();
         assertThat(stats.getTotalSubmissions()).isEqualTo(3);
         assertThat(stats.getApprovedSubmissions()).isEqualTo(1);
-        assertThat(stats.getIndividualSubmissions()).isEqualTo(2);  // now correctly expecting 2
+        assertThat(stats.getIndividualSubmissions()).isEqualTo(2);
         assertThat(stats.getTeamSubmissions()).isEqualTo(1);
     }
 
@@ -837,11 +853,11 @@ class SubmissionRecordsServiceImplTest {
     void testGetPlatformSubmissionTrend_Empty() {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(Collections.emptyList());
 
-        var trend = submissionService.getPlatformSubmissionTrend();
+        var trend = analyticsService.getPlatformSubmissionTrend();
         assertThat(trend).isEmpty();
     }
 
@@ -853,11 +869,11 @@ class SubmissionRecordsServiceImplTest {
 
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(List.of(r1, r2));
 
-        var trend = submissionService.getPlatformSubmissionTrend();
+        var trend = analyticsService.getPlatformSubmissionTrend();
         // should contain an entry for r1's date
         String key1 = r1.getCreatedAt().toLocalDate().toString();
         assertThat(trend).containsKey(key1);
@@ -867,7 +883,7 @@ class SubmissionRecordsServiceImplTest {
     @Test
     @DisplayName("✅ getSubmissionStatistics throws on blank id")
     void testGetSubmissionStatistics_Blank() {
-        assertThatThrownBy(() -> submissionService.getSubmissionStatistics(" "))
+        assertThatThrownBy(() -> analyticsService.getSubmissionStatistics(" "))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("must not be blank");
     }
@@ -878,8 +894,7 @@ class SubmissionRecordsServiceImplTest {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
 
-        // Always return our same mock for any lambdaQuery() call
-        when(submissionService.lambdaQuery()).thenReturn(q);
+        doReturn(q).when(analyticsService).lambdaQuery();
 
         // And have every .eq(...) return the same chainable mock
         when(q.eq(any(), any())).thenReturn(q);
@@ -887,7 +902,7 @@ class SubmissionRecordsServiceImplTest {
         // Then stub .count() to return 5 (total), 2 (approved), 1 (pending), 2 (rejected) in that order
         when(q.count()).thenReturn(5L, 2L, 1L, 2L);
 
-        SubmissionStatisticsVO vo = submissionService.getSubmissionStatistics("c1");
+        SubmissionStatisticsVO vo = analyticsService.getSubmissionStatistics("c1");
 
         assertThat(vo.getTotalSubmissions()).isEqualTo(5);
         assertThat(vo.getApprovedSubmissions()).isEqualTo(2);

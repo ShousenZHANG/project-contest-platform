@@ -5,6 +5,7 @@ import com.w16a.danish.registration.mapper.CompetitionTeamsMapper;
 import com.w16a.danish.registration.service.ICompetitionTeamsService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
  * @author Eddy
  * @since 2025-04-17
  */
+@Slf4j
 @Service
 public class CompetitionTeamsServiceImpl extends ServiceImpl<CompetitionTeamsMapper, CompetitionTeams> implements ICompetitionTeamsService {
 

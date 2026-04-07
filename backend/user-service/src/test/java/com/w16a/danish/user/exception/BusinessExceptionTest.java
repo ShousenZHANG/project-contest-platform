@@ -1,5 +1,6 @@
 package com.w16a.danish.user.exception;
 
+import com.w16a.danish.common.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 

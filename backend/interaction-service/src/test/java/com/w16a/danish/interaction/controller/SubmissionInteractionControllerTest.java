@@ -2,7 +2,7 @@ package com.w16a.danish.interaction.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
-import com.w16a.danish.interaction.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
 import com.w16a.danish.interaction.service.ISubmissionCommentsService;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;

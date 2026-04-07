@@ -3,7 +3,7 @@ package com.w16a.danish.fileService.service.impl;
 import cn.hutool.core.lang.UUID;
 import com.w16a.danish.fileService.config.MinioPropertiesConfig;
 import com.w16a.danish.fileService.enums.BucketType;
-import com.w16a.danish.fileService.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.fileService.service.FileStorageService;
 import com.w16a.danish.fileService.util.FileValidator;
 import io.minio.*;
@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @author Eddy ZHANG
  * @date 2025/03/28
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileStorageServiceImpl implements FileStorageService {

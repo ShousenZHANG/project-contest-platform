@@ -3,7 +3,7 @@ package com.w16a.danish.interaction.controller;
 
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.vo.InteractionStatisticsVO;
-import com.w16a.danish.interaction.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
 import com.w16a.danish.interaction.service.ISubmissionCommentsService;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;
@@ -14,9 +14,11 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
  * @author Eddy ZHANG
  * @date 2025/04/08
  */
+@Slf4j
 @RestController
 @RequestMapping("/interactions")
 @RequiredArgsConstructor
@@ -41,7 +44,7 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Comment added successfully")}
     )
     @PostMapping("/comments")
-    public ResponseEntity<String> postComment(@RequestBody SubmissionCommentDTO dto,
+    public ResponseEntity<String> postComment(@Valid @RequestBody SubmissionCommentDTO dto,
                                               @RequestHeader("User-ID") String userId) {
         commentsService.addComment(userId, dto);
         return ResponseEntity.ok("Comment added successfully");
@@ -75,7 +78,7 @@ public class SubmissionInteractionController {
     public ResponseEntity<String> updateComment(
             @PathVariable String id,
             @RequestHeader("User-ID") String userId,
-            @RequestBody SubmissionCommentDTO dto) {
+            @Valid @RequestBody SubmissionCommentDTO dto) {
 
         commentsService.updateComment(id, userId, dto);
         return ResponseEntity.ok("Comment updated successfully");

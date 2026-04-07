@@ -2,7 +2,7 @@ package com.w16a.danish.judge.controller;
 
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionBriefVO;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
@@ -11,9 +11,11 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Controller for handling submission judging operations.
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
  * @author Eddy
  * @since 2025-04-18
  */
+@Slf4j
 @RestController
 @RequestMapping("/judges")
 @RequiredArgsConstructor
@@ -57,7 +60,7 @@ public class SubmissionJudgesController {
     @PostMapping("/score")
     public ResponseEntity<String> judgeSubmission(
             @RequestHeader("User-ID") String judgeId,
-            @RequestBody SubmissionJudgeDTO judgeDTO) {
+            @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
         submissionJudgesService.judgeSubmission(judgeId, judgeDTO);
         return ResponseEntity.ok("Submission judged successfully.");

@@ -6,16 +6,15 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.w16a.danish.judge.config.AwardNotifier;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
-import com.w16a.danish.judge.domain.po.SubmissionRecords;
+import com.w16a.danish.judge.domain.vo.SubmissionInfoVO;
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
 import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionWinnersMapper;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
-import com.w16a.danish.judge.service.ISubmissionRecordsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,7 @@ class SubmissionWinnersServiceImplTest {
     private SubmissionWinnersServiceImpl winnersService;
 
     @Mock private CompetitionServiceClient competitionServiceClient;
-    @Mock private ISubmissionRecordsService submissionRecordsService;
+    @Mock private com.w16a.danish.judge.feign.SubmissionServiceClient submissionServiceClient;
     @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
     @Mock private ISubmissionJudgesService submissionJudgesService;
     @Mock private UserServiceClient userServiceClient;
@@ -66,18 +65,13 @@ class SubmissionWinnersServiceImplTest {
         when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
                 .thenReturn(ResponseEntity.ok(true));
 
-        // Arrange - Mock submission records
-        LambdaQueryChainWrapper<SubmissionRecords> recordQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(recordQuery).when(submissionRecordsService).lambdaQuery();
-        when(recordQuery.eq(any(SFunction.class), any())).thenReturn(recordQuery);
-        when(recordQuery.isNotNull(any(SFunction.class))).thenReturn(recordQuery);
-        when(recordQuery.in(any(SFunction.class), anyCollection())).thenReturn(recordQuery);
-        when(recordQuery.list()).thenReturn(List.of(
-                new SubmissionRecords()
-                        .setId("submission-1")
-                        .setTitle("Awesome Project")
-                        .setTotalScore(BigDecimal.valueOf(95))
-        ));
+        // Arrange - Mock scored submissions via Feign
+        SubmissionInfoVO scoredSubmission = new SubmissionInfoVO();
+        scoredSubmission.setId("submission-1");
+        scoredSubmission.setTitle("Awesome Project");
+        scoredSubmission.setTotalScore(BigDecimal.valueOf(95));
+        when(submissionServiceClient.getScoredSubmissions(any()))
+                .thenReturn(ResponseEntity.ok(List.of(scoredSubmission)));
 
         LambdaQueryChainWrapper<SubmissionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(judgeQuery).when(submissionJudgesService).lambdaQuery();
@@ -123,17 +117,13 @@ class SubmissionWinnersServiceImplTest {
         when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
                 .thenReturn(ResponseEntity.ok(true));
 
-        // Mock submissionRecordsService.lambdaQuery() -> returning one submission record
-        LambdaQueryChainWrapper<SubmissionRecords> recordQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(recordQuery).when(submissionRecordsService).lambdaQuery();
-        when(recordQuery.eq(any(), any())).thenReturn(recordQuery);
-        when(recordQuery.isNotNull(any())).thenReturn(recordQuery);
-        when(recordQuery.list()).thenReturn(List.of(
-                new SubmissionRecords()
-                        .setId("submission-1")
-                        .setTotalScore(BigDecimal.valueOf(90))
-                        .setUserId("user-1")
-        ));
+        // Mock getScoredSubmissions via Feign
+        SubmissionInfoVO scoredSub = new SubmissionInfoVO();
+        scoredSub.setId("submission-1");
+        scoredSub.setTotalScore(BigDecimal.valueOf(90));
+        scoredSub.setUserId("user-1");
+        when(submissionServiceClient.getScoredSubmissions(any()))
+                .thenReturn(ResponseEntity.ok(List.of(scoredSub)));
 
         // Mock no criterion scores
         when(submissionJudgeScoresService.listBySubmissionIds(anyList()))
@@ -153,7 +143,7 @@ class SubmissionWinnersServiceImplTest {
                 .thenReturn(ResponseEntity.ok(mockCompetition));
 
         // Mock userServiceClient.getUserBriefById to avoid NPE
-        var mockUser = new com.w16a.danish.judge.domain.vo.UserBriefVO();
+        var mockUser = new com.w16a.danish.common.domain.vo.UserBriefVO();
         mockUser.setId("user-1");
         mockUser.setName("Mocked User");
         mockUser.setEmail("mockeduser@example.com");
@@ -196,16 +186,13 @@ class SubmissionWinnersServiceImplTest {
                         .setAwardName("Champion")
         ));
 
-        // Mock submissionRecordsService.lambdaQuery()
-        LambdaQueryChainWrapper<SubmissionRecords> recordQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(recordQuery).when(submissionRecordsService).lambdaQuery();
-        when(recordQuery.in(any(SFunction.class), anyCollection())).thenReturn(recordQuery);
-        when(recordQuery.list()).thenReturn(List.of(
-                new SubmissionRecords()
-                        .setId("submission-1")
-                        .setTitle("Innovation Project")
-                        .setTotalScore(BigDecimal.valueOf(88))
-        ));
+        // Mock getSubmissionsByIds via Feign
+        SubmissionInfoVO sub = new SubmissionInfoVO();
+        sub.setId("submission-1");
+        sub.setTitle("Innovation Project");
+        sub.setTotalScore(BigDecimal.valueOf(88));
+        when(submissionServiceClient.getSubmissionsByIds(anyList()))
+                .thenReturn(ResponseEntity.ok(List.of(sub)));
 
         when(userServiceClient.getUsersByIds(anyList(), any()))
                 .thenReturn(ResponseEntity.ok(Collections.emptyList()));
@@ -223,9 +210,9 @@ class SubmissionWinnersServiceImplTest {
     @DisplayName("❌ Should not send notification if competition not found")
     void testSendAwardNotification_CompetitionNotFound() throws Exception {
         // Arrange
-        SubmissionRecords submission = new SubmissionRecords()
-                .setId("submission-1")
-                .setUserId("user-1");
+        SubmissionInfoVO submission = new SubmissionInfoVO();
+        submission.setId("submission-1");
+        submission.setUserId("user-1");
 
         // Mock: getCompetitionById returns ResponseEntity.ok(null)
         when(competitionServiceClient.getCompetitionById(anyString()))
@@ -234,7 +221,7 @@ class SubmissionWinnersServiceImplTest {
         // Reflectively call private sendAwardNotification() method
         Method method = SubmissionWinnersServiceImpl.class.getDeclaredMethod(
                 "sendAwardNotification",
-                SubmissionRecords.class,
+                SubmissionInfoVO.class,
                 String.class,
                 List.class
         );
@@ -252,9 +239,9 @@ class SubmissionWinnersServiceImplTest {
     @DisplayName("❌ Should not send notification if no recipients found")
     void testSendAwardNotification_NoRecipients() throws Exception {
         // Arrange
-        SubmissionRecords submission = new SubmissionRecords()
-                .setId("submission-1")
-                .setUserId("user-1");
+        SubmissionInfoVO submission = new SubmissionInfoVO();
+        submission.setId("submission-1");
+        submission.setUserId("user-1");
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setName("Mocked Competition");
@@ -270,7 +257,7 @@ class SubmissionWinnersServiceImplTest {
         // Access private sendAwardNotification method via reflection
         Method method = SubmissionWinnersServiceImpl.class.getDeclaredMethod(
                 "sendAwardNotification",
-                SubmissionRecords.class,
+                SubmissionInfoVO.class,
                 String.class,
                 List.class
         );
@@ -290,8 +277,8 @@ class SubmissionWinnersServiceImplTest {
         String userName = "Mocked User";
         String userEmail = "mocked@example.com";
 
-        SubmissionRecords submission = new SubmissionRecords()
-                .setId("submission-1");
+        SubmissionInfoVO submission = new SubmissionInfoVO();
+        submission.setId("submission-1");
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setName("Mocked Competition");
@@ -330,8 +317,8 @@ class SubmissionWinnersServiceImplTest {
         String userName = "Mocked User";
         String userEmail = "mocked@example.com";
 
-        SubmissionRecords submission = new SubmissionRecords()
-                .setId("submission-1");
+        SubmissionInfoVO submission = new SubmissionInfoVO();
+        submission.setId("submission-1");
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setName("Mocked Competition");

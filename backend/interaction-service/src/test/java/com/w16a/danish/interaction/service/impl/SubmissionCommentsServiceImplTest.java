@@ -1,16 +1,18 @@
 package com.w16a.danish.interaction.service.impl;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
-import com.w16a.danish.interaction.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
-import com.w16a.danish.interaction.exception.BusinessException;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.feign.RegistrationServiceClient;
 import com.w16a.danish.interaction.feign.UserServiceClient;
 import com.w16a.danish.interaction.mapper.SubmissionCommentsMapper;
-import com.w16a.danish.interaction.domain.vo.UserBriefVO;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +61,10 @@ class SubmissionCommentsServiceImplTest {
 
         when(submissionCommentsMapper.insert(any(SubmissionComments.class))).thenReturn(1);
         when(submissionCommentsMapper.updateById(any(SubmissionComments.class))).thenReturn(1);
+
+        IPage<SubmissionComments> emptyPage = new Page<>();
+        emptyPage.setRecords(Collections.emptyList());
+        when(submissionCommentsMapper.selectPage(any(), any())).thenReturn(emptyPage);
     }
 
     @Test
@@ -156,11 +162,14 @@ class SubmissionCommentsServiceImplTest {
     @DisplayName("✅ Get paginated comments successfully")
     void testGetPaginatedCommentsSuccess() {
         LambdaQueryChainWrapper<SubmissionComments> query = mock(LambdaQueryChainWrapper.class);
+        IPage<SubmissionComments> emptyPage = new Page<>();
+        emptyPage.setRecords(Collections.emptyList());
 
         doReturn(query).when(submissionCommentsService).lambdaQuery();
         when(query.eq(any(), any())).thenReturn(query);
         when(query.isNull(any())).thenReturn(query);
         when(query.orderBy(anyBoolean(), anyBoolean(), any(SFunction.class))).thenReturn(query);
+        when(query.page(any())).thenReturn(emptyPage);
         when(query.list()).thenReturn(Collections.emptyList());
 
         when(userServiceClient.getUsersByIds(anyList(), any()))
@@ -204,15 +213,19 @@ class SubmissionCommentsServiceImplTest {
         doReturn(parentQuery).doReturn(replyQuery).when(submissionCommentsService).lambdaQuery();
 
         // parent query mock
+        SubmissionComments parentComment = new SubmissionComments()
+                .setId("parentId")
+                .setContent("Parent Comment")
+                .setUserId("user1");
+        IPage<SubmissionComments> parentPage = new Page<>();
+        parentPage.setRecords(List.of(parentComment));
+        parentPage.setTotal(1L);
+
         when(parentQuery.eq(any(SFunction.class), any())).thenReturn(parentQuery);
         when(parentQuery.isNull(any(SFunction.class))).thenReturn(parentQuery);
         when(parentQuery.orderBy(anyBoolean(), anyBoolean(), any(SFunction.class))).thenReturn(parentQuery);
-        when(parentQuery.list()).thenReturn(List.of(
-                new SubmissionComments()
-                        .setId("parentId")
-                        .setContent("Parent Comment")
-                        .setUserId("user1")
-        ));
+        when(parentQuery.page(any())).thenReturn(parentPage);
+        when(parentQuery.list()).thenReturn(List.of(parentComment));
 
         // reply query mock
         when(replyQuery.eq(any(SFunction.class), any())).thenReturn(replyQuery);

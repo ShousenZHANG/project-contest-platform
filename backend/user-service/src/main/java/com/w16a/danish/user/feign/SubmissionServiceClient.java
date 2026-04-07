@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
  * @author Eddy
  * @date 2025/04/18
  */
-@FeignClient(name = "registration-service")
+@FeignClient(name = "registration-service", fallback = com.w16a.danish.user.feign.fallback.SubmissionServiceClientFallback.class)
 public interface SubmissionServiceClient {
 
     /**

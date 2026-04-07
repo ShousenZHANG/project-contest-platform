@@ -6,6 +6,7 @@ import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompetitionOrganizersServiceImpl extends ServiceImpl<CompetitionOrganizersMapper, CompetitionOrganizers> implements ICompetitionOrganizersService {

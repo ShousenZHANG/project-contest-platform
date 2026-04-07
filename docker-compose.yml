@@ -3,7 +3,7 @@ services:
     image: mysql:8.0.42
     container_name: 9900-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     ports:
       - "3306:3306"
     volumes:
@@ -12,6 +12,13 @@ services:
     restart: always
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   redis:
     image: redis:7.4.3
     container_name: 9900-redis
@@ -21,12 +28,18 @@ services:
       - my-network
     volumes:
       - ./.redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:4.0.7-management
     container_name: 9900-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -34,6 +47,13 @@ services:
       - ./.rabbitmq-data:/var/lib/rabbitmq
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
   nacos:
     image: nacos/nacos-server:v2.5.1
     container_name: 9900-nacos
@@ -47,6 +67,12 @@ services:
       - TZ=Australia/Sydney
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -57,14 +83,34 @@ services:
     volumes:
       - ./.minio-data:/data
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
     command: server /data --console-address ":9001"
     networks:
       - my-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-# This is the main API gateway for the backend services
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: 9900-zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - my-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9411/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ── Backend Services ─────────────────────────────────────────────────────────
+
   backend-api-gateway:
     container_name: backend-api-gateway
     build:
@@ -73,15 +119,26 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       - JWT_SECRET=${JWT_SECRET}
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-user-service:
     container_name: backend-user-service
@@ -91,12 +148,16 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
@@ -105,6 +166,12 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-competition-service:
     container_name: backend-competition-service
@@ -114,12 +181,22 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-file-service:
     container_name: backend-file-service
@@ -129,12 +206,22 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-registration-service:
     container_name: backend-registration-service
@@ -144,12 +231,22 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-interaction-service:
     container_name: backend-interaction-service
@@ -159,12 +256,22 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8086/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   backend-judge-service:
     container_name: backend-judge-service
@@ -174,12 +281,22 @@ services:
     networks:
       - my-network
     depends_on:
-      - backend-api-gateway
-      - mysql
-      - redis
-      - rabbitmq
-      - nacos
-      - minio
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   frontend-web:
     container_name: frontend-web

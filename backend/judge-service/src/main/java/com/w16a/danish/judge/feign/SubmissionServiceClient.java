@@ -1,12 +1,18 @@
 package com.w16a.danish.judge.feign;
 
+import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -15,7 +21,7 @@ import java.util.Map;
  * @author Eddy
  * @since 2025-04-18
  */
-@FeignClient(name = "registration-service")
+@FeignClient(name = "registration-service", fallback = com.w16a.danish.judge.feign.fallback.SubmissionServiceClientFallback.class)
 public interface SubmissionServiceClient {
 
     /**
@@ -102,4 +108,57 @@ public interface SubmissionServiceClient {
      */
     @GetMapping("/submissions/public/platform/submission-trend")
     ResponseEntity<Map<String, Integer>> getPlatformSubmissionTrend();
+
+    // ── Internal endpoints ────────────────────────────────────────────────────
+
+    /**
+     * Update the aggregated total score on a submission record.
+     */
+    @PutMapping("/submissions/internal/{id}/total-score")
+    ResponseEntity<Void> updateTotalScore(
+            @PathVariable("id") String submissionId,
+            @RequestParam("score") java.math.BigDecimal totalScore
+    );
+
+    /**
+     * Get score statistics for all judged submissions in a competition.
+     */
+    @GetMapping("/submissions/internal/score-statistics")
+    ResponseEntity<com.w16a.danish.judge.domain.vo.SubmissionScoreStatisticsVO> getScoreStatistics(
+            @RequestParam("competitionId") String competitionId
+    );
+
+    /**
+     * Get basic submission info for an individual participant.
+     */
+    @GetMapping("/submissions/internal/my-submission")
+    ResponseEntity<SubmissionInfoVO> getMySubmissionBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("userId") String userId
+    );
+
+    /**
+     * Get basic submission info for a team.
+     */
+    @GetMapping("/submissions/internal/team-submission")
+    ResponseEntity<SubmissionInfoVO> getTeamSubmissionBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("teamId") String teamId
+    );
+
+    /**
+     * Get all scored submissions (totalScore IS NOT NULL) for a competition.
+     */
+    @GetMapping("/submissions/internal/scored")
+    ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(
+            @RequestParam("competitionId") String competitionId
+    );
+
+    /**
+     * Get submissions by a list of IDs.
+     */
+    @PostMapping("/submissions/internal/by-ids")
+    ResponseEntity<List<SubmissionInfoVO>> getSubmissionsByIds(
+            @RequestBody List<String> submissionIds
+    );
 }

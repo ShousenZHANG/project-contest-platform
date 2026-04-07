@@ -5,7 +5,7 @@ import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
 import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.competition.domain.vo.PageResponse;
+import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.competition.service.ICompetitionsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +51,9 @@ class CompetitionControllerTest {
     @DisplayName("✅ Should create competition successfully")
     void testCreateCompetition() throws Exception {
         CompetitionCreateDTO dto = new CompetitionCreateDTO();
+        dto.setName("Test Competition");
+        dto.setStartDate(java.time.LocalDateTime.now().plusDays(1));
+        dto.setEndDate(java.time.LocalDateTime.now().plusDays(30));
         when(competitionService.createCompetition(any(), any(), any()))
                 .thenReturn(new CompetitionResponseVO());
 

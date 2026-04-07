@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @author Eddy ZHANG
  * @date 2025/03/27
  */
+@Slf4j
 @RestController
 @RequestMapping("/files")
 @RequiredArgsConstructor

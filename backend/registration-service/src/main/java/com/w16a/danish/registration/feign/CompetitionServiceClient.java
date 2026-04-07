@@ -17,7 +17,7 @@ import java.util.List;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
-@FeignClient(name = "competition-service", path = "/competitions")
+@FeignClient(name = "competition-service", path = "/competitions", fallback = com.w16a.danish.registration.feign.fallback.CompetitionServiceClientFallback.class)
 public interface CompetitionServiceClient {
 
     /**

@@ -1,21 +1,29 @@
-# ignore all files
-.mysql-data/
-.nacos-data/
-.redis-data/
-.rabbitmq-data/
-.minio-data/
-logs/
-mysql-init/
-
-frontend/
-
-# Maven build cache
-**/target/
-*.jar
-*.war
-*.ear
-
-.idea/
-
+# Version control
+.git
 .gitignore
-*.log
+
+# Data volumes (not needed in build context)
+.mysql-data
+.redis-data
+.rabbitmq-data
+.nacos-data
+.minio-data
+
+# Build artifacts (each service builds its own)
+**/target
+**/.mvn/timing.properties
+
+# Frontend (not needed for backend service builds)
+frontend/node_modules
+frontend/build
+
+# IDE / OS artifacts
+.idea
+.vscode
+*.iml
+*.DS_Store
+Thumbs.db
+
+# Test reports
+**/surefire-reports
+**/failsafe-reports
