@@ -7,6 +7,7 @@
  */
 
 import axios from "axios";
+import AuthTokenManager from '../auth/authTokenManager';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -21,7 +22,7 @@ const apiClient = axios.create({
 // ── Request interceptor: attach JWT ─────────────────────────────────────────
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = AuthTokenManager.getToken();
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
@@ -36,10 +37,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid — clear storage and redirect to login
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("email");
-      localStorage.removeItem("role");
+      AuthTokenManager.clearSession();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
