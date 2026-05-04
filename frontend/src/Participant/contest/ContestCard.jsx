@@ -1,63 +1,35 @@
 /**
- * @file ContestCard.js
- * @description
- * This component displays a single contest in a card format for participants.
- * Participants can:
- *  - View basic contest information (title, date, category, description, status).
- *  - Join contests as an individual or as a team depending on the participation type.
- *  - Cancel their registration if already registered.
- *  - View approved submissions for a contest.
- * The component manages registration, cancellation, and team selection with backend API integration,
- * handles authentication, and provides user feedback via dialogs and snackbars.
- * It uses Material-UI components for styling and layout.
+ * ContestCard.jsx
+ *
+ * Participant contest card. Migrated from MUI to shadcn/ui.
  *
  * Role: Participant
  * Developer: Zhaoyi Yang, Beiqi Dai
  */
 
-import React, { useState } from "react";
-import "./ContestCard.css";
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Button,
-  Typography,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Snackbar,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  CircularProgress,
-  Box,
-} from "@mui/material";
-import { Flag, Category, Visibility, AccessTime, PlayArrow, Lock } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Flag, Eye, Tag, Play, Clock, Lock, Loader2 } from 'lucide-react';
 import apiClient from '../../api/apiClient';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardFooter } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 
 function ContestCard({ contest, onLoginRequest }) {
   const navigate = useNavigate();
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [openRegDialog, setOpenRegDialog] = useState(false);
   const [openTeamDialog, setOpenTeamDialog] = useState(false);
   const [createdTeams, setCreatedTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
-
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleSnackbarClose = (event, reason) => {
-    if (event) event.stopPropagation();
-    setSnackbar((prev) => ({ ...prev, open: false }));
-  };
 
   const checkTeamStatus = async (teamId) => {
     try {
@@ -71,7 +43,7 @@ function ContestCard({ contest, onLoginRequest }) {
   };
 
   const fetchCreatedTeams = async () => {
-    const userId = localStorage.getItem("userId");
+    const userId = localStorage.getItem('userId');
     setTeamsLoading(true);
     try {
       const res = await apiClient.get(
@@ -81,7 +53,7 @@ function ContestCard({ contest, onLoginRequest }) {
       setCreatedTeams(teams);
       return teams;
     } catch (err) {
-      showSnackbar("Failed to load your teams.", "error");
+      toast.error('Failed to load your teams.');
     } finally {
       setTeamsLoading(false);
     }
@@ -91,18 +63,18 @@ function ContestCard({ contest, onLoginRequest }) {
   const registerTeam = async (teamId) => {
     try {
       await apiClient.post(`/registrations/teams/${contest.id}/${teamId}`);
-      showSnackbar("Team registered successfully!", "success");
+      toast.success('Team registered successfully!');
     } catch (err) {
-      showSnackbar("Team registration failed.", "error");
+      toast.error('Team registration failed.');
     }
   };
 
   const cancelTeamRegistration = async (teamId) => {
     try {
       await apiClient.delete(`/registrations/teams/${contest.id}/${teamId}`);
-      showSnackbar("Team registration cancelled!", "success");
+      toast.success('Team registration cancelled!');
     } catch (err) {
-      showSnackbar("Team cancellation failed.", "error");
+      toast.error('Team cancellation failed.');
     } finally {
       setOpenTeamDialog(false);
     }
@@ -111,19 +83,19 @@ function ContestCard({ contest, onLoginRequest }) {
   const handleJoinClick = async (e) => {
     e.stopPropagation();
 
-    if (contest.status !== "ONGOING") {
-      showSnackbar("You can only join ongoing competitions.", "warning");
+    if (contest.status !== 'ONGOING') {
+      toast.warning('You can only join ongoing competitions.');
       return;
     }
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (!token) {
       if (onLoginRequest) onLoginRequest();
-      else showSnackbar("Please log in first!", "warning");
+      else toast.warning('Please log in first!');
       return;
     }
 
-    if (contest.participationType === "TEAM") {
+    if (contest.participationType === 'TEAM') {
       await fetchCreatedTeams();
       setOpenTeamDialog(true);
       return;
@@ -131,21 +103,24 @@ function ContestCard({ contest, onLoginRequest }) {
 
     try {
       await apiClient.post(`/registrations/${contest.id}`);
-      showSnackbar("Registration successful!", "success");
+      toast.success('Registration successful!');
     } catch (err) {
-      const text = typeof err.response?.data === 'string' ? err.response.data : JSON.stringify(err.response?.data || '');
-      if (text.includes("already registered")) setOpenRegDialog(true);
-      else showSnackbar("Registration failed.", "error");
+      const text =
+        typeof err.response?.data === 'string'
+          ? err.response.data
+          : JSON.stringify(err.response?.data || '');
+      if (text.includes('already registered')) setOpenRegDialog(true);
+      else toast.error('Registration failed.');
     }
   };
 
   const handleCancelRegistration = async () => {
     try {
       await apiClient.delete(`/registrations/${contest.id}`);
-      showSnackbar("Cancelled successfully!", "success");
+      toast.success('Cancelled successfully!');
       setOpenRegDialog(false);
     } catch (err) {
-      showSnackbar("Cancellation failed.", "error");
+      toast.error('Cancellation failed.');
     }
   };
 
@@ -153,7 +128,7 @@ function ContestCard({ contest, onLoginRequest }) {
     e.stopPropagation();
 
     if (!contest?.id) {
-      showSnackbar("Invalid contest ID.", "error");
+      toast.error('Invalid contest ID.');
       return;
     }
 
@@ -163,140 +138,131 @@ function ContestCard({ contest, onLoginRequest }) {
       );
       const submissions = res.data.data || [];
       if (submissions.length === 0) {
-        showSnackbar("No approved submissions yet.", "info");
+        toast.info('No approved submissions yet.');
         return;
       }
       navigate(`/view-submission/${contest.id}`);
     } catch (err) {
-      showSnackbar("Network error fetching submissions.", "error");
+      toast.error('Network error fetching submissions.');
     }
   };
 
+  const statusBadge = () => {
+    const status = contest.status;
+    const Icon = status === 'ONGOING' ? Play : status === 'UPCOMING' ? Clock : Lock;
+    const variant =
+      status === 'ONGOING' ? 'warning' : status === 'UPCOMING' ? 'secondary' : 'outline';
+    return (
+      <Badge variant={variant} className="gap-1">
+        <Icon className="h-3 w-3" />
+        {status}
+      </Badge>
+    );
+  };
 
   return (
     <>
       <Card
-        className="contest-card"
         onClick={() => navigate(`/contest-detail/${contest.id}`)}
-        sx={{ maxWidth: 345, boxShadow: 3, cursor: "pointer" }}
+        className="group max-w-sm cursor-pointer overflow-hidden transition-all hover:-translate-y-1 hover:shadow-md"
       >
-        <CardMedia component="img" height="200" image={contest.image} alt={contest.title} />
-        <CardContent>
-          <Box
-            sx={{
-              display: "inline-flex",
-              alignItems: "center",
-              backgroundColor:
-                contest.status === "ONGOING"
-                  ? "#FF9800"
-                  : contest.status === "UPCOMING"
-                    ? "#BDBDBD"
-                    : "#9E9E9E",
-              color: "white",
-              padding: "4px 10px",
-              borderRadius: "20px",
-              fontSize: "0.8rem",
-              fontWeight: "bold",
-              mb: 1,
-            }}
-          >
-            {contest.status === "ONGOING" && <PlayArrow sx={{ fontSize: 16, mr: 1 }} />}
-            {contest.status === "UPCOMING" && <AccessTime sx={{ fontSize: 16, mr: 1 }} />}
-            {contest.status === "COMPLETED" && <Lock sx={{ fontSize: 16, mr: 1 }} />}
-            {contest.status}
-          </Box>
+        <div className="h-48 w-full overflow-hidden bg-muted">
+          <img
+            src={contest.image}
+            alt={contest.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        </div>
 
-          <Typography
-            variant="h6"
-            sx={{ mt: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "87%" }}
-          >
+        <CardContent className="p-4">
+          <div className="mb-2">{statusBadge()}</div>
+
+          <h3 className="line-clamp-1 text-base font-semibold text-foreground">
             {contest.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            <strong>Date:</strong> {contest.date}
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            <Category sx={{ fontSize: 18, marginRight: 1, color: "gray" }} /> {contest.category}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ mt: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}
-          >
-            <span style={{ fontWeight: "bold", color: "#888" }}>Description:</span> {contest.description}
-          </Typography>
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-medium">Date:</span> {contest.date}
+          </p>
+          <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+            <Tag className="h-3 w-3" /> {contest.category}
+          </p>
+          <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Description:</span> {contest.description}
+          </p>
         </CardContent>
-        <CardActions>
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              startIcon={<Flag />}
-              onClick={handleJoinClick}
-              sx={{ bgcolor: "orange", "&:hover": { bgcolor: "darkorange" } }}
-            >
-              Join
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<Visibility />}
-              onClick={handleViewSubmission}
-              sx={{
-                color: "orange",
-                borderColor: "orange",
-                "&:hover": { bgcolor: "orange", color: "white" },
-              }}
-            >
-              View Submission
-            </Button>
-          </Stack>
-        </CardActions>
-      </Card>
 
-      <Dialog open={openRegDialog} onClose={() => setOpenRegDialog(false)} onClick={(e) => e.stopPropagation()}>
-        <DialogTitle>Already Registered</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            You have already registered for this competition. Cancel?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenRegDialog(false)} sx={{ color: "orange" }}>
-            No
+        <CardFooter className="gap-2 p-4 pt-0">
+          <Button
+            onClick={handleJoinClick}
+            className="bg-warning text-warning-foreground hover:bg-warning/90"
+          >
+            <Flag className="mr-2 h-4 w-4" />
+            Join
           </Button>
           <Button
-            onClick={handleCancelRegistration}
-            sx={{ bgcolor: "orange", "&:hover": { bgcolor: "darkorange" } }}
-            autoFocus
+            variant="outline"
+            onClick={handleViewSubmission}
+            className="border-warning text-warning hover:bg-warning/10"
           >
-            Yes
+            <Eye className="mr-2 h-4 w-4" />
+            View Submission
           </Button>
-        </DialogActions>
+        </CardFooter>
+      </Card>
+
+      <Dialog open={openRegDialog} onOpenChange={setOpenRegDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Already Registered</DialogTitle>
+            <DialogDescription>
+              You have already registered for this competition. Cancel?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenRegDialog(false)}>
+              No
+            </Button>
+            <Button
+              autoFocus
+              onClick={handleCancelRegistration}
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+            >
+              Yes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={openTeamDialog} onClose={() => setOpenTeamDialog(false)} onClick={(e) => e.stopPropagation()}>
-        <DialogTitle>Select Your Team</DialogTitle>
-        <DialogContent>
+      <Dialog open={openTeamDialog} onOpenChange={setOpenTeamDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Select Your Team</DialogTitle>
+          </DialogHeader>
           {teamsLoading ? (
-            <CircularProgress />
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-warning" />
+            </div>
           ) : createdTeams.length === 0 ? (
-            <DialogContentText>You have no teams. Please create one first.</DialogContentText>
+            <p className="text-sm text-muted-foreground">
+              You have no teams. Please create one first.
+            </p>
           ) : (
-            <List>
+            <ul className="space-y-3">
               {createdTeams.map((team) => (
-                <ListItem key={team.id} sx={{ flexDirection: "column", alignItems: "flex-start" }}>
-                  <ListItemText primary={team.name} />
-                  <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                <li
+                  key={team.id}
+                  className="flex flex-col gap-2 rounded-md border p-3"
+                >
+                  <p className="font-medium text-foreground">{team.name}</p>
+                  <div className="flex gap-2">
                     <Button
-                      variant="outlined"
-                      size="small"
-                      sx={{
-                        color: "orange",
-                        borderColor: "orange",
-                        "&:hover": { bgcolor: "orange", color: "white" },
-                      }}
+                      size="sm"
+                      variant="outline"
+                      className="border-warning text-warning hover:bg-warning/10"
                       onClick={async () => {
                         const registered = await checkTeamStatus(team.id);
                         if (registered) {
-                          showSnackbar("Team already registered.", "info");
+                          toast.info('Team already registered.');
                         } else {
                           registerTeam(team.id);
                         }
@@ -305,17 +271,13 @@ function ContestCard({ contest, onLoginRequest }) {
                       Register
                     </Button>
                     <Button
-                      variant="outlined"
-                      size="small"
-                      sx={{
-                        color: "orange",
-                        borderColor: "orange",
-                        "&:hover": { bgcolor: "orange", color: "white" },
-                      }}
+                      size="sm"
+                      variant="outline"
+                      className="border-warning text-warning hover:bg-warning/10"
                       onClick={async () => {
                         const registered = await checkTeamStatus(team.id);
                         if (!registered) {
-                          showSnackbar("Team not registered yet.", "warning");
+                          toast.warning('Team not registered yet.');
                         } else {
                           cancelTeamRegistration(team.id);
                         }
@@ -323,29 +285,18 @@ function ContestCard({ contest, onLoginRequest }) {
                     >
                       Cancel Reg
                     </Button>
-                  </Box>
-                </ListItem>
+                  </div>
+                </li>
               ))}
-            </List>
+            </ul>
           )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenTeamDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenTeamDialog(false)} sx={{ color: "orange" }}>
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: "100%" }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </>
   );
 }

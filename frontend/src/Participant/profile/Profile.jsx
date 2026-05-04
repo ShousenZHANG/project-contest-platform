@@ -1,29 +1,37 @@
 /**
- * @file Profile.js
- * @description
- * This component allows participants to view and update their profile information.
- * Features include:
- *  - Viewing and editing basic user information (name, email, password, description).
- *  - Uploading a new profile avatar image with validation checks.
- *  - Deleting the user account with confirmation.
- *  - Providing real-time feedback through Snackbar notifications.
- *  - Utilizing Material-UI components for consistent and user-friendly design.
- * The component communicates with the backend API for fetching, updating, and deleting user data.
+ * Profile.jsx
+ *
+ * Participant profile management. Migrated from MUI to shadcn/ui + Tailwind.
  *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
 import React, { useState, useEffect } from 'react';
-import './Profile.css';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Snackbar, Alert } from '@mui/material';
-import BadgeIcon from '@mui/icons-material/Badge';
-import EmailIcon from '@mui/icons-material/Email';
-import LockIcon from '@mui/icons-material/Lock';
-import DescriptionIcon from '@mui/icons-material/Description';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { Camera, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../../api/apiClient';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+
+const PASSWORD_REGEX = /^(?=.*[A-Z]).{8,}$/;
 
 function Profile() {
   const [formData, setFormData] = useState({
@@ -31,7 +39,7 @@ function Profile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || ''
+    role: localStorage.getItem('role') || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -39,18 +47,8 @@ function Profile() {
   const [tempAvatar, setTempAvatar] = useState(null);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'warning' });
-
-  const showSnackbar = (message, severity = 'warning') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleSnackbarClose = (event, reason) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    setSnackbar((prev) => ({ ...prev, open: false }));
-  };
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -63,7 +61,7 @@ function Profile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || ''
+            role: localStorage.getItem('role') || '',
           });
           setAvatarUrl(data.avatarUrl);
         }
@@ -83,54 +81,48 @@ function Profile() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (formData.password) {
-      const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
-      if (!passwordRegex.test(formData.password)) {
-        showSnackbar('Password must be at least 8 characters and contain at least one uppercase letter.', 'warning');
-        return;
-      }
+    if (formData.password && !PASSWORD_REGEX.test(formData.password)) {
+      toast.warning(
+        'Password must be at least 8 characters and contain at least one uppercase letter.'
+      );
+      return;
     }
 
+    setSubmitting(true);
     try {
       const { role, ...profileData } = formData;
       await apiClient.put('/users/profile', { ...profileData, avatarUrl });
-      showSnackbar('Profile updated successfully!', 'success');
+      toast.success('Profile updated successfully!');
     } catch (error) {
       const msg = error.response?.data?.message || 'Error updating profile.';
-      showSnackbar(msg, 'error');
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
-  };
-
-  const handleAvatarIconClick = () => {
-    setAvatarDialogOpen(true);
   };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const newFileName = file.name.replace(/[^\w.-]/g, '_');
-      const encodedFileName = encodeURIComponent(newFileName);
-      const renamedFile = new File([file], encodedFileName, { type: file.type });
+    if (!file) return;
 
-      if (tempAvatarUrl) {
-        URL.revokeObjectURL(tempAvatarUrl);
-      }
+    const newFileName = file.name.replace(/[^\w.-]/g, '_');
+    const encodedFileName = encodeURIComponent(newFileName);
+    const renamedFile = new File([file], encodedFileName, { type: file.type });
 
-      const isValidImage = renamedFile.type.startsWith('image/');
-      if (!isValidImage) {
-        showSnackbar('Please select a valid image file.', 'warning');
-        return;
-      }
+    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
 
-      const maxSize = 5 * 1024 * 1024;
-      if (renamedFile.size > maxSize) {
-        showSnackbar('File size exceeds the 5MB limit. Please select a smaller image.', 'warning');
-        return;
-      }
-
-      setTempAvatar(renamedFile);
-      setTempAvatarUrl(URL.createObjectURL(renamedFile));
+    if (!renamedFile.type.startsWith('image/')) {
+      toast.warning('Please select a valid image file.');
+      return;
     }
+
+    if (renamedFile.size > 5 * 1024 * 1024) {
+      toast.warning('File size exceeds the 5MB limit. Please select a smaller image.');
+      return;
+    }
+
+    setTempAvatar(renamedFile);
+    setTempAvatarUrl(URL.createObjectURL(renamedFile));
   };
 
   const handleAvatarSave = async () => {
@@ -139,6 +131,7 @@ function Profile() {
     const formDataUpload = new FormData();
     formDataUpload.append('file', tempAvatar);
 
+    setUploading(true);
     try {
       const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -151,26 +144,21 @@ function Profile() {
         setAvatarDialogOpen(false);
         window.location.reload(true);
       } else {
-        showSnackbar('Error uploading avatar.', 'error');
+        toast.error('Error uploading avatar.');
       }
     } catch (error) {
       const msg = error.response?.data?.message || 'Failed to upload avatar.';
-      showSnackbar(msg, 'error');
+      toast.error(msg);
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) {
-      URL.revokeObjectURL(tempAvatarUrl);
-    }
+    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
     setTempAvatar(null);
     setTempAvatarUrl('');
     setAvatarDialogOpen(false);
-
-    const fileInput = document.querySelector('input[type="file"]');
-    if (fileInput) {
-      fileInput.value = '';
-    }
   };
 
   const handleDeleteAccount = async () => {
@@ -178,17 +166,17 @@ function Profile() {
 
     try {
       await apiClient.delete(`/users/${userId}`);
-      showSnackbar('Your account has been deleted.', 'success');
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("email");
-      localStorage.removeItem("role");
+      toast.success('Your account has been deleted.');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
+      localStorage.removeItem('role');
       setTimeout(() => {
         window.location.href = '/';
-      }, 1500);
+      }, 1200);
     } catch (error) {
       const msg = error.response?.data?.message || 'Error deleting account.';
-      showSnackbar(msg, 'error');
+      toast.error(msg);
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -196,123 +184,158 @@ function Profile() {
 
   useEffect(() => {
     return () => {
-      if (tempAvatarUrl) {
-        URL.revokeObjectURL(tempAvatarUrl);
-      }
+      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
     };
   }, [tempAvatarUrl]);
 
+  const initials = (formData.name || formData.email || 'U').slice(0, 2).toUpperCase();
+
   return (
-    <>
-
-      <div className="Participantprofile-container">
-
-        <div className="Participantprofile-content">
-          <div className="profile-badge">
-            <div
-              className="profile-avatar"
-              style={{ position: 'relative', marginTop: '-60px' }}
-              onClick={handleAvatarIconClick}
+    <div className="p-6">
+      <Card className="max-w-4xl">
+        <CardHeader>
+          <CardTitle>My Profile</CardTitle>
+          <CardDescription>Manage your account info and avatar.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setAvatarDialogOpen(true)}
+              className="group relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <img
-                className="avatar"
-                src={avatarUrl || '/OIP.jpg'}
-                alt="User Avatar"
-                style={{
-                  width: '100px',
-                  height: '100px',
-                  borderRadius: '50%',
-                  border: '3px solid white',
-                  backgroundColor: 'white',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-                }}
-              />
-              <div className="edit-icon" title="Edit Avatar">Edit</div>
+              <Avatar className="h-24 w-24 border-2 border-background shadow-md">
+                <AvatarImage src={avatarUrl || '/OIP.jpg'} alt="User Avatar" />
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <Camera className="h-5 w-5 text-white" />
+              </span>
+            </button>
+            <div>
+              <p className="text-sm font-medium text-foreground">{formData.name || 'Unnamed'}</p>
+              <p className="text-xs text-muted-foreground">{formData.email}</p>
             </div>
-
-            <form className="profile-form" onSubmit={handleSubmit}>
-              <div className="profile-form-columns">
-                <div className="form-left">
-                  <div className="input-group">
-                    <BadgeIcon style={{ marginRight: '8px' }} />
-                    <label>Name</label>
-                  </div>
-                  <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter name" />
-
-                  <div className="input-group">
-                    <EmailIcon style={{ marginRight: '8px' }} />
-                    <label>Email</label>
-                  </div>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter email" />
-
-                  <div className="input-group">
-                    <LockIcon style={{ marginRight: '8px' }} />
-                    <label>Password</label>
-                  </div>
-                  <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter new password" />
-
-                  <div className="input-group">
-                    <AccountCircleIcon style={{ marginRight: '8px' }} />
-                    <label>User Role</label>
-                  </div>
-                  <input type="text" name="role" value={formData.role} disabled style={{ backgroundColor: '#f3f3f3', cursor: 'not-allowed' }} />
-
-                </div>
-
-                <div className="form-right">
-                  <div className="input-group">
-                    <DescriptionIcon style={{ marginRight: '8px' }} />
-                    <label>Description</label>
-                  </div>
-                  <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Tell us about yourself"
-                    style={{ minHeight: '150px' }} />
-                  <button type="submit" className="save-button">Save</button>
-                  <button type="button" onClick={() => setDeleteDialogOpen(true)} className="delete-button">Delete Account</button>
-                </div>
-              </div>
-            </form>
-
           </div>
-        </div>
-      </div>
 
-      <Dialog open={avatarDialogOpen} onClose={handleAvatarDialogClose}>
-        <DialogTitle>Upload Avatar</DialogTitle>
+          <form className="grid grid-cols-1 gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="Enter email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter new password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">User Role</Label>
+              <Input id="role" type="text" name="role" value={formData.role} disabled />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="description">Description</Label>
+              <textarea
+                id="description"
+                name="description"
+                value={formData.description || ''}
+                onChange={handleChange}
+                placeholder="Tell us about yourself"
+                rows={5}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="flex flex-wrap gap-3 md:col-span-2">
+              <Button type="submit" disabled={submitting}>
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete Account
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Dialog open={avatarDialogOpen} onOpenChange={(open) => (!open ? handleAvatarDialogClose() : setAvatarDialogOpen(true))}>
         <DialogContent>
-          <input accept="image/*" type="file" onChange={handleAvatarChange} style={{ marginTop: '16px' }} />
+          <DialogHeader>
+            <DialogTitle>Upload Avatar</DialogTitle>
+            <DialogDescription>Select a new image (max 5MB).</DialogDescription>
+          </DialogHeader>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarChange}
+            className="text-sm"
+          />
+          {tempAvatarUrl && (
+            <img
+              src={tempAvatarUrl}
+              alt="preview"
+              className="mt-2 h-32 w-32 rounded-md object-cover"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={handleAvatarDialogClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleAvatarSave} disabled={uploading || !tempAvatar}>
+              {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleAvatarDialogClose}>Cancel</Button>
-          <Button onClick={handleAvatarSave} variant="contained">Save</Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete Account</DialogTitle>
-        <DialogContent>Are you sure you want to delete your account? This action is irreversible.</DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteAccount} color="error">Delete</Button>
-        </DialogActions>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Account</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete your account? This action is irreversible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAccount}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleSnackbarClose}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+    </div>
   );
-
 }
 
 export default Profile;

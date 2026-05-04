@@ -1,30 +1,20 @@
 /**
- * RatingDetail.js
+ * RatingDetail.jsx
  *
- * Allows judges to rate submissions for a competition. The component displays scoring criteria as sliders, collects feedback from the judge, and submits the ratings and feedback to the backend.
- * It handles the retrieval of scoring criteria, submission details, and provides a confirmation of the rating submission.
+ * Allows judges to rate submissions. Migrated from MUI to shadcn/ui + native sliders.
  *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
 
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import './Rating.css';
-import {
-  Typography,
-  Slider,
-  Paper,
-  Box,
-  CircularProgress,
-  Button,
-  Snackbar,
-  Alert,
-  TextField,
-  Grid,
-} from '@mui/material';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Label } from '../components/ui/label';
 
 function RatingDetail() {
   const { competitionId, submissionId } = useParams();
@@ -34,7 +24,6 @@ function RatingDetail() {
   const [scores, setScores] = useState({});
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     const fetchScoringCriteria = async () => {
@@ -75,98 +64,70 @@ function RatingDetail() {
         judgeComments: feedback,
         scores: ratingsArray,
       });
-      setSnackbar({ open: true, message: 'Rating submitted successfully', severity: 'success' });
-      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
+      toast.success('Rating submitted successfully');
+      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1200);
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Error submitting rating';
-      setSnackbar({ open: true, message: errorMsg, severity: 'error' });
+      toast.error(errorMsg);
     }
   };
 
   return (
-    <>
+    <div className="p-6">
+      <h2 className="mb-4 text-xl font-semibold text-foreground">Rate This Submission</h2>
 
-      <div className="rating-container">
-
-        <div className="rating-content">
-          <Typography variant="h5" gutterBottom>
-            Rate This Submission
-          </Typography>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <CircularProgress />
-            </div>
-          ) : (
-            <Paper sx={{ padding: 3, borderRadius: '20px' }}>
-              <Grid container spacing={4}>
-                {/* Left: The rating slider */}
-                <Grid item xs={12} md={7}>
-                  {scoringCriteria.map((criterion, index) => (
-                    <Box key={index} mb={4}>
-                      <Typography gutterBottom>{criterion}</Typography>
-                      <Slider
-                        value={scores[criterion]}
-                        min={0}
-                        max={10}
-                        step={0.1}
-                        onChange={(e, val) => handleSliderChange(criterion, val)}
-                        valueLabelDisplay="auto"
-                        marks={[{ value: 0, label: '0.0' }, { value: 10, label: '10.0' }]}
-                      />
-                    </Box>
-                  ))}
-                </Grid>
-
-                {/* Right: Feedback + Submit button */}
-                <Grid item xs={12} md={5} display="flex" flexDirection="column" alignItems="center">
-                  <Typography gutterBottom>Feedback</Typography>
-                  <TextField
-                    multiline
-                    rows={8}
-                    placeholder="Write your feedback here..."
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    fullWidth
-                    sx={{
-                      borderRadius: '16px',
-                      backgroundColor: '#eaf4f8',
-                      mb: 2,
-                    }}
-                  />
-                  <Button
-                    onClick={handleSubmitRating}
-                    variant="contained"
-                    sx={{
-                      backgroundColor: '#83c5be',
-                      color: '#fff',
-                      borderRadius: '20px',
-                      textTransform: 'none',
-                      px: 4,
-                      ':hover': {
-                        backgroundColor: '#64b3aa',
-                      },
-                    }}
-                  >
-                    Submit
-                  </Button>
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
-
-          <Snackbar
-            open={snackbar.open}
-            autoHideDuration={4000}
-            onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          >
-            <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </div>
-    </>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
+              <div className="md:col-span-7 space-y-6">
+                {scoringCriteria.map((criterion, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">{criterion}</Label>
+                      <span className="text-sm text-muted-foreground">
+                        {Number(scores[criterion]).toFixed(1)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      value={scores[criterion]}
+                      onChange={(e) => handleSliderChange(criterion, parseFloat(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>0.0</span>
+                      <span>10.0</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="md:col-span-5 flex flex-col gap-3">
+                <Label className="text-sm font-medium">Feedback</Label>
+                <textarea
+                  rows={10}
+                  placeholder="Write your feedback here..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <Button onClick={handleSubmitRating} className="self-end">
+                  Submit
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

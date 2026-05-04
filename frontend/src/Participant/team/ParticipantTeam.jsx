@@ -1,34 +1,20 @@
 /**
- * @file ParticipantTeam.js
- * @description 
- * This component renders the participant's team management area. 
- * 
- * Main Features:
- *  - Displays public teams and allows browsing, joining, and leaving teams.
- *  - Allows users to create new teams.
- *  - Provides a "My Teams" view where users can manage (edit/delete) their own teams.
- *  - Integrates Snackbar notifications for user feedback.
- * 
- * Key Components Used:
- *  - TeamList: Displays the list of public teams with join/leave actions.
- *  - TeamCreateDialog: Dialog for creating a new team.
- *  - MyTeamsDialog: Dialog for viewing and editing the user's own teams.
- * 
- * API Functions:
- *  - fetchJoinedTeams, fetchTeams, fetchMyTeams: For retrieving team information.
- *  - createTeam, joinTeam, leaveTeam, deleteTeam: For team actions.
- * 
- * Styling:
- *  - Uses a soft orange (#FF7F50) and deep orange (#FF5722) theme for buttons and highlights.
- * 
- * Developer: Beiqi Dai
+ * @file ParticipantTeam.jsx
+ * @description
+ * Participant team management area: browse public teams, create team,
+ * view My Teams. Migrated from MUI to shadcn/ui + Tailwind. Sonner toasts
+ * replace Snackbar/Alert.
+ *
  * Role: Participant
+ * Developer: Beiqi Dai
  */
 
-
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, Box, Typography, Button, Snackbar, Alert } from '@mui/material';
-import GroupsIcon from '@mui/icons-material/Groups';
+import { Users, Plus, FolderKanban } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import apiClient from '@/api/apiClient';
 import TeamCreateDialog from './TeamCreateDialog';
 import MyTeamsDialog from './MyTeamsDialog';
 import TeamList from './TeamList';
@@ -39,17 +25,13 @@ import {
   createTeam,
   joinTeam,
   leaveTeam,
-  deleteTeam
+  deleteTeam,
 } from './teamApi';
-import apiClient from '../../api/apiClient';
 
 function ParticipantTeam() {
   const [userData, setUserData] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
 
   const [teams, setTeams] = useState([]);
   const [joinedTeams, setJoinedTeams] = useState(new Set());
@@ -68,6 +50,7 @@ function ParticipantTeam() {
         data.userId = localStorage.getItem('userId');
         setUserData(data);
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to fetch user data:', error);
       }
     })();
@@ -87,69 +70,53 @@ function ParticipantTeam() {
     fetchTeams({ page, keyword, sortBy, order }, setTeams, setPages);
   };
 
-  return (
-    <Card
-      className="participant-team-sidebar participant-team-sticky"
-      sx={{
-        minWidth: '880px',
-        maxWidth: '640px',
-        margin: '0 auto',
-        padding: 2,
-        backgroundColor: '#fff',
-        borderRadius: 2,
-        boxShadow: 3
-      }}
-    >
-      <CardContent>
-        <Box display="flex" alignItems="center" mb={1}>
-          <GroupsIcon sx={{ mr: 1 }} />
-          <Typography variant="h6" fontWeight="bold">Teams</Typography>
-        </Box>
+  // Adapter — teamApi.joinTeam/leaveTeam call (setMsg, setSuccess, setOpen)
+  // separately. We collect the latest msg/severity and fire one toast on open.
+  const makeStatusAdapter = () => {
+    const state = { msg: '', ok: true };
+    return {
+      setMsg: (msg) => {
+        state.msg = msg;
+      },
+      setOk: (ok) => {
+        state.ok = ok;
+      },
+      fire: () => {
+        if (state.ok) toast.success(state.msg);
+        else toast.error(state.msg);
+      },
+    };
+  };
 
-        <Box mb={2} display="flex" gap={1}>
-          <Button
-            variant="contained"
-            onClick={() => setDialogOpen(true)}
-            sx={{
-              backgroundColor: '#FF7F50',
-              color: '#fff',
-              '&:hover': {
-                backgroundColor: '#FF5722'
-              }
-            }}
-          >
+  return (
+    <Card className="mx-auto w-full max-w-3xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Users className="h-5 w-5 text-primary" />
+          Teams
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
             Create Team
           </Button>
           <Button
-            variant="contained"
+            variant="outline"
             onClick={() => {
               setViewDialogOpen(true);
               fetchMyTeams(userData, setMyTeams);
             }}
-            sx={{
-              backgroundColor: '#FF7F50',
-              color: '#fff',
-              '&:hover': {
-                backgroundColor: '#FF5722'
-              }
-            }}
           >
+            <FolderKanban className="h-4 w-4" />
             View My Teams
           </Button>
-        </Box>
+        </div>
 
-        {/* 👉 Adding a regional description list is for the public team */}
-        <Box
-          display="flex"
-          alignItems="center"
-          gap={1}
-          mb={2}
-          p={2}
-        >
-          <Typography variant="body1" fontWeight="medium" color="#FF5722">
-            Browse and join public teams below 👇
-          </Typography>
-        </Box>
+        <p className="rounded-md bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
+          Browse and join public teams below
+        </p>
 
         <TeamList
           teams={teams}
@@ -163,12 +130,14 @@ function ParticipantTeam() {
           setKeyword={setKeyword}
           setSortBy={setSortBy}
           setOrder={setOrder}
-          onJoin={(team) =>
-            joinTeam(team, userData, setJoinedTeams, setSnackbarMessage, setIsSuccess, setSnackbarOpen)
-          }
-          onLeave={(id) =>
-            leaveTeam(id, userData, setJoinedTeams, setSnackbarMessage, setIsSuccess, setSnackbarOpen)
-          }
+          onJoin={(team) => {
+            const a = makeStatusAdapter();
+            joinTeam(team, userData, setJoinedTeams, a.setMsg, a.setOk, a.fire);
+          }}
+          onLeave={(id) => {
+            const a = makeStatusAdapter();
+            leaveTeam(id, userData, setJoinedTeams, a.setMsg, a.setOk, a.fire);
+          }}
         />
 
         <TeamCreateDialog
@@ -177,18 +146,16 @@ function ParticipantTeam() {
           onCreate={(name, desc) =>
             createTeam(name, desc, userData, {
               onSuccess: () => {
-                setSnackbarMessage('Team created!');
-                setIsSuccess(true);
-                setSnackbarOpen(true);
+                toast.success('Team created!');
                 setDialogOpen(false);
                 fetchJoinedTeams(userData, setJoinedTeams);
-                fetchTeams({ page: 1, keyword, sortBy, order }, setTeams, setPages);
+                fetchTeams(
+                  { page: 1, keyword, sortBy, order },
+                  setTeams,
+                  setPages
+                );
               },
-              onError: (msg) => {
-                setSnackbarMessage(msg);
-                setIsSuccess(false);
-                setSnackbarOpen(true);
-              }
+              onError: (msg) => toast.error(msg),
             })
           }
         />
@@ -202,40 +169,23 @@ function ParticipantTeam() {
           onDelete={(id) =>
             deleteTeam(id, userData, {
               onSuccess: () => {
-                setSnackbarMessage('Team deleted');
-                setIsSuccess(true);
-                setSnackbarOpen(true);
+                toast.success('Team deleted');
                 setMyTeams((prev) => prev.filter((t) => t.id !== id));
                 setJoinedTeams((prev) => {
                   const copy = new Set(prev);
                   copy.delete(id);
                   return copy;
                 });
-                fetchTeams({ page, keyword, sortBy, order }, setTeams, setPages);
+                fetchTeams(
+                  { page, keyword, sortBy, order },
+                  setTeams,
+                  setPages
+                );
               },
-              onError: (msg) => {
-                setSnackbarMessage(msg);
-                setIsSuccess(false);
-                setSnackbarOpen(true);
-              }
+              onError: (msg) => toast.error(msg),
             })
           }
         />
-
-        <Snackbar
-          open={snackbarOpen}
-          autoHideDuration={3000}
-          onClose={() => setSnackbarOpen(false)}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert
-            onClose={() => setSnackbarOpen(false)}
-            severity={isSuccess ? 'success' : 'error'}
-            sx={{ width: '100%' }}
-          >
-            {snackbarMessage}
-          </Alert>
-        </Snackbar>
       </CardContent>
     </Card>
   );

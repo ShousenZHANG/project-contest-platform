@@ -1,90 +1,66 @@
 /**
- * Sidebar.js
- * 
- * A fixed navigation sidebar component for participants to access different sections:
- * Profile, Contest, Team, Project, and Rating pages.
- * Highlights the current active page and prevents access if not logged in.
- * 
+ * Sidebar.jsx
+ *
+ * Participant sidebar navigation. Migrated to Tailwind + lucide icons.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import './Sidebar.css';
+import { User, Trophy, Users, FolderKanban, Star, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 
 function Sidebar() {
   const location = useLocation();
   const [activePath, setActivePath] = useState(location.pathname);
-  const email = localStorage.getItem("email");
+  const email = localStorage.getItem('email');
 
   const handleLinkClick = (event, path) => {
     const token = localStorage.getItem('token');
     if (!token) {
       event.preventDefault();
-      alert('You are not authorized. Please log in first.');
+      toast.error('You are not authorized. Please log in first.');
       return;
     }
     setActivePath(path);
   };
 
-  return (
-    <aside className="participant-sidebar">
-      <nav>
-        <ul>
-          <li>
-            <NavLink
-              to={`/profile/${email}`}
-              className={({ isActive }) => (isActive ? "active-link" : "")}
-              onClick={(e) => handleLinkClick(e, `/profile/${email}`)}
-            >
-              {activePath.startsWith("/profile") && <span className="participant-arrow-icon">▶</span>}
-              <span role="img" aria-label="profile">👤</span> Profile
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to={`/contest/${email}`}
-              className={({ isActive }) => (isActive ? "active-link" : "")}
-              onClick={(e) => handleLinkClick(e, `/contest/${email}`)}
-            >
-              {activePath.startsWith("/contest") && <span className="participant-arrow-icon">▶</span>}
-              <span role="img" aria-label="contest">🏆</span> Contest
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to={`/teams/${email}`}
-              className={({ isActive }) => (isActive ? "active-link" : "")}
-              onClick={(e) => handleLinkClick(e, `/teams/${email}`)}
-            >
-              {activePath.startsWith("/teams") && <span className="participant-arrow-icon">▶</span>}
-              <span role="img" aria-label="team">👥</span> Team
-            </NavLink>
+  const linkClass = (active) =>
+    cn(
+      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+      active
+        ? 'bg-primary text-primary-foreground'
+        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+    );
 
-          </li>
-          <li>
-            <NavLink
-              to={`/project/${email}`}
-              className={({ isActive }) => (isActive ? "active-link" : "")}
-              onClick={(e) => handleLinkClick(e, `/project/${email}`)}
-            >
-              {activePath.startsWith("/project") && <span className="participant-arrow-icon">▶</span>}
-              <span role="img" aria-label="project">📁</span> Project
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to={`/rating/${email}`}
-              className={({ isActive }) => (isActive ? "active-link" : "")}
-              onClick={(e) => handleLinkClick(e, `/rating/${email}`)}
-            >
-              {activePath.startsWith("/rating") && <span className="participant-arrow-icon">▶</span>}
-              <span role="img" aria-label="rating">⭐</span> Rating
-            </NavLink>
-          </li>
-        </ul>
+  const items = [
+    { to: `/profile/${email}`, prefix: '/profile', label: 'Profile', Icon: User },
+    { to: `/contest/${email}`, prefix: '/contest', label: 'Contest', Icon: Trophy },
+    { to: `/teams/${email}`, prefix: '/teams', label: 'Team', Icon: Users },
+    { to: `/project/${email}`, prefix: '/project', label: 'Project', Icon: FolderKanban },
+    { to: `/rating/${email}`, prefix: '/rating', label: 'Rating', Icon: Star },
+  ];
+
+  return (
+    <aside className="flex h-full w-56 flex-col border-r border-border bg-card p-3">
+      <nav className="flex flex-col gap-1">
+        {items.map(({ to, prefix, label, Icon }) => (
+          <NavLink
+            key={prefix}
+            to={to}
+            onClick={(e) => handleLinkClick(e, to)}
+            className={({ isActive }) =>
+              linkClass(isActive || activePath.startsWith(prefix))
+            }
+          >
+            <Icon className="h-4 w-4" />
+            <span className="flex-1">{label}</span>
+            {activePath.startsWith(prefix) && <ChevronRight className="h-3 w-3" />}
+          </NavLink>
+        ))}
       </nav>
     </aside>
   );

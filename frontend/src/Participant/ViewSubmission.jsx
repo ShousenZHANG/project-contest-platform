@@ -1,49 +1,28 @@
 /**
- * ViewSubmission.js
+ * ViewSubmission.jsx
  *
- * Participant view for submission details.
- * Displays submission info, file download, voting, and comments access.
- * Includes loading and error handling for fetching submission data.
+ * Participant view for submission details. Migrated from MUI to shadcn/ui.
  *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Snackbar,
-  Alert,
-  IconButton,
-  Box,
-  CircularProgress,
-} from "@mui/material";
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
-import "./ViewSubmission.css";
-import ViewVote from "./ViewVote";
-import apiClient from "../api/apiClient";
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import ViewVote from './ViewVote';
 
 function ViewSubmission() {
   const navigate = useNavigate();
-  const { competitionId, submissionId } = useParams();
+  const { submissionId } = useParams();
 
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
-  // Get details of submission
   useEffect(() => {
     apiClient
       .get(`/submissions/public/${submissionId}`)
@@ -52,9 +31,7 @@ function ViewSubmission() {
         setLoading(false);
       })
       .catch(() => {
-        setSnackbarMessage("Failed to obtain the work information");
-        setSnackbarSeverity("error");
-        setSnackbarOpen(true);
+        toast.error('Failed to obtain the work information');
         setLoading(false);
       });
   }, [submissionId]);
@@ -69,29 +46,22 @@ function ViewSubmission() {
 
   if (loading) {
     return (
-      <>
-
-
-        <div className="view-submission-content" style={{ textAlign: "center", padding: "40px" }}>
-          <CircularProgress color="warning" />
-          <Typography mt={2}>Load the work information...</Typography>
-        </div>
-      </>
+      <div className="flex flex-col items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-warning" />
+        <p className="mt-3 text-sm text-muted-foreground">
+          Loading the work information...
+        </p>
+      </div>
     );
   }
 
   if (!submission) {
     return (
-      <div style={{ padding: "20px" }}>
-        <Typography variant="h5" color="error">
+      <div className="p-6">
+        <p className="text-lg font-medium text-destructive">
           The work was not found.
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleGoBack}
-          sx={{ mt: 2 }}
-        >
+        </p>
+        <Button onClick={handleGoBack} className="mt-3">
           Go Back
         </Button>
       </div>
@@ -99,106 +69,72 @@ function ViewSubmission() {
   }
 
   return (
-    <>
+    <div className="p-6">
+      <Button
+        variant="ghost"
+        onClick={handleGoBack}
+        className="mb-4 text-warning hover:text-warning hover:bg-warning/10"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Go back
+      </Button>
 
-      <div className="view-submission-container">
+      <h1 className="mb-6 text-center text-2xl font-bold text-foreground">
+        Submission Details
+      </h1>
 
-        <div className="view-submission-content">
-          <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
-            <IconButton onClick={handleGoBack} sx={{ color: "#FF9800" }}>
-              <ArrowBackIosNewIcon />
-            </IconButton>
-            <Typography
-              variant="body1"
-              sx={{ ml: 1, fontWeight: "bold", color: "#FF9800" }}
-            >
-              Go back
-            </Typography>
-          </Box>
-
-          <Typography
-            variant="h4"
-            sx={{ mb: 4, fontWeight: "bold", textAlign: "center" }}
-          >
-            Submission Details
-          </Typography>
-
-          <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: "#FF9800" }}>
-                  <TableCell align="center">Title</TableCell>
-                  <TableCell align="center">Description</TableCell>
-                  <TableCell align="center">File Name</TableCell>
-                  <TableCell align="center">File Type</TableCell>
-                  <TableCell align="center">File</TableCell>
-                  <TableCell align="center">Review Status</TableCell>
-                  <TableCell align="center">Vote</TableCell>
-                  <TableCell align="center">Comment</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell align="center">{submission.title}</TableCell>
-                  <TableCell align="center">{submission.description}</TableCell>
-                  <TableCell align="center">{submission.fileName}</TableCell>
-                  <TableCell align="center">{submission.fileType}</TableCell>
-                  <TableCell align="center">
+      <Card className="shadow-md">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-warning text-warning-foreground">
+                <tr>
+                  <th className="px-3 py-3 text-center font-medium">Title</th>
+                  <th className="px-3 py-3 text-center font-medium">Description</th>
+                  <th className="px-3 py-3 text-center font-medium">File Name</th>
+                  <th className="px-3 py-3 text-center font-medium">File Type</th>
+                  <th className="px-3 py-3 text-center font-medium">File</th>
+                  <th className="px-3 py-3 text-center font-medium">Review Status</th>
+                  <th className="px-3 py-3 text-center font-medium">Vote</th>
+                  <th className="px-3 py-3 text-center font-medium">Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="px-3 py-3 text-center">{submission.title}</td>
+                  <td className="px-3 py-3 text-center">{submission.description}</td>
+                  <td className="px-3 py-3 text-center">{submission.fileName}</td>
+                  <td className="px-3 py-3 text-center">{submission.fileType}</td>
+                  <td className="px-3 py-3 text-center">
                     <Button
-                      variant="contained"
-                      href={submission.fileUrl}
-                      target="_blank"
-                      sx={{
-                        backgroundColor: "#FF9800",
-                        "&:hover": { backgroundColor: "#e68900" },
-                      }}
+                      asChild
+                      className="bg-warning text-warning-foreground hover:bg-warning/90"
                     >
-                      View File
+                      <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
+                        View File
+                      </a>
                     </Button>
-                  </TableCell>
-                  <TableCell align="center">{submission.reviewStatus}</TableCell>
-                  <TableCell align="center">
+                  </td>
+                  <td className="px-3 py-3 text-center">{submission.reviewStatus}</td>
+                  <td className="px-3 py-3 text-center">
                     <ViewVote submissionId={submissionId} />
-                  </TableCell>
-                  <TableCell align="center">
+                  </td>
+                  <td className="px-3 py-3 text-center">
                     <Button
-                      variant="outlined"
+                      variant="outline"
                       onClick={handleOpenCommentsPage}
-                      sx={{
-                        color: "#FF9800",
-                        borderColor: "#FF9800",
-                        "&:hover": {
-                          backgroundColor: "rgba(255, 152, 0, 0.08)",
-                          borderColor: "#e68900",
-                          color: "#e68900",
-                        },
-                      }}
+                      className="border-warning text-warning hover:bg-warning/10"
                     >
                       View comment
                     </Button>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </div>
-      </div>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          onClose={() => setSnackbarOpen(false)}
-          severity={snackbarSeverity}
-          sx={{ width: "100%" }}
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

@@ -1,23 +1,47 @@
 /**
- * TeamProjectDetail.js
- *
- * View and manage team submissions.
- * Allows the team creator to edit or delete the team's submitted work.
+ * @file TeamProjectDetail.jsx
+ * @description
+ * View, edit, or delete a team's submission. Migrated from MUI to shadcn/ui
+ * + Tailwind. confirm() replaced with shadcn Dialog. sonner replaces Snackbar.
  *
  * Role: Participant (Team Leader)
  * Developer: Beiqi Dai
  */
 
-
-// Enhanced TeamProjectDetail.js with edit/delete only visible to creator
-import React, { useState, useEffect } from 'react';
-import {
-  Typography, Button, CircularProgress, Alert, Paper, Snackbar, TextField
-} from '@mui/material';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import '../project/Projectdetail.css';
-import apiClient from '../../api/apiClient';
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '@/api/apiClient';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+function reviewBadgeVariant(status) {
+  const s = (status || '').toUpperCase();
+  if (s === 'APPROVED') return 'success';
+  if (s === 'REJECTED') return 'destructive';
+  if (s === 'PENDING') return 'warning';
+  return 'secondary';
+}
 
 function TeamProjectDetail() {
   const { competitionId, teamId } = useParams();
@@ -30,7 +54,7 @@ function TeamProjectDetail() {
   const [updatedTitle, setUpdatedTitle] = useState('');
   const [updatedDescription, setUpdatedDescription] = useState('');
   const [updatedFile, setUpdatedFile] = useState(null);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const userId = localStorage.getItem('userId');
 
@@ -46,7 +70,10 @@ function TeamProjectDetail() {
         setUpdatedDescription(data.description || '');
       } catch (err) {
         if (err.response?.status === 404) setError('Submission not found.');
-        else setError(err.response?.data || err.message || 'Failed to load submission.');
+        else
+          setError(
+            err.response?.data || err.message || 'Failed to load submission.'
+          );
       } finally {
         setLoading(false);
       }
@@ -55,11 +82,12 @@ function TeamProjectDetail() {
     const checkIfCreator = async () => {
       try {
         const res = await apiClient.get('/teams/public/created', {
-          params: { userId, page: 1, size: 100 }
+          params: { userId, page: 1, size: 100 },
         });
-        const is = res.data.data?.some(team => team.id === teamId);
-        setIsCreator(is);
+        const is = res.data.data?.some((team) => team.id === teamId);
+        setIsCreator(Boolean(is));
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Failed to verify creator:', err);
       }
     };
@@ -67,10 +95,6 @@ function TeamProjectDetail() {
     fetchSubmission();
     checkIfCreator();
   }, [competitionId, teamId, userId]);
-
-  const handleEdit = () => setEditMode(true);
-  const handleCancelEdit = () => setEditMode(false);
-  const handleFileChange = (e) => setUpdatedFile(e.target.files[0]);
 
   const handleSaveEdit = async () => {
     try {
@@ -82,98 +106,200 @@ function TeamProjectDetail() {
       if (updatedFile) formData.append('file', updatedFile);
 
       await apiClient.post('/submissions/teams/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setSnackbarMessage('Submission updated successfully!');
+      toast.success('Submission updated successfully!');
       setEditMode(false);
     } catch (err) {
-      setSnackbarMessage(err.response?.data || err.message);
+      const msg = err.response?.data || err.message;
+      toast.error(typeof msg === 'string' ? msg : 'Update failed');
     }
   };
 
   const handleDelete = async () => {
-    if (!submission?.submissionId || !window.confirm('Confirm delete submission?')) return;
+    setConfirmDelete(false);
+    if (!submission?.submissionId) return;
     try {
-      await apiClient.delete(`/submissions/teams/${submission.submissionId}`);
-      setSnackbarMessage('Submission deleted.');
-      setTimeout(() => navigate(-1), 1500);
+      await apiClient.delete(
+        `/submissions/teams/${submission.submissionId}`
+      );
+      toast.success('Submission deleted.');
+      setTimeout(() => navigate(-1), 1200);
     } catch (err) {
-      setSnackbarMessage(err.response?.data || err.message);
+      const msg = err.response?.data || err.message;
+      toast.error(typeof msg === 'string' ? msg : 'Delete failed');
     }
   };
 
-  if (loading) return <CircularProgress />;
-  if (error) return <Typography color="error">{error}</Typography>;
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="px-4 py-6">
+        <p className="text-destructive">{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="min-h-screen bg-background px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-4 w-4" />
+          Go Back
+        </Button>
 
-      <div className="participant-project-container">
-
-        <div className="participant-project-content">
-          <div className="back-button" onClick={() => navigate(-1)}>
-            <ArrowBackIcon className="back-icon" sx={{ color: '#FF9800' }} />
-            <Typography variant="button" className="back-text" sx={{ color: '#FF9800' }}>
-              Go Back
-            </Typography>
-          </div>
-
-          <Paper className="detail-paper">
-            <Typography variant="h4" gutterBottom sx={{ color: '#FF9800' }}>
-              Team Submission Details
-            </Typography>
-
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">Team Submission Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {editMode ? (
-              <>
-                <TextField fullWidth label="Title" margin="normal" value={updatedTitle} onChange={(e) => setUpdatedTitle(e.target.value)} />
-                <TextField fullWidth label="Description" margin="normal" multiline minRows={3} value={updatedDescription} onChange={(e) => setUpdatedDescription(e.target.value)} />
-                <input type="file" onChange={handleFileChange} style={{ margin: '10px 0' }} />
-                <div style={{ marginTop: 20 }}>
-                  <Button variant="contained" onClick={handleSaveEdit} sx={{ backgroundColor: '#FF9800', mr: 2 }}>Save</Button>
-                  <Button variant="outlined" onClick={handleCancelEdit} sx={{ color: '#FF9800' }}>Cancel</Button>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="tpd-title">Title</Label>
+                  <Input
+                    id="tpd-title"
+                    value={updatedTitle}
+                    onChange={(e) => setUpdatedTitle(e.target.value)}
+                  />
                 </div>
-              </>
+                <div className="space-y-2">
+                  <Label htmlFor="tpd-desc">Description</Label>
+                  <textarea
+                    id="tpd-desc"
+                    rows={4}
+                    value={updatedDescription}
+                    onChange={(e) => setUpdatedDescription(e.target.value)}
+                    className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tpd-file">File</Label>
+                  <Input
+                    id="tpd-file"
+                    type="file"
+                    onChange={(e) => setUpdatedFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveEdit}>
+                    <Save className="h-4 w-4" />
+                    Save
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditMode(false)}>
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <>
-                <Typography variant="h6">Title: {submission.title}</Typography>
-                <Typography variant="body1">Description: {submission.description}</Typography>
-                <Typography variant="body2">File Name: {submission.fileName}</Typography>
+              <div className="space-y-2 text-sm">
+                <p>
+                  <span className="font-semibold">Title:</span>{' '}
+                  {submission.title}
+                </p>
+                <p>
+                  <span className="font-semibold">Description:</span>{' '}
+                  {submission.description}
+                </p>
+                <p>
+                  <span className="font-semibold">File Name:</span>{' '}
+                  {submission.fileName}
+                </p>
                 {submission.fileUrl && (
-                  <Button variant="outlined" href={submission.fileUrl} target="_blank" sx={{ borderColor: '#FF9800', color: '#FF9800', mt: 2 }}>
-                    View File
+                  <Button asChild variant="outline" size="sm">
+                    <a
+                      href={submission.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View File
+                    </a>
                   </Button>
                 )}
-                <Typography variant="body2">File Type: {submission.fileType}</Typography>
-                <Typography variant="body2">Review Status: {submission.reviewStatus}</Typography>
-                <Typography variant="body2">Review Comments: {submission.reviewComments}</Typography>
-                <Typography variant="body2">Reviewed By: {submission.reviewedBy}</Typography>
-                <Typography variant="body2">Reviewed At: {submission.reviewedAt ? new Date(submission.reviewedAt).toLocaleString() : 'N/A'}</Typography>
-                <Typography variant="body2">Total Score: {submission.totalScore}</Typography>
-                <Typography variant="body2">Submitted At: {submission.createdAt ? new Date(submission.createdAt).toLocaleString() : 'Unknown'}</Typography>
+                <p>
+                  <span className="font-semibold">File Type:</span>{' '}
+                  {submission.fileType}
+                </p>
+                <p className="flex items-center gap-2">
+                  <span className="font-semibold">Review Status:</span>
+                  <Badge variant={reviewBadgeVariant(submission.reviewStatus)}>
+                    {submission.reviewStatus || 'PENDING'}
+                  </Badge>
+                </p>
+                <p>
+                  <span className="font-semibold">Review Comments:</span>{' '}
+                  {submission.reviewComments}
+                </p>
+                <p>
+                  <span className="font-semibold">Reviewed By:</span>{' '}
+                  {submission.reviewedBy}
+                </p>
+                <p>
+                  <span className="font-semibold">Reviewed At:</span>{' '}
+                  {submission.reviewedAt
+                    ? new Date(submission.reviewedAt).toLocaleString()
+                    : 'N/A'}
+                </p>
+                <p>
+                  <span className="font-semibold">Total Score:</span>{' '}
+                  {submission.totalScore}
+                </p>
+                <p>
+                  <span className="font-semibold">Submitted At:</span>{' '}
+                  {submission.createdAt
+                    ? new Date(submission.createdAt).toLocaleString()
+                    : 'Unknown'}
+                </p>
+
                 {isCreator && (
-                  <div style={{ marginTop: 20 }}>
-                    <Button variant="contained" onClick={handleEdit} sx={{ backgroundColor: '#FF9800', mr: 2 }}>Edit</Button>
-                    <Button variant="outlined" onClick={handleDelete} sx={{ color: '#FF9800' }}>Delete</Button>
+                  <div className="flex gap-2 pt-3">
+                    <Button onClick={() => setEditMode(true)}>
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
                   </div>
                 )}
-              </>
+              </div>
             )}
-          </Paper>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Snackbar
-        open={!!snackbarMessage}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarMessage('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert severity="success" sx={{ width: '100%', backgroundColor: '#FF9800', color: '#fff' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete submission?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove the submission. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

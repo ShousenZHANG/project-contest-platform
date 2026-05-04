@@ -1,90 +1,43 @@
 /**
- * @file ChangeContestTable.js
- * @description 
- * This component renders a table displaying a list of competitions available for participants to join.
- * Core functionalities include:
- *  - Displaying competition attributes such as name, category, date, and status.
- *  - Delegating each contest row rendering and interaction handling to the ChangeContestList component.
- *  - Providing a callback when a row is clicked, enabling navigation or additional actions.
- *  - Using Material-UI Table components for layout and customized header styling.
- * 
+ * @file ChangeContestTable.jsx
+ * @description
+ * Compact table that lists contests available for participants to join.
+ * Migrated from MUI Table to native HTML table + Tailwind for compact density.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React from "react";
-import "./ChangeContestList.css";
-import { Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
-import ChangeContestList from "./ChangeContestList";
+import React from 'react';
+import ChangeContestList from './ChangeContestList';
 
 function ChangeContestTable({ contests, onRowClick }) {
   return (
-    <div className="table-container">
-      <Table>
-        <TableHead>
-          <TableRow
-            sx={{
-              backgroundColor: "#ffa680",
-            }}
-          >
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Competition Name
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Category
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Date
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Status
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Join
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {contests.map((contest, index) => (
-            <ChangeContestList
-              key={index}
-              contest={contest}
-              onClick={() => onRowClick && onRowClick(contest)}
-            />
-          ))}
-        </TableBody>
-      </Table>
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="bg-primary text-primary-foreground">
+              <th className="px-4 py-3 text-sm font-semibold">
+                Competition Name
+              </th>
+              <th className="px-4 py-3 text-sm font-semibold">Category</th>
+              <th className="px-4 py-3 text-sm font-semibold">Date</th>
+              <th className="px-4 py-3 text-sm font-semibold">Status</th>
+              <th className="px-4 py-3 text-sm font-semibold">Join</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contests.map((contest, index) => (
+              <ChangeContestList
+                key={contest.id ?? index}
+                contest={contest}
+                onClick={() => onRowClick?.(contest)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

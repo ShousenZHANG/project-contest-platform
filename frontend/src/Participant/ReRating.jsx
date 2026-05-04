@@ -1,30 +1,20 @@
 /**
- * ReRating.js
+ * ReRating.jsx
  *
- * This component allows judges to update their previous rating for a submission. It fetches the initial judging details and provides sliders to adjust scores and a text field for feedback. Once the rating is updated, the data is submitted to the backend.
+ * Allows judges to update a previous rating. Migrated from MUI to shadcn/ui.
  *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
 
-
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import './Rating.css';
-import {
-  Typography,
-  Slider,
-  Paper,
-  Box,
-  CircularProgress,
-  Button,
-  Snackbar,
-  Alert,
-  TextField,
-  Grid,
-} from '@mui/material';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Label } from '../components/ui/label';
 
 function ReRating() {
   const { competitionId, submissionId } = useParams();
@@ -35,7 +25,6 @@ function ReRating() {
   const [weights, setWeights] = useState({});
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     const fetchJudgingDetails = async () => {
@@ -44,11 +33,11 @@ function ReRating() {
         const data = res.data;
         const newScores = {};
         const newWeights = {};
-        data.scores.forEach(s => {
+        data.scores.forEach((s) => {
           newScores[s.criterion] = s.score;
           newWeights[s.criterion] = s.weight;
         });
-        setScoringCriteria(data.scores.map(s => s.criterion));
+        setScoringCriteria(data.scores.map((s) => s.criterion));
         setScores(newScores);
         setWeights(newWeights);
         setFeedback(data.judgeComments || '');
@@ -63,11 +52,11 @@ function ReRating() {
   }, [submissionId]);
 
   const handleSliderChange = (criterion, value) => {
-    setScores(prev => ({ ...prev, [criterion]: value }));
+    setScores((prev) => ({ ...prev, [criterion]: value }));
   };
 
   const handleSubmit = async () => {
-    const scoreArray = scoringCriteria.map(criterion => ({
+    const scoreArray = scoringCriteria.map((criterion) => ({
       criterion,
       score: scores[criterion],
       weight: weights[criterion],
@@ -80,92 +69,70 @@ function ReRating() {
         judgeComments: feedback,
         scores: scoreArray,
       });
-      setSnackbar({ open: true, message: 'Rating updated successfully', severity: 'success' });
-      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1500);
+      toast.success('Rating updated successfully');
+      setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1200);
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Error updating rating';
-      setSnackbar({ open: true, message: errorMsg, severity: 'error' });
+      toast.error(errorMsg);
     }
   };
 
   return (
-    <>
+    <div className="p-6">
+      <h2 className="mb-4 text-xl font-semibold text-foreground">Update Your Rating</h2>
 
-      <div className="rating-container">
-
-        <div className="rating-content">
-          <Typography variant="h5" gutterBottom>
-            Update Your Rating
-          </Typography>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <CircularProgress />
-            </div>
-          ) : (
-            <Paper sx={{ padding: 3, borderRadius: '20px' }}>
-              <Grid container spacing={4}>
-                <Grid item xs={12} md={7}>
-                  {scoringCriteria.map((criterion, index) => (
-                    <Box key={index} mb={4}>
-                      <Typography gutterBottom>{criterion}</Typography>
-                      <Slider
-                        value={scores[criterion]}
-                        min={0}
-                        max={10}
-                        step={0.1}
-                        onChange={(e, val) => handleSliderChange(criterion, val)}
-                        valueLabelDisplay="auto"
-                        marks={[{ value: 0, label: '0.0' }, { value: 10, label: '10.0' }]}
-                      />
-                    </Box>
-                  ))}
-                </Grid>
-
-                <Grid item xs={12} md={5} display="flex" flexDirection="column" alignItems="center">
-                  <Typography gutterBottom>Feedback</Typography>
-                  <TextField
-                    multiline
-                    rows={8}
-                    placeholder="Write your feedback here..."
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    fullWidth
-                    sx={{ borderRadius: '16px', backgroundColor: '#eaf4f8', mb: 2 }}
-                  />
-                  <Button
-                    onClick={handleSubmit}
-                    variant="contained"
-                    sx={{
-                      backgroundColor: '#ffa726',
-                      color: '#fff',
-                      borderRadius: '20px',
-                      textTransform: 'none',
-                      px: 4,
-                      ':hover': {
-                        backgroundColor: '#fb8c00',
-                      },
-                    }}
-                  >
-                    Update Rating
-                  </Button>
-                </Grid>
-              </Grid>
-            </Paper>
-          )}
-
-          <Snackbar
-            open={snackbar.open}
-            autoHideDuration={4000}
-            onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          >
-            <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </div>
-    </>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
+              <div className="md:col-span-7 space-y-6">
+                {scoringCriteria.map((criterion, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">{criterion}</Label>
+                      <span className="text-sm text-muted-foreground">
+                        {Number(scores[criterion]).toFixed(1)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      value={scores[criterion]}
+                      onChange={(e) => handleSliderChange(criterion, parseFloat(e.target.value))}
+                      className="w-full accent-warning"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>0.0</span>
+                      <span>10.0</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="md:col-span-5 flex flex-col gap-3">
+                <Label className="text-sm font-medium">Feedback</Label>
+                <textarea
+                  rows={10}
+                  placeholder="Write your feedback here..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <Button onClick={handleSubmit} className="self-end bg-warning text-warning-foreground hover:bg-warning/90">
+                  Update Rating
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

@@ -1,41 +1,30 @@
 /**
- * @file ViewSubmission.js
- * @description 
- * This component displays detailed information about a single submission.
- * Features include:
- *  - Displaying submission metadata such as title, description, file information, and review status.
- *  - Providing a button to view the submitted file in a new tab.
- *  - Enabling users to view votes and comments associated with the submission.
- *  - Navigation controls to return to the previous page or to open the comments page.
- * The component integrates with the ViewVote and comment management functionalities.
- * It uses Material-UI for table layout, buttons, and notifications.
- * 
+ * @file ViewSubmission.jsx
+ * @description
+ * Lists approved submissions for a competition with vote/comment actions.
+ * Migrated from MUI to shadcn/ui + Tailwind. Compact table density. Uses
+ * sonner for transient errors and shadcn Button for actions.
+ *
  * Role: Participant
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Snackbar,
-  Alert,
-  IconButton,
-  Box,
-  CircularProgress,
-} from "@mui/material";
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
-import "./ViewSubmission.css";
-import ViewVote from "../ViewVote";
-import apiClient from '../../api/apiClient';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '@/api/apiClient';
+import ViewVote from '../ViewVote';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+
+function reviewBadgeVariant(status) {
+  const s = (status || '').toUpperCase();
+  if (s === 'APPROVED') return 'success';
+  if (s === 'REJECTED') return 'destructive';
+  if (s === 'PENDING') return 'warning';
+  return 'secondary';
+}
 
 function ViewSubmission() {
   const { competitionId } = useParams();
@@ -43,15 +32,21 @@ function ViewSubmission() {
 
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
-        const res = await apiClient.get(`/submissions/public/approved?competitionId=${competitionId}`);
+        const res = await apiClient.get(
+          `/submissions/public/approved?competitionId=${competitionId}`
+        );
         setSubmissions(res.data.data || []);
       } catch (error) {
-        setErrorMessage(error.response?.data || error.message || "Network error fetching submissions");
+        const msg =
+          error.response?.data ||
+          error.message ||
+          'Network error fetching submissions';
+        setErrorMessage(typeof msg === 'string' ? msg : 'Network error');
       } finally {
         setLoading(false);
       }
@@ -60,134 +55,126 @@ function ViewSubmission() {
     fetchSubmissions();
   }, [competitionId]);
 
+  useEffect(() => {
+    if (errorMessage) toast.error(errorMessage);
+  }, [errorMessage]);
+
   const handleOpenCommentsPage = (submissionId) => {
     navigate(`/comments/${submissionId}`);
   };
 
-  const handleGoBack = () => {
-    navigate(-1);
-  };
+  const handleGoBack = () => navigate(-1);
 
   return (
-    <>
-      
-      <div className="view-submission-container">
-        
-        <div className="view-submission-content">
-          <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
-            <IconButton onClick={handleGoBack} sx={{ color: "#FF9800" }}>
-              <ArrowBackIosNewIcon />
-            </IconButton>
-            <Typography
-              variant="body1"
-              sx={{ ml: 1, fontWeight: "bold", color: "#FF9800" }}
-            >
-              Go back
-            </Typography>
-          </Box>
-
-          <Typography
-            variant="h4"
-            sx={{ mb: 4, fontWeight: "bold", textAlign: "center" }}
-          >
-            Approved Submissions
-          </Typography>
-
-          {loading ? (
-            <Box display="flex" justifyContent="center" alignItems="center" height="50vh">
-              <CircularProgress />
-            </Box>
-          ) : errorMessage ? (
-            <Typography variant="h6" color="error" align="center">
-              {errorMessage}
-            </Typography>
-          ) : submissions.length === 0 ? (
-            <Typography variant="h6" align="center">
-              No approved submissions found.
-            </Typography>
-          ) : (
-            <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "#FF9800" }}>
-                    <TableCell align="center">Title</TableCell>
-                    <TableCell align="center">Description</TableCell>
-                    <TableCell align="center">File Name</TableCell>
-                    <TableCell align="center">File Type</TableCell>
-                    <TableCell align="center">File</TableCell>
-                    <TableCell align="center">Review Status</TableCell>
-                    <TableCell align="center">Vote</TableCell>
-                    <TableCell align="center">Comment</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {submissions.map((submission) => (
-                    <TableRow key={submission.id || submission._id}>
-                      <TableCell align="center">{submission.title}</TableCell>
-                      <TableCell align="center">{submission.description}</TableCell>
-                      <TableCell align="center">{submission.fileName}</TableCell>
-                      <TableCell align="center">{submission.fileType}</TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          href={submission.fileUrl}
-                          target="_blank"
-                          sx={{
-                            backgroundColor: "#FF9800",
-                            "&:hover": {
-                              backgroundColor: "#e68900",
-                            },
-                          }}
-                        >
-                          View File
-                        </Button>
-                      </TableCell>
-                      <TableCell align="center">{submission.reviewStatus}</TableCell>
-                      <TableCell align="center">
-                        <ViewVote submissionId={submission.id || submission._id} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="outlined"
-                          onClick={() => handleOpenCommentsPage(submission.id || submission._id)}
-                          sx={{
-                            color: "#FF9800",
-                            borderColor: "#FF9800",
-                            "&:hover": {
-                              backgroundColor: "rgba(255, 152, 0, 0.08)",
-                              borderColor: "#e68900",
-                              color: "#e68900",
-                            },
-                          }}
-                        >
-                          View comment
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+    <div className="min-h-screen bg-background px-4 py-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex items-center">
+          <Button variant="ghost" size="sm" onClick={handleGoBack}>
+            <ArrowLeft className="h-4 w-4" />
+            Go back
+          </Button>
         </div>
-      </div>
 
-      <Snackbar
-        open={Boolean(errorMessage)}
-        autoHideDuration={3000}
-        onClose={() => setErrorMessage("")}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          onClose={() => setErrorMessage("")}
-          severity="error"
-          sx={{ width: "100%" }}
-        >
-          {errorMessage}
-        </Alert>
-      </Snackbar>
-    </>
+        <h1 className="mb-6 text-center text-3xl font-bold text-foreground">
+          Approved Submissions
+        </h1>
+
+        {loading ? (
+          <div className="flex h-[40vh] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : errorMessage ? (
+          <p className="text-center text-destructive">{errorMessage}</p>
+        ) : submissions.length === 0 ? (
+          <p className="text-center text-muted-foreground">
+            No approved submissions found.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-primary text-primary-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-center font-semibold">Title</th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      Description
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      File Name
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      File Type
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold">File</th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      Review Status
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold">Vote</th>
+                    <th className="px-3 py-2 text-center font-semibold">
+                      Comment
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissions.map((submission) => {
+                    const sid = submission.id || submission._id;
+                    return (
+                      <tr
+                        key={sid}
+                        className="border-b border-border last:border-0 hover:bg-muted/40"
+                      >
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {submission.title}
+                        </td>
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {submission.description}
+                        </td>
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {submission.fileName}
+                        </td>
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {submission.fileType}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Button asChild size="sm">
+                            <a
+                              href={submission.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              View File
+                            </a>
+                          </Button>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Badge variant={reviewBadgeVariant(submission.reviewStatus)}>
+                            {submission.reviewStatus}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <ViewVote submissionId={sid} />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenCommentsPage(sid)}
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            View comment
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

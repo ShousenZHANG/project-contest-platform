@@ -1,360 +1,312 @@
 /**
- * @file Project.js
- * @description
- * This component allows participants to manage their contest participation and submissions.
- * Key functionalities include:
- *  - Viewing a list of joined contests in both individual and team modes.
- *  - Submitting a project file to an ongoing contest.
- *  - Validating allowed file types before submission based on contest settings.
- *  - Viewing existing submissions and their review status.
- *  - Switching between individual and team registration views.
- *  - Providing real-time feedback through Snackbar notifications.
- *  - Integrating with backend APIs to fetch registration, contest, and submission data.
+ * Project.jsx
+ *
+ * Participant project list & submissions. Migrated from MUI to shadcn/ui.
  *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Typography,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  Button,
-  Pagination,
-  Snackbar,
-  Alert
-} from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
+import apiClient from '../../api/apiClient';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
 import { SubmitDialog } from './Submitbottom';
 import TeamRegistrations from '../team/TeamRegistrations';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import './Project.css';
-import { useNavigate } from 'react-router-dom';
-import apiClient from '../../api/apiClient';
 
 function Project() {
   const [userData, setUserData] = useState(null);
   const [registrationData, setRegistrationData] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, size: 10, pages: 0 });
   const [allowedTypes, setAllowedTypes] = useState([]);
-  const [viewMode, setViewMode] = useState('personal'); // 'personal' or 'team'
+  const [viewMode, setViewMode] = useState('personal');
 
-  // Submit dialog state
   const [openSubmitDialog, setOpenSubmitDialog] = useState(false);
   const [selectedCompetitionId, setSelectedCompetitionId] = useState(null);
 
-  // Snackbar
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-
   const navigate = useNavigate();
 
-  // 1. Fetch user information
   useEffect(() => {
     (async () => {
       try {
         const res = await apiClient.get('/users/profile');
         setUserData(res.data);
       } catch (error) {
-        console.error('Failed to fetch user data:', error);
+        // Failed to fetch user data
       }
     })();
   }, []);
 
-  /**
-   * 2. Fetch personal registrations (wrapped in useCallback so the reference is stable)
-   */
   const fetchRegistrations = useCallback(
     async (currentPage = 1) => {
       try {
         const res = await apiClient.get('/registrations/my', {
-          params: { page: currentPage, size: pagination.size }
+          params: { page: currentPage, size: pagination.size },
         });
         const data = res.data;
         setRegistrationData(Array.isArray(data.data) ? data.data : []);
-        setPagination(prev => ({
+        setPagination((prev) => ({
           ...prev,
           total: data.total ?? 0,
           page: data.page ?? 1,
-          pages: data.pages ?? 0
+          pages: data.pages ?? 0,
         }));
       } catch (error) {
-        console.error('Failed to fetch registration info:', error);
         setRegistrationData([]);
       }
     },
     [pagination.size]
   );
 
-  /**
-   * 3. Fetch data whenever userData / page / mode changes
-   */
   useEffect(() => {
     if (!userData) return;
     if (viewMode === 'personal') {
       fetchRegistrations(pagination.page);
     }
-    // Team mode data is fetched inside TeamRegistrations component
   }, [userData, pagination.page, viewMode, fetchRegistrations]);
 
-  // 4. Populate submission details for personal entries
   useEffect(() => {
     if (viewMode !== 'personal' || !userData || registrationData.length === 0) return;
     registrationData
-      .filter(item => item.hasSubmitted && !item.fileName)
-      .forEach(async item => {
+      .filter((item) => item.hasSubmitted && !item.fileName)
+      .forEach(async (item) => {
         try {
           const res = await apiClient.get(`/submissions/${item.competitionId}`);
           const submissionData = res.data;
-          setRegistrationData(prev =>
-            prev.map(reg =>
+          setRegistrationData((prev) =>
+            prev.map((reg) =>
               reg.competitionId === item.competitionId
-                ? { ...reg, fileName: submissionData.fileName, reviewStatus: submissionData.reviewStatus }
+                ? {
+                    ...reg,
+                    fileName: submissionData.fileName,
+                    reviewStatus: submissionData.reviewStatus,
+                  }
                 : reg
             )
           );
         } catch (err) {
-          console.error('Error fetching submission details:', err);
+          // Error fetching submission details
         }
       });
   }, [registrationData, userData, viewMode]);
 
-  // Open/close the submit dialog
-  const handleOpenSubmitDialog = competitionId => {
+  const handleOpenSubmitDialog = (competitionId) => {
     setSelectedCompetitionId(competitionId);
     setOpenSubmitDialog(true);
   };
+
   const handleCloseSubmitDialog = () => {
     setOpenSubmitDialog(false);
     setSelectedCompetitionId(null);
   };
 
-  // 5. Submission or edit logic
   const handleDialogSubmit = async ({ title, description, file }) => {
     if (!file) {
-      setSnackbarMessage('Please select a file to upload!');
-      setSnackbarOpen(true);
+      toast.warning('Please select a file to upload!');
       handleCloseSubmitDialog();
       return;
     }
 
     try {
-      // Fetch competition details
       const detailRes = await apiClient.get(`/competitions/${selectedCompetitionId}`);
       const competitionDetail = detailRes.data;
       const allowedSubmissionTypes = competitionDetail.allowedSubmissionTypes || [];
       setAllowedTypes(allowedSubmissionTypes);
 
-      // Validate file type
       const fileExtension = file.name.split('.').pop().toLowerCase();
-      const allowedLower = allowedSubmissionTypes.map(t => t.toLowerCase());
+      const allowedLower = allowedSubmissionTypes.map((t) => t.toLowerCase());
       const extensionMap = {
         image: ['jpg', 'jpeg', 'png'],
         code: ['py', 'js', 'ts', 'java', 'cpp', 'c', 'cs', 'rb', 'go', 'rs', 'swift', 'kt'],
-        text: ['txt', 'md', 'rtf', 'csv', 'log', 'doc', 'docx', 'pdf', 'odt']
+        text: ['txt', 'md', 'rtf', 'csv', 'log', 'doc', 'docx', 'pdf', 'odt'],
       };
       const isMatched =
         allowedLower.includes(fileExtension) ||
-        Object.entries(extensionMap).some(([key, list]) => allowedLower.includes(key) && list.includes(fileExtension));
+        Object.entries(extensionMap).some(
+          ([key, list]) => allowedLower.includes(key) && list.includes(fileExtension)
+        );
       if (!isMatched) {
-        const readable = allowedSubmissionTypes.flatMap(type => {
+        const readable = allowedSubmissionTypes.flatMap((type) => {
           const lower = type.toLowerCase();
           return extensionMap[lower] || [type];
         });
-        setSnackbarMessage(`Invalid file type. Allowed: ${readable.join(', ')}`);
-        setSnackbarOpen(true);
+        toast.warning(`Invalid file type. Allowed: ${readable.join(', ')}`);
         handleCloseSubmitDialog();
         return;
       }
 
-      // Build upload form
       const formData = new FormData();
       formData.append('competitionId', selectedCompetitionId);
       formData.append('title', title);
       formData.append('description', description);
       formData.append('file', file);
 
-      // Upload
       await apiClient.post('/submissions/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Locally update submission state
-      setRegistrationData(prev =>
-        prev.map(item =>
+      toast.success('Submission uploaded!');
+      setRegistrationData((prev) =>
+        prev.map((item) =>
           item.competitionId === selectedCompetitionId
             ? { ...item, hasSubmitted: true, fileName: file.name }
             : item
         )
       );
     } catch (error) {
-      console.error('Submission failed:', error);
-      setSnackbarMessage('Upload failed. Please try again.');
-      setSnackbarOpen(true);
+      toast.error('Upload failed. Please try again.');
     } finally {
       handleCloseSubmitDialog();
     }
   };
 
-  // View submission detail page
-  const handleViewSubmissionDetail = competitionId => {
+  const handleViewSubmissionDetail = (competitionId) => {
     navigate(`/project-detail/${competitionId}`);
+  };
+
+  const reviewBadgeVariant = (status) => {
+    const s = (status || '').toUpperCase();
+    if (s === 'APPROVED') return 'success';
+    if (s === 'REJECTED') return 'destructive';
+    if (s === 'PENDING') return 'warning';
+    return 'secondary';
   };
 
   return (
     <>
-
-      <div className="participant-project-container">
-
-        <div className="participant-project-content">
-          {/* Header */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: 20,
-            padding: '10px 20px',
-            backgroundColor: '#FFF3E0',
-            borderRadius: 12,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}>
-            <EmojiEventsIcon sx={{ color: '#FF9800', fontSize: 36, mr: 2 }} />
-            <Typography variant="h4" component="h2"
-              sx={{ fontWeight: 'bold', color: '#FF9800', textShadow: '1px 1px 2px rgba(0,0,0,0.2)' }}>
-              Joined Competitions
-            </Typography>
-          </div>
-
-          {/* Toggle buttons */}
-          <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-            <Button
-              variant={viewMode === 'personal' ? 'contained' : 'outlined'}
-              onClick={() => setViewMode('personal')}
-              sx={{
-                backgroundColor: viewMode === 'personal' ? '#FF9800' : 'transparent',
-                color: viewMode === 'personal' ? '#fff' : '#FF9800',
-                borderColor: '#FF9800',
-                '&:hover': {
-                  backgroundColor: viewMode === 'personal'
-                    ? '#FB8C00'
-                    : 'rgba(255,152,0,0.1)',
-                },
-              }}
-            >
-              Individual
-            </Button>
-            <Button
-              variant={viewMode === 'team' ? 'contained' : 'outlined'}
-              onClick={() => setViewMode('team')}
-              sx={{
-                backgroundColor: viewMode === 'team' ? '#FF9800' : 'transparent',
-                color: viewMode === 'team' ? '#fff' : '#FF9800',
-                borderColor: '#FF9800',
-                '&:hover': {
-                  backgroundColor: viewMode === 'team'
-                    ? '#FB8C00'
-                    : 'rgba(255,152,0,0.1)',
-                },
-              }}
-            >
-              Team
-            </Button>
-          </div>
-
-          {/* View */}
-          {viewMode === 'personal' ? (
-            <>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Contest Name</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Competition Status</TableCell>
-                    <TableCell>Submission Name</TableCell>
-                    <TableCell>Submission Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {registrationData.map((item, idx) => (
-                    <TableRow key={`${item.competitionId}-${idx}`}>
-                      <TableCell>{item.competitionName}</TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell>{item.status || 'Unknown'}</TableCell>
-                      <TableCell>
-                        {!item.hasSubmitted ? (
-                          <Button
-                            variant="outlined"
-                            disabled={item.status !== 'ONGOING'}
-                            onClick={() => handleOpenSubmitDialog(item.competitionId)}
-                          >
-                            Submit
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="text"
-                            sx={{ textDecoration: 'underline' }}
-                            onClick={() => handleViewSubmissionDetail(item.competitionId)}
-                          >
-                            {item.fileName || 'No file'}
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {item.hasSubmitted
-                          ? (item.reviewStatus || 'PENDING').toUpperCase()
-                          : 'Not Submitted'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
-                <Pagination
-                  count={pagination.pages}
-                  page={pagination.page}
-                  onChange={(e, v) => setPagination(prev => ({ ...prev, page: v }))}
-                  sx={{
-                    '& .MuiPaginationItem-root': { color: '#FF9800', borderColor: '#FF9800' },
-                    '& .MuiPaginationItem-root.Mui-selected': {
-                      backgroundColor: '#FF9800',
-                      color: 'white',
-                      borderColor: '#FF9800',
-                      '&:hover': { backgroundColor: '#FB8C00' }
-                    }
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            <TeamRegistrations userData={userData} />
-          )}
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-5 flex items-center gap-3 rounded-lg border bg-card p-4 shadow-sm">
+          <Trophy className="h-7 w-7 text-warning" />
+          <h2 className="text-2xl font-bold text-foreground">Joined Competitions</h2>
         </div>
+
+        {/* Toggle */}
+        <div className="mb-4 flex gap-2">
+          <Button
+            variant={viewMode === 'personal' ? 'default' : 'outline'}
+            onClick={() => setViewMode('personal')}
+            className={viewMode === 'personal' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : 'border-warning text-warning hover:bg-warning/10'}
+          >
+            Individual
+          </Button>
+          <Button
+            variant={viewMode === 'team' ? 'default' : 'outline'}
+            onClick={() => setViewMode('team')}
+            className={viewMode === 'team' ? 'bg-warning text-warning-foreground hover:bg-warning/90' : 'border-warning text-warning hover:bg-warning/10'}
+          >
+            Team
+          </Button>
+        </div>
+
+        {viewMode === 'personal' ? (
+          <>
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b bg-muted/40">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 font-medium">Contest Name</th>
+                        <th className="px-3 py-2 font-medium">Category</th>
+                        <th className="px-3 py-2 font-medium">Competition Status</th>
+                        <th className="px-3 py-2 font-medium">Submission Name</th>
+                        <th className="px-3 py-2 font-medium">Submission Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {registrationData.map((item, idx) => (
+                        <tr
+                          key={`${item.competitionId}-${idx}`}
+                          className="border-b last:border-b-0 hover:bg-muted/20"
+                        >
+                          <td className="px-3 py-2 font-medium">{item.competitionName}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{item.category}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline">{item.status || 'Unknown'}</Badge>
+                          </td>
+                          <td className="px-3 py-2">
+                            {!item.hasSubmitted ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={item.status !== 'ONGOING'}
+                                onClick={() => handleOpenSubmitDialog(item.competitionId)}
+                              >
+                                Submit
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="link"
+                                className="h-auto p-0 text-primary"
+                                onClick={() => handleViewSubmissionDetail(item.competitionId)}
+                              >
+                                {item.fileName || 'No file'}
+                              </Button>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {item.hasSubmitted ? (
+                              <Badge variant={reviewBadgeVariant(item.reviewStatus)}>
+                                {(item.reviewStatus || 'PENDING').toUpperCase()}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Not Submitted</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {registrationData.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            No registrations yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pagination.page <= 1}
+                onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {pagination.page} of {pagination.pages || 1}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pagination.page >= pagination.pages}
+                onClick={() => setPagination((prev) => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <TeamRegistrations userData={userData} />
+        )}
       </div>
 
-      {/* Submit Dialog */}
       <SubmitDialog
         open={openSubmitDialog}
         onClose={handleCloseSubmitDialog}
         onSubmit={handleDialogSubmit}
         allowedTypes={allowedTypes}
       />
-
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
     </>
   );
 }

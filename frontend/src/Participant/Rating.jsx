@@ -1,35 +1,28 @@
 /**
- * Rating.js
+ * Rating.jsx
  *
- * Displays a list of competitions assigned to the current judge, allowing them to view the competition details and review submissions.
- * Provides functionality to navigate to review submission pages and view competition-related information, such as category, start/end dates, scoring criteria, and allowed submission types.
+ * Displays a list of competitions assigned to the current judge. Migrated from MUI to shadcn/ui.
  *
  * Role: Judge
  * Developer: Zhaoyi Yang
  */
 
-
 import React, { useState, useEffect } from 'react';
-import './Rating.css';
-import {
-  Typography,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableContainer,
-  Paper,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Divider,
-  Chip,
-} from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { ExternalLink } from 'lucide-react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Card, CardContent } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Separator } from '../components/ui/separator';
 
 function Rating() {
   const [competitions, setCompetitions] = useState([]);
@@ -55,140 +48,141 @@ function Rating() {
       setSelectedComp(res.data);
       setDialogOpen(true);
     } catch (error) {
-      alert('Failed to fetch competition detail');
+      toast.error('Failed to fetch competition detail');
     }
   };
 
   return (
     <>
+      <div className="p-6">
+        <h2 className="mb-4 text-xl font-semibold text-foreground">
+          Competitions Assigned to You as Judge
+        </h2>
 
-      <div className="rating-container">
-
-        <div className="rating-content">
-          <Typography variant="h5" gutterBottom>
-            Competitions Assigned to You as Judge
-          </Typography>
-
-          <TableContainer component={Paper} sx={{ mt: 2 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>#</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {competitions.map((comp, index) => (
-                  <TableRow key={comp.id}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Button variant="text" onClick={() => fetchCompetitionDetail(comp.id)}>
-                        {comp.name}
-                      </Button>
-                    </TableCell>
-                    <TableCell>{comp.description}</TableCell>
-                    <TableCell>{comp.status}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        color={comp.status === 'COMPLETED' ? 'primary' : 'inherit'}
-                        disabled={comp.status !== 'COMPLETED'}
-                        onClick={() => navigate(`/JudgeSubmissions/${comp.id}`)}
-                      >
-                        Review
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted/40">
+                  <tr className="text-left">
+                    <th className="px-4 py-3 font-medium">#</th>
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    <th className="px-4 py-3 font-medium">Description</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {competitions.map((comp, index) => (
+                    <tr key={comp.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                      <td className="px-4 py-3">{index + 1}</td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 text-primary"
+                          onClick={() => fetchCompetitionDetail(comp.id)}
+                        >
+                          {comp.name}
+                        </Button>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground max-w-md truncate">{comp.description}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={comp.status === 'COMPLETED' ? 'success' : 'secondary'}>
+                          {comp.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          size="sm"
+                          disabled={comp.status !== 'COMPLETED'}
+                          onClick={() => navigate(`/JudgeSubmissions/${comp.id}`)}
+                        >
+                          Review
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {competitions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        No competitions assigned.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedComp?.name}
-          <Chip label={selectedComp?.status} sx={{ ml: 2 }} color="primary" size="small" />
-        </DialogTitle>
-        <DialogContent dividers sx={{ p: 3 }}>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>{selectedComp?.name}</span>
+              {selectedComp?.status && (
+                <Badge variant="default">{selectedComp.status}</Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
           {selectedComp && (
-            <>
-              <Typography sx={{ mb: 2 }}>{selectedComp.description}</Typography>
-              <Divider sx={{ mb: 2 }} />
-              <Typography>
-                <strong>Category:</strong> {selectedComp.category}
-              </Typography>
-              <Typography>
-                <strong>Participation:</strong> {selectedComp.participationType}
-              </Typography>
-              <Typography>
-                <strong>Start:</strong>{' '}
-                {new Date(selectedComp.startDate).toLocaleString()}
-              </Typography>
-              <Typography>
-                <strong>End:</strong> {new Date(selectedComp.endDate).toLocaleString()}
-              </Typography>
-              <Typography>
-                <strong>Public:</strong> {selectedComp.isPublic ? 'Yes' : 'No'}
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Typography>
-                <strong>Scoring Criteria:</strong>
-              </Typography>
-              {selectedComp.scoringCriteria?.map((item, idx) => (
-                <Chip key={idx} label={item} size="small" sx={{ m: 0.5 }} />
-              ))}
-              <Typography sx={{ mt: 2 }}>
-                <strong>Allowed Submission Types:</strong>
-              </Typography>
-              {selectedComp.allowedSubmissionTypes?.map((item, idx) => (
-                <Chip key={idx} label={item} size="small" color="secondary" sx={{ m: 0.5 }} />
-              ))}
+            <div className="space-y-3 text-sm">
+              <p>{selectedComp.description}</p>
+              <Separator />
+              <p><strong>Category:</strong> {selectedComp.category}</p>
+              <p><strong>Participation:</strong> {selectedComp.participationType}</p>
+              <p><strong>Start:</strong> {new Date(selectedComp.startDate).toLocaleString()}</p>
+              <p><strong>End:</strong> {new Date(selectedComp.endDate).toLocaleString()}</p>
+              <p><strong>Public:</strong> {selectedComp.isPublic ? 'Yes' : 'No'}</p>
+              <Separator />
+              <div>
+                <p className="font-medium">Scoring Criteria:</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedComp.scoringCriteria?.map((item, idx) => (
+                    <Badge key={idx} variant="outline">{item}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="font-medium">Allowed Submission Types:</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedComp.allowedSubmissionTypes?.map((item, idx) => (
+                    <Badge key={idx} variant="secondary">{item}</Badge>
+                  ))}
+                </div>
+              </div>
               {selectedComp.imageUrls?.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Display Images:
-                  </Typography>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div>
+                  <p className="font-medium">Display Images:</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {selectedComp.imageUrls.map((url, idx) => (
                       <img
                         key={idx}
                         src={url}
                         alt={`img-${idx}`}
-                        style={{
-                          width: 120,
-                          height: 100,
-                          objectFit: 'cover',
-                          borderRadius: 6,
-                          border: '1px solid #ddd',
-                        }}
+                        className="h-24 w-32 rounded-md border object-cover"
                       />
                     ))}
                   </div>
                 </div>
               )}
               {selectedComp.introVideoUrl && (
-                <Button
-                  variant="outlined"
-                  href={selectedComp.introVideoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  sx={{ mt: 3 }}
-                >
-                  Watch Intro Video
+                <Button variant="outline" asChild>
+                  <a href={selectedComp.introVideoUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Watch Intro Video
+                  </a>
                 </Button>
               )}
-            </>
+            </div>
           )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
     </>
   );

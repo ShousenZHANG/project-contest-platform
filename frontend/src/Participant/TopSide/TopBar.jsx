@@ -1,26 +1,33 @@
 /**
- * PTopBar.js
- * 
- * Top navigation bar for participants.
- * Displays project logo, user avatar, welcome message, and a logout button.
- * Supports avatar click to navigate to user profile and logout confirmation dialog.
- * 
+ * TopBar.jsx
+ *
+ * Participant top navigation bar. Migrated to shadcn/ui + Tailwind.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiLogOut } from 'react-icons/fi';
-import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Button } from '@mui/material';
-import logo from './LOGO.png';
-import './PTopBar.css';
+import { LogOut } from 'lucide-react';
 import apiClient from '../../api/apiClient';
+import logo from './LOGO.png';
+import { Button } from '../../components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 
 function TopBar() {
   const [open, setOpen] = useState(false);
-  const [, setProjectName] = useState(localStorage.getItem("projectName") || "Please set a project name");
+  const [, setProjectName] = useState(
+    localStorage.getItem('projectName') || 'Please set a project name'
+  );
   const [avatarUrl, setAvatarUrl] = useState('');
   const navigate = useNavigate();
   const userName = localStorage.getItem('email') || 'Participant';
@@ -31,25 +38,23 @@ function TopBar() {
         const res = await apiClient.get('/api/project/info');
         const data = res.data;
         if (data.success && data.projectName) {
-          localStorage.setItem("projectName", `Welcome To ${data.projectName}`);
+          localStorage.setItem('projectName', `Welcome To ${data.projectName}`);
           setProjectName(`Welcome To ${data.projectName}`);
         }
       } catch {
-        setProjectName("Please set a project name");
+        setProjectName('Please set a project name');
       }
     };
 
-    if (!localStorage.getItem("projectName")) {
+    if (!localStorage.getItem('projectName')) {
       fetchProjectName();
     }
 
-    window.addEventListener("storage", () => {
-      setProjectName(localStorage.getItem("projectName") || "Please set a project name");
-    });
-
-    return () => {
-      window.removeEventListener("storage", () => { });
+    const handler = () => {
+      setProjectName(localStorage.getItem('projectName') || 'Please set a project name');
     };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
   }, []);
 
   useEffect(() => {
@@ -67,63 +72,74 @@ function TopBar() {
     fetchUserAvatar();
   }, []);
 
-  const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
-
   const handleConfirmLogout = async () => {
     try {
-      await apiClient.post("/users/logout");
+      await apiClient.post('/users/logout');
     } catch (err) {
       // Logout API call failed silently
     }
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("email");
-    localStorage.removeItem("role");
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('email');
+    localStorage.removeItem('role');
     setOpen(false);
-    window.location.href = "/";
+    window.location.href = '/';
   };
 
   const handleAvatarClick = () => {
-    const email = localStorage.getItem("email");
+    const email = localStorage.getItem('email');
     if (email) {
       navigate(`/Profile/${email}`);
     }
   };
 
-  return (
-    <header className="participant-topbar">
-      <div className="participant-topbar-content">
-        {/* Left: LOGO + Project title */}
-        <div className="participant-topbar-left">
-          <img src={logo} alt="Logo" className="participant-logo" />
-          <h1 className="participant-topbar-rect">Questora</h1>
-        </div>
+  const initials = (userName.split('@')[0] || 'U').slice(0, 2).toUpperCase();
 
-        {/* Right: Welcome message + avatar + exit */}
-        <div className="participant-topbar-actions">
-          <h1 className="participant-topbar-rect">👋 Hi, {userName.split('@')[0]}</h1>
-          <img
-            className="participant-avatar"
-            src={avatarUrl || "/OIP.jpg"}
-            alt="User Avatar"
-            onClick={handleAvatarClick}
-            style={{ cursor: "pointer" }}
-          />
-          <FiLogOut className="participant-logout-icon" onClick={handleOpen} />
-        </div>
+  return (
+    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4">
+      <div className="flex items-center gap-3">
+        <img src={logo} alt="Logo" className="h-9 w-9 object-contain" />
+        <h1 className="text-lg font-semibold text-foreground">Questora</h1>
       </div>
 
-      {/* Exit the pop-up window */}
-      <Dialog open={open} onClose={handleClose}>
-        <DialogTitle>Log out reminder</DialogTitle>
+      <div className="flex items-center gap-3">
+        <span className="hidden text-sm text-muted-foreground sm:inline">
+          Hi, {userName.split('@')[0]}
+        </span>
+        <button
+          onClick={handleAvatarClick}
+          className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Avatar className="h-9 w-9 cursor-pointer">
+            <AvatarImage src={avatarUrl || '/OIP.jpg'} alt="User Avatar" />
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpen(true)}
+          aria-label="Log out"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogContentText>Are you sure you want to log out?</DialogContentText>
+          <DialogHeader>
+            <DialogTitle>Log out reminder</DialogTitle>
+            <DialogDescription>Are you sure you want to log out?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmLogout}>
+              Log out
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleConfirmLogout} color="error">Log out</Button>
-        </DialogActions>
       </Dialog>
     </header>
   );

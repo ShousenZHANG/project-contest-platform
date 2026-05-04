@@ -1,74 +1,49 @@
 /**
- * @file DeleteComment.js
- * @description 
- * This component allows a user to delete their comment from a submission's comment section.
- * Participants can:
- *  - Click the delete button next to their own comments or replies.
- *  - Receive real-time feedback via a Snackbar after deletion succeeds or fails.
- *  - Trigger a parent refresh by invoking the `onDeleted` callback after successful deletion.
- * The component communicates with a backend API, sending proper authentication headers
- * and handles user session validations (token and userId presence).
- * It uses Material-UI components for the delete button and snackbar feedback.
- * 
+ * @file DeleteComment.jsx
+ * @description
+ * Icon button that deletes a comment and notifies via sonner toast.
+ * Migrated from MUI to shadcn/ui + Tailwind.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState } from "react";
-import PropTypes from "prop-types";
-import { IconButton, Snackbar, Alert } from "@mui/material";
-import apiClient from "../../api/apiClient";
-import DeleteIcon from "@mui/icons-material/Delete";
+import React from 'react';
+import PropTypes from 'prop-types';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '@/api/apiClient';
+import { Button } from '@/components/ui/button';
 
 function DeleteComment({ commentId, onDeleted }) {
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
-
-  const handleDelete = () => {
-    const currentUserId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
+  const handleDelete = async () => {
+    const currentUserId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
 
     if (!currentUserId || !token) {
-      setSnackbarMessage("Please log in.");
-      setSnackbarSeverity("error");
-      return setSnackbarOpen(true);
+      toast.error('Please log in.');
+      return;
     }
 
-    apiClient
-      .delete(`/interactions/comments/${commentId}`)
-      .then(() => {
-        setSnackbarMessage("Comment deleted successfully!");
-        setSnackbarSeverity("success");
-        setSnackbarOpen(true);
-        onDeleted();
-      })
-      .catch(() => {
-        setSnackbarMessage("Failed to delete comment.");
-        setSnackbarSeverity("error");
-        setSnackbarOpen(true);
-      });
+    try {
+      await apiClient.delete(`/interactions/comments/${commentId}`);
+      toast.success('Comment deleted successfully!');
+      onDeleted?.();
+    } catch {
+      toast.error('Failed to delete comment.');
+    }
   };
 
-  const handleClose = () => setSnackbarOpen(false);
-
   return (
-    <>
-      <IconButton onClick={handleDelete} size="small">
-        <DeleteIcon fontSize="small" />
-      </IconButton>
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert onClose={handleClose} severity={snackbarSeverity} sx={{ width: "100%" }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </>
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+      onClick={handleDelete}
+      aria-label="Delete comment"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
   );
 }
 

@@ -1,115 +1,65 @@
 /**
- * TeamPage.js
- * 
- * Main page for participants to explore, create, join, and manage teams.
- * Combines ParticipantTeam view and MyTeamsDialog popups.
- * 
+ * @file TeamPage.jsx
+ * @description
+ * Team management landing page. Migrated from MUI to shadcn/ui + Tailwind.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-// src/Participant/TeamPage.js
 import React, { useEffect, useState } from 'react';
+import { Users } from 'lucide-react';
+import apiClient from '@/api/apiClient';
 import ParticipantTeam from './ParticipantTeam';
 import MyTeamsDialog from './MyTeamsDialog';
-import '../project/Project.css'; // reuse existing CSS
-import { Typography, Snackbar, Alert } from '@mui/material';
-import GroupsIcon from '@mui/icons-material/Groups';
-import apiClient from '../../api/apiClient';
 
 function TeamPage() {
   const [userData, setUserData] = useState(null);
-  const [viewMode] = useState('explore'); // explore / my
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [success, setSuccess] = useState(true);
+  const [viewMode] = useState('explore');
   const [myDialogOpen, setMyDialogOpen] = useState(false);
   const [myTeams, setMyTeams] = useState([]);
 
-  // Fetch user information (same as in Project)
   useEffect(() => {
     (async () => {
       try {
         const res = await apiClient.get('/users/profile');
         setUserData(res.data);
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to fetch user data:', error);
       }
     })();
   }, []);
 
   return (
-    <>
-      
-      <div className="participant-project-container">
-        
-        <div className="participant-project-content">
+    <div className="min-h-screen bg-background px-4 py-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <header className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-4 shadow-sm">
+          <Users className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">
+            Team Management
+          </h1>
+        </header>
 
-          {/* Header changed to orange style */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: 20,
-            padding: '10px 20px',
-            backgroundColor: '#FFE3D3', // orange background
-            borderRadius: 12,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-          }}>
-            <GroupsIcon sx={{ color: '#FF5722', fontSize: 36, mr: 2 }} />
-            <Typography variant="h4" component="h2"
-              sx={{
-                fontWeight: 'bold',
-                color: '#FF5722', // orange text
-                textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
-              }}>
-              Team Management
-            </Typography>
-          </div>
-
-          {/* Main view content */}
-          {userData && viewMode === 'explore' && (
-            <ParticipantTeam
-              userData={userData}
-              onSnackbar={(msg, ok = true) => {
-                setSnackbarMessage(msg);
-                setSuccess(ok);
-                setSnackbarOpen(true);
-              }}
-              onOpenMyTeams={(list) => {
-                setMyTeams(list);
-                setMyDialogOpen(true);
-              }}
-            />
-          )}
-
-          {/* My Teams Dialog */}
-          <MyTeamsDialog
-            open={myDialogOpen}
-            onClose={() => setMyDialogOpen(false)}
-            myTeams={myTeams}
+        {userData && viewMode === 'explore' && (
+          <ParticipantTeam
             userData={userData}
-            onUpdate={() => window.location.reload()}
+            onOpenMyTeams={(list) => {
+              setMyTeams(list);
+              setMyDialogOpen(true);
+            }}
           />
+        )}
 
-          {/* Global notification */}
-          <Snackbar
-            open={snackbarOpen}
-            autoHideDuration={3000}
-            onClose={() => setSnackbarOpen(false)}
-            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          >
-            <Alert
-              onClose={() => setSnackbarOpen(false)}
-              severity={success ? 'success' : 'error'}
-              sx={{ width: '100%' }}
-            >
-              {snackbarMessage}
-            </Alert>
-          </Snackbar>
-        </div>
+        <MyTeamsDialog
+          open={myDialogOpen}
+          onClose={() => setMyDialogOpen(false)}
+          myTeams={myTeams}
+          userData={userData}
+          onUpdate={() => window.location.reload()}
+        />
       </div>
-    </>
+    </div>
   );
 }
 

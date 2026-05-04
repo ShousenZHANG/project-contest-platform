@@ -1,8 +1,7 @@
 /**
- * JudgeSubmissions.js
+ * JudgeSubmissions.jsx
  *
- * Allows judges to view, search, and review pending submissions for a competition.
- * Provides functionality to open detailed judge comments and scores for each submission.
+ * Allows judges to view, search, and review pending submissions. Migrated from MUI to shadcn/ui.
  *
  * Role: Judge
  * Developer: Zhaoyi Yang
@@ -10,28 +9,19 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import './Rating.css';
-import {
-  Typography,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Paper,
-  Link,
-  TextField,
-  Pagination,
-  CircularProgress,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-} from '@mui/material';
+import { Loader2, ChevronLeft, ChevronRight, Scale } from 'lucide-react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardContent } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 
 function JudgeSubmissions() {
   const { competitionId } = useParams();
@@ -75,77 +65,79 @@ function JudgeSubmissions() {
 
   return (
     <>
+      <div className="p-6">
+        <h2 className="mb-4 text-xl font-semibold text-foreground">
+          Pending Submissions for Review
+        </h2>
 
-      <div className="rating-container">
+        <Input
+          placeholder="Search by title..."
+          value={keyword}
+          onChange={(e) => {
+            setPage(1);
+            setKeyword(e.target.value);
+          }}
+          className="mb-4 max-w-md"
+        />
 
-        <div className="rating-content">
-          <Typography variant="h5" gutterBottom>
-            Pending Submissions for Review
-          </Typography>
-
-          <TextField
-            label="Search by Title"
-            variant="outlined"
-            value={keyword}
-            onChange={(e) => {
-              setPage(1);
-              setKeyword(e.target.value);
-            }}
-            fullWidth
-            sx={{ mt: 2, mb: 2 }}
-          />
-
-          {loading ? (
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-              <CircularProgress />
-            </div>
-          ) : (
-            <div className="table-wrapper">
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Title</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Last Updated</TableCell>
-                      <TableCell>File</TableCell>
-                      <TableCell>Scored</TableCell>
-                      <TableCell>Action</TableCell>
-                      <TableCell>Rejudge</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/40">
+                    <tr className="text-left">
+                      <th className="px-3 py-2 font-medium">#</th>
+                      <th className="px-3 py-2 font-medium">Title</th>
+                      <th className="px-3 py-2 font-medium">Description</th>
+                      <th className="px-3 py-2 font-medium">Last Updated</th>
+                      <th className="px-3 py-2 font-medium">File</th>
+                      <th className="px-3 py-2 font-medium">Scored</th>
+                      <th className="px-3 py-2 font-medium">Action</th>
+                      <th className="px-3 py-2 font-medium">Rejudge</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {submissions.map((submission, index) => (
-                      <TableRow key={submission.id}>
-                        <TableCell>{(page - 1) * 10 + index + 1}</TableCell>
-                        <TableCell>{submission.title}</TableCell>
-                        <TableCell>{submission.description}</TableCell>
-                        <TableCell>
+                      <tr key={submission.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                        <td className="px-3 py-2">{(page - 1) * 10 + index + 1}</td>
+                        <td className="px-3 py-2 font-medium">{submission.title}</td>
+                        <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">
+                          {submission.description}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
                           {new Date(submission.lastUpdatedAt).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Link href={submission.fileUrl} target="_blank" rel="noopener">
+                        </td>
+                        <td className="px-3 py-2">
+                          <a
+                            href={submission.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
                             {submission.fileName || 'Download'}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
+                          </a>
+                        </td>
+                        <td className="px-3 py-2">
                           {submission.hasScored ? (
                             <Button
-                              variant="text"
-                              sx={{ color: '#1976d2', textTransform: 'none' }}
+                              variant="link"
+                              className="h-auto p-0 text-primary"
                               onClick={() => handleViewJudgingDetail(submission.id)}
                             >
                               Yes
                             </Button>
                           ) : (
-                            'No'
+                            <Badge variant="outline">No</Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td className="px-3 py-2">
                           <Button
-                            variant="contained"
-                            size="small"
+                            size="sm"
                             disabled={submission.hasScored}
                             onClick={() =>
                               navigate(`/RatingDetail/${competitionId}/${submission.id}`)
@@ -153,11 +145,11 @@ function JudgeSubmissions() {
                           >
                             Review
                           </Button>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td className="px-3 py-2">
                           <Button
-                            variant="outlined"
-                            size="small"
+                            size="sm"
+                            variant="outline"
                             disabled={!submission.hasScored}
                             onClick={() =>
                               navigate(`/ReRating/${competitionId}/${submission.id}`)
@@ -165,73 +157,78 @@ function JudgeSubmissions() {
                           >
                             Rejudge
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </div>
-          )}
+                    {submissions.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                          No submissions found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-          <Pagination
-            sx={{ mt: 2 }}
-            count={totalPages}
-            page={page}
-            onChange={(e, val) => setPage(val)}
-            color="primary"
-          />
+        {/* Pagination */}
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.5rem', textAlign: 'center' }}>
-          🧑‍⚖️ Judging Details
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-            <strong>Judge Comments:</strong> {judgeDetail?.judgeComments || 'No comments'}
-          </Typography>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-            <strong>Total Score:</strong> {judgeDetail?.totalScore}
-          </Typography>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 2, mb: 1 }}>
-            Criteria Scores:
-          </Typography>
-          {judgeDetail?.scores?.map((s, idx) => (
-            <Box
-              key={idx}
-              sx={{
-                backgroundColor: '#f0f4f8',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                mb: 1,
-              }}
-            >
-              <Typography>
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-center gap-2">
+              <Scale className="h-5 w-5" />
+              Judging Details
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              <strong>Judge Comments:</strong>{' '}
+              {judgeDetail?.judgeComments || 'No comments'}
+            </p>
+            <p>
+              <strong>Total Score:</strong> {judgeDetail?.totalScore}
+            </p>
+            <p className="mt-3 font-semibold">Criteria Scores:</p>
+            {judgeDetail?.scores?.map((s, idx) => (
+              <div
+                key={idx}
+                className="rounded-md bg-muted/50 px-3 py-2"
+              >
                 <strong>{s.criterion}</strong>: {s.score}{' '}
-                <span style={{ color: '#888' }}>(weight: {s.weight})</span>
-              </Typography>
-            </Box>
-          ))}
+                <span className="text-muted-foreground">(weight: {s.weight})</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setOpenDialog(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setOpenDialog(false)}
-            sx={{
-              borderRadius: '20px',
-              px: 4,
-              backgroundColor: '#90caf9',
-              color: '#fff',
-              textTransform: 'none',
-              ':hover': {
-                backgroundColor: '#64b5f6',
-              },
-            }}
-          >
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );

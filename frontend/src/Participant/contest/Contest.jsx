@@ -1,42 +1,30 @@
 /**
- * @file Contest.js
- * @description
- * This component provides a participant-facing view to explore available competitions.
- * Participants can:
- *  - Search competitions by keywords.
- *  - Filter competitions by status (Upcoming, Ongoing, Completed, Awarded).
- *  - Filter by participation type (Individual or Team).
- *  - Filter by competition categories.
- *  - Switch between card view and table list view.
- *  - Join competitions directly if allowed.
- * The component integrates with a backend API for fetching competition data,
- * manages pagination and client-side filtering, and uses Material-UI for UI design.
+ * Contest.jsx
+ *
+ * Participant contest browse page. Migrated from MUI to shadcn/ui.
  *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState, useEffect } from "react";
-import ContestCard from "./ContestCard";
-import ChangeContestTable from "./ChangeContestTable";
-import { IconButton, Typography, Pagination } from "@mui/material";
-import { Close, FilterAlt, ViewList } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
-import "./Contest.css";
-import SearchIcon from "@mui/icons-material/Search";
-import defaultImage from "./1.jpg";
-import RefreshIcon from "@mui/icons-material/Refresh";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../api/apiClient';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import ContestCard from './ContestCard';
+import ChangeContestTable from './ChangeContestTable';
+import defaultImage from './1.jpg';
 
 function Contest() {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [selectedParticipationType, setSelectedParticipationType] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedParticipationType, setSelectedParticipationType] = useState('');
   const [contests, setContests] = useState([]);
-  const [searchInput, setSearchInput] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isListView, setIsListView] = useState(false);
   const [page, setPage] = useState(1);
   const [size] = useState(6);
@@ -46,9 +34,7 @@ function Contest() {
 
   const handleCategoryChange = (category) => {
     setSelectedCategories((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
   };
 
@@ -56,9 +42,9 @@ function Contest() {
     const fetchContests = async () => {
       try {
         const params = new URLSearchParams();
-        if (searchTerm) params.append("keyword", searchTerm);
-        if (selectedCategories.length > 0) params.append("category", selectedCategories.join(","));
-        if (selectedStatus) params.append("status", selectedStatus);
+        if (searchTerm) params.append('keyword', searchTerm);
+        if (selectedCategories.length > 0) params.append('category', selectedCategories.join(','));
+        if (selectedStatus) params.append('status', selectedStatus);
 
         const res = await apiClient.get(`/competitions/list?${params.toString()}`);
         setContests(res.data.data || []);
@@ -71,10 +57,8 @@ function Contest() {
   }, [searchTerm, selectedCategories, selectedStatus]);
 
   const formatDateRange = (start, end) => {
-    if (!start || !end) return "N/A";
-    const startStr = new Date(start).toLocaleDateString();
-    const endStr = new Date(end).toLocaleDateString();
-    return `${startStr} ~ ${endStr}`;
+    if (!start || !end) return 'N/A';
+    return `${new Date(start).toLocaleDateString()} ~ ${new Date(end).toLocaleDateString()}`;
   };
 
   const handleCardClick = (contest) => {
@@ -88,14 +72,14 @@ function Contest() {
 
   const getStatusText = (status) => {
     switch (status) {
-      case "UPCOMING":
-        return "Not started";
-      case "ONGOING":
-        return "Ongoing";
-      case "COMPLETED":
-        return "Completed";
+      case 'UPCOMING':
+        return 'Not started';
+      case 'ONGOING':
+        return 'Ongoing';
+      case 'COMPLETED':
+        return 'Completed';
       default:
-        return "Unknown status";
+        return 'Unknown status';
     }
   };
 
@@ -103,109 +87,165 @@ function Contest() {
   const paginatedContests = contests.slice((page - 1) * size, page * size);
 
   const filteredContests = paginatedContests.filter((item) => {
-    if (selectedParticipationType && item.participationType !== selectedParticipationType) return false;
+    if (selectedParticipationType && item.participationType !== selectedParticipationType)
+      return false;
     return true;
   });
 
   return (
-    <>
+    <div className="p-6">
+      {/* Top toolbar */}
+      <div className="mb-4 flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Reset"
+          onClick={() => {
+            setSearchInput('');
+            setSearchTerm('');
+            setPage(1);
+          }}
+          className="border-warning text-warning hover:bg-warning/10"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
 
-      <div className="participant-contest-container">
+        <Input
+          type="text"
+          placeholder="Search..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+          className="max-w-md"
+        />
 
-        <div className="participant-contest-content">
-          {/* Top search bar */}
-          <div className="participant-contest-header">
-            <IconButton onClick={() => {
-              setSearchInput("");
-              setSearchTerm("");
-              setPage(1);
-            }} sx={{
-              color: "#FF9800", border: "1px solid #FF9800", borderRadius: "8px", marginRight: "8px",
-              ":hover": { backgroundColor: "#FFE0B2" },
-            }}><RefreshIcon /></IconButton>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Search"
+          onClick={handleSearchClick}
+          className="border-warning text-warning hover:bg-warning/10"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
 
-            <input
-              className="participant-search-bar"
-              type="text"
-              placeholder="Search..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-            <IconButton onClick={handleSearchClick} sx={{
-              color: "#FF9800", border: "1px solid #FF9800", borderRadius: "8px", marginLeft: "8px",
-              ":hover": { backgroundColor: "#FFE0B2" },
-            }}><SearchIcon /></IconButton>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Toggle filter"
+          onClick={toggleFilter}
+          className="border-warning text-warning hover:bg-warning/10"
+        >
+          <Filter className="h-4 w-4" />
+        </Button>
 
-            <IconButton onClick={toggleFilter} sx={{
-              color: "#FF9800", border: "1px solid #FF9800", borderRadius: "8px", marginLeft: "8px",
-              ":hover": { backgroundColor: "#FFE0B2" },
-            }}><FilterAlt /></IconButton>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Toggle list view"
+          onClick={() => setIsListView((prev) => !prev)}
+          className="border-warning text-warning hover:bg-warning/10"
+        >
+          <List className="h-4 w-4" />
+        </Button>
+      </div>
 
-            <IconButton onClick={() => setIsListView((prev) => !prev)} sx={{
-              color: "#FF9800", border: "1px solid #FF9800", borderRadius: "8px", marginLeft: "8px",
-              ":hover": { backgroundColor: "#FFE0B2" },
-            }}><ViewList /></IconButton>
-          </div>
+      <div className="flex gap-4">
+        {/* Filter panel */}
+        {isFilterVisible && (
+          <aside className="w-60 flex-shrink-0 rounded-lg border bg-card p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+              <Button variant="ghost" size="icon" onClick={toggleFilter} aria-label="Close filter">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
 
-          {/* Filter panel */}
-          <div className={`participant-filter-sidebar ${isFilterVisible ? "visible" : ""}`}>
-            <IconButton className="participant-close-filter" onClick={toggleFilter}><Close /></IconButton>
-
-            <Typography variant="h6" sx={{ mt: 2, backgroundColor: "white", color: "white", padding: "5px" }}>
-              Filter by Status
-            </Typography>
-            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="participant-filter-select">
-              <option value="">All</option>
-              <option value="UPCOMING">UPCOMING</option>
-              <option value="ONGOING">ONGOING</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="AWARDED">AWARDED</option>
-            </select>
-
-            <Typography variant="h6" sx={{ mt: 2, backgroundColor: "white", color: "white", padding: "5px" }}>
-              Filter by Participation Type
-            </Typography>
-            <select value={selectedParticipationType} onChange={(e) => setSelectedParticipationType(e.target.value)} className="participant-filter-select">
-              <option value="">All</option>
-              <option value="INDIVIDUAL">Individual</option>
-              <option value="TEAM">Team</option>
-            </select>
-
-            <Typography variant="h6" sx={{ mt: 2, backgroundColor: "white", color: "white", padding: "5px", marginBottom: "10px" }}>
-              Filter by Category
-            </Typography>
-            {contests.length > 0 &&
-              Array.from(new Set(contests.map((item) => item.category))).sort().map((category) => (
-                <label key={category} className="participant-filter-option">
-                  <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => handleCategoryChange(category)} />
-                  {category}
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-xs font-medium uppercase text-muted-foreground">
+                  Status
                 </label>
-              ))}
-          </div>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">All</option>
+                  <option value="UPCOMING">UPCOMING</option>
+                  <option value="ONGOING">ONGOING</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="AWARDED">AWARDED</option>
+                </select>
+              </div>
 
-          {/* Display area */}
-          <div className="participant-contest-cards">
-            {isListView ? (
-              <ChangeContestTable
-                contests={filteredContests.map((item) => ({
-                  id: item.id,
-                  title: item.name,
-                  description: item.description,
-                  category: item.category,
-                  date: formatDateRange(item.startDate, item.endDate),
-                  isPublic: item.isPublic,
-                  status: item.status,
-                  statusText: getStatusText(item.status),
-                  allowedSubmissionTypes: item.allowedSubmissionTypes,
-                  scoringCriteria: item.scoringCriteria,
-                  introVideoUrl: item.introVideoUrl,
-                  image: item.imageUrls?.[0] || defaultImage,
-                  createdAt: item.createdAt,
-                }))}
-                onRowClick={handleCardClick}
-              />
-            ) : (
-              filteredContests.map((item) => (
+              <div>
+                <label className="mb-2 block text-xs font-medium uppercase text-muted-foreground">
+                  Participation Type
+                </label>
+                <select
+                  value={selectedParticipationType}
+                  onChange={(e) => setSelectedParticipationType(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">All</option>
+                  <option value="INDIVIDUAL">Individual</option>
+                  <option value="TEAM">Team</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-medium uppercase text-muted-foreground">
+                  Category
+                </label>
+                <div className="space-y-1.5">
+                  {contests.length > 0 &&
+                    Array.from(new Set(contests.map((item) => item.category)))
+                      .sort()
+                      .map((category) => (
+                        <label
+                          key={category}
+                          className="flex items-center gap-2 text-sm text-foreground"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCategories.includes(category)}
+                            onChange={() => handleCategoryChange(category)}
+                            className="h-4 w-4 accent-warning"
+                          />
+                          {category}
+                        </label>
+                      ))}
+                </div>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Display area */}
+        <div className="flex-1">
+          {isListView ? (
+            <ChangeContestTable
+              contests={filteredContests.map((item) => ({
+                id: item.id,
+                title: item.name,
+                description: item.description,
+                category: item.category,
+                date: formatDateRange(item.startDate, item.endDate),
+                isPublic: item.isPublic,
+                status: item.status,
+                statusText: getStatusText(item.status),
+                allowedSubmissionTypes: item.allowedSubmissionTypes,
+                scoringCriteria: item.scoringCriteria,
+                introVideoUrl: item.introVideoUrl,
+                image: item.imageUrls?.[0] || defaultImage,
+                createdAt: item.createdAt,
+              }))}
+              onRowClick={handleCardClick}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredContests.map((item) => (
                 <ContestCard
                   key={item.id}
                   contest={{
@@ -221,34 +261,39 @@ function Contest() {
                     introVideoUrl: item.introVideoUrl,
                     image: item.imageUrls?.[0] || defaultImage,
                     createdAt: item.createdAt,
-                    participationType: item.participationType || "INDIVIDUAL",
+                    participationType: item.participationType || 'INDIVIDUAL',
                   }}
                   onCardClick={handleCardClick}
                 />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* Paginator */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
-            <Pagination
-              count={pages}
-              page={page}
-              onChange={(event, value) => setPage(value)}
-              sx={{
-                '& .MuiPaginationItem-root': { color: '#FF9800', borderColor: '#FF9800' },
-                '& .MuiPaginationItem-root.Mui-selected': {
-                  backgroundColor: '#FF9800',
-                  color: '#fff',
-                  borderColor: '#FF9800',
-                  '&:hover': { backgroundColor: '#FB8C00' },
-                }
-              }}
-            />
+          {/* Pagination */}
+          <div className="mt-6 flex items-center justify-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {pages || 1}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= pages}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

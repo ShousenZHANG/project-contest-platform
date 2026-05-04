@@ -1,40 +1,36 @@
 /**
- * ViewVote.js
+ * ViewVote.jsx
  *
- * Displays vote count for a submission and allows participants to vote or cancel their vote.
- * Fetches initial vote data and handles vote actions with backend API.
+ * Vote count + toggle for a submission. Migrated from MUI to shadcn/ui.
  *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState, useEffect } from "react";
-import { Button, Typography, Box, Snackbar, Alert } from "@mui/material";
-import apiClient from "../api/apiClient";
+import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
 
 function ViewVote({ submissionId }) {
   const [votes, setVotes] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("info");
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
 
     if (!submissionId || !userId || !token) return;
 
     apiClient
-      .get("/interactions/votes/count", { params: { submissionId } })
+      .get('/interactions/votes/count', { params: { submissionId } })
       .then((res) => {
         setVotes(res.data || 0);
       })
       .catch(() => {});
 
     apiClient
-      .get("/interactions/votes/status", { params: { submissionId } })
+      .get('/interactions/votes/status', { params: { submissionId } })
       .then((res) => {
         setHasVoted(res.data === true);
       })
@@ -42,13 +38,11 @@ function ViewVote({ submissionId }) {
   }, [submissionId]);
 
   const handleVote = () => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
 
     if (!userId || !token) {
-      setSnackbarMessage("User not logged in.");
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
+      toast.error('User not logged in.');
       return;
     }
 
@@ -58,71 +52,35 @@ function ViewVote({ submissionId }) {
         .then(() => {
           setVotes((prev) => prev + 1);
           setHasVoted(true);
-          setSnackbarMessage("Vote successful! Thank you!");
-          setSnackbarSeverity("success");
-          setSnackbarOpen(true);
+          toast.success('Vote successful! Thank you!');
         })
         .catch(() => {
-          setSnackbarMessage("Vote failed.");
-          setSnackbarSeverity("error");
-          setSnackbarOpen(true);
+          toast.error('Vote failed.');
         });
     } else {
       apiClient
-        .delete("/interactions/votes", { params: { submissionId } })
+        .delete('/interactions/votes', { params: { submissionId } })
         .then(() => {
           setVotes((prev) => Math.max(prev - 1, 0));
           setHasVoted(false);
-          setSnackbarMessage("Vote canceled.");
-          setSnackbarSeverity("info");
-          setSnackbarOpen(true);
+          toast.info('Vote canceled.');
         })
         .catch(() => {
-          setSnackbarMessage("Cancel vote failed.");
-          setSnackbarSeverity("error");
-          setSnackbarOpen(true);
+          toast.error('Cancel vote failed.');
         });
     }
   };
 
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
-
   return (
-    <Box display="flex" alignItems="center">
-      <Typography variant="body1" style={{ marginRight: "8px" }}>
-        {votes}
-      </Typography>
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-medium">{votes}</span>
       <Button
-        variant="contained"
         onClick={handleVote}
-        sx={{
-          backgroundColor: "#FF9800",
-          color: "white",
-          ":hover": {
-            backgroundColor: "#FB8C00",
-          },
-        }}
+        className="bg-warning text-warning-foreground hover:bg-warning/90"
       >
-        {hasVoted ? "Cancel Vote" : "Vote"}
+        {hasVoted ? 'Cancel Vote' : 'Vote'}
       </Button>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          onClose={handleSnackbarClose}
-          severity={snackbarSeverity}
-          sx={{ width: "100%" }}
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+    </div>
   );
 }
 

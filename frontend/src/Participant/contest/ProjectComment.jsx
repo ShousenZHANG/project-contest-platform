@@ -1,193 +1,155 @@
 /**
- * @file ProjectComment.js
- * @description 
- * This component allows participants to view and post comments under a project submission.
- * Key functionalities include:
- *  - Displaying a paginated list of existing comments and their replies.
- *  - Allowing logged-in users to submit a new comment on a project.
- *  - Real-time feedback through Snackbar notifications for success and error cases.
- *  - Automatic reloading of the comment list after a new comment is posted.
- * The component integrates with a backend API, using authentication tokens
- * and supports both comment creation and comment display inside a modal dialog.
- * It uses Material-UI for layout, dialogs, and notifications.
- * 
+ * @file ProjectComment.jsx
+ * @description
+ * Inline comment composer + dialog showing existing comments for a submission.
+ * Migrated from MUI to shadcn/ui + Tailwind. Uses sonner for feedback.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState, useEffect } from "react";
-import { Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Snackbar, Alert } from "@mui/material";
-import apiClient from "../../api/apiClient";
+import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
+import apiClient from '@/api/apiClient';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 
 function ProjectComment({ submissionId }) {
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const [newComment, setNewComment] = useState("");
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Get the comment list
   useEffect(() => {
-    if (submissionId) {
-      setCommentsLoading(true);
-      apiClient
-        .get(`/interactions/comments/list`, {
-          params: {
-            submissionId: submissionId,
-            page: 1,
-            size: 10,
-            sortBy: "createdAt",
-            order: "desc",
-          },
-        })
-        .then((res) => {
-          setComments(res.data.data || []);
-          setCommentsLoading(false);
-        })
-        .catch(() => {
-          setComments([]);
-          setCommentsLoading(false);
-        });
-    }
+    if (!submissionId) return;
+    setCommentsLoading(true);
+    apiClient
+      .get('/interactions/comments/list', {
+        params: {
+          submissionId,
+          page: 1,
+          size: 10,
+          sortBy: 'createdAt',
+          order: 'desc',
+        },
+      })
+      .then((res) => setComments(res.data.data || []))
+      .catch(() => setComments([]))
+      .finally(() => setCommentsLoading(false));
   }, [submissionId]);
 
-  // Open the comment pop-up window
-  const handleOpenComments = () => {
-    setCommentsOpen(true);
-  };
-
-  // Close the comment pop-up window
-  const handleCloseComments = () => {
-    setCommentsOpen(false);
-  };
-
-  // Handle the submission of a new comment
-  const handleAddComment = () => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
+  const handleAddComment = async () => {
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
 
     if (!userId || !token) {
-      setSnackbarMessage("User not logged in. Cannot post comment.");
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
+      toast.error('User not logged in. Cannot post comment.');
       return;
     }
 
-    const commentData = {
-      submissionId: submissionId,
-      content: newComment,
-    };
+    if (!newComment.trim()) {
+      toast.error('Comment cannot be empty.');
+      return;
+    }
 
-    apiClient
-      .post(`/interactions/comments`, commentData)
-      .then(() => {
-        setSnackbarMessage("Comment posted successfully!");
-        setSnackbarSeverity("success");
-        setSnackbarOpen(true);
-        setNewComment("");  // Clear the input field
-        handleOpenComments(); // refresh the comment list
-      })
-      .catch((error) => {
-        setSnackbarMessage("Failed to post comment.");
-        setSnackbarSeverity("error");
-        setSnackbarOpen(true);
+    setSubmitting(true);
+    try {
+      await apiClient.post('/interactions/comments', {
+        submissionId,
+        content: newComment,
       });
-  };
-
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
+      toast.success('Comment posted successfully!');
+      setNewComment('');
+      setCommentsOpen(true);
+    } catch {
+      toast.error('Failed to post comment.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <>
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
-        <TextField
-          label="Add a Comment"
-          fullWidth
-          multiline
+      <div className="mt-5 space-y-3 text-center">
+        <Label htmlFor="project-comment-input" className="sr-only">
+          Add a Comment
+        </Label>
+        <textarea
+          id="project-comment-input"
           rows={4}
+          placeholder="Add a Comment"
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          variant="outlined"
+          className="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAddComment}
-          sx={{ mt: 2 }}
-        >
+        <Button onClick={handleAddComment} disabled={submitting}>
+          {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
           Post Comment
         </Button>
       </div>
 
-      {/* Comment */}
-      <Dialog open={commentsOpen} onClose={handleCloseComments} fullWidth maxWidth="md">
-        <DialogTitle>Comment list</DialogTitle>
-        <DialogContent dividers>
-          {commentsLoading ? (
-            <Typography>Loading...</Typography>
-          ) : comments.length === 0 ? (
-            <Typography>There are no comments for the moment.</Typography>
-          ) : (
-            comments.map((comment) => (
-              <div key={comment._id} style={{ marginBottom: "10px" }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-                  {comment.authorName || "Anonymous"}
-                </Typography>
-                <Typography variant="body2" sx={{ color: "gray" }}>
-                  {new Date(comment.createdAt).toLocaleString()}
-                </Typography>
-                <Typography variant="body1" sx={{ marginTop: "5px" }}>
-                  {comment.content}
-                </Typography>
-                {/* 子评论展示 */}
-                {comment.replies && comment.replies.length > 0 && (
-                  <div style={{ marginLeft: "20px" }}>
-                    {comment.replies.map((reply) => (
-                      <div key={reply._id}>
-                        <Typography variant="body2" sx={{ fontWeight: "bold" }}>
-                          {reply.authorName || "Anonymous"}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: "gray" }}>
-                          {new Date(reply.createdAt).toLocaleString()}
-                        </Typography>
-                        <Typography variant="body2" sx={{ marginTop: "5px" }}>
-                          {reply.content}
-                        </Typography>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <hr />
-              </div>
-            ))
-          )}
+      <Dialog open={commentsOpen} onOpenChange={setCommentsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Comment list</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+            {commentsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                There are no comments for the moment.
+              </p>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment._id || comment.id} className="space-y-1">
+                  <p className="font-semibold text-foreground">
+                    {comment.authorName || 'Anonymous'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </p>
+                  <p className="text-sm text-foreground">{comment.content}</p>
+                  {comment.replies?.length > 0 && (
+                    <div className="ml-5 space-y-2 border-l-2 border-border pl-3">
+                      {comment.replies.map((reply) => (
+                        <div key={reply._id || reply.id} className="space-y-0.5">
+                          <p className="text-sm font-semibold text-foreground">
+                            {reply.authorName || 'Anonymous'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(reply.createdAt).toLocaleString()}
+                          </p>
+                          <p className="text-sm text-foreground">
+                            {reply.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Separator className="my-2" />
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseComments} color="primary">
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
-
-      {/* Snackbar Notification */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          onClose={handleSnackbarClose}
-          severity={snackbarSeverity}
-          sx={{ width: "100%" }}
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
     </>
   );
 }
