@@ -71,3 +71,8 @@ frontend/.vscode/
 
 
 node_modules/
+
+### Agent tooling caches ###
+.claude/
+.omc/
+.reports/
