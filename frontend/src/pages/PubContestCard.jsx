@@ -1,28 +1,19 @@
 /**
- * ContestCard.js
+ * PubContestCard.jsx
  *
- * This component represents a public contest card view.
- * It displays the contest's image, title, organizer, date, category, and description.
- * Users can vote for a contest or join it by clicking the corresponding buttons.
- * Voting and joining actions require user authentication and interact with the server API.
+ * Vibrant contest card for public listing. Provides Vote / Join actions that
+ * call the backend (and prompt login when unauthenticated). Migrated from MUI
+ * to shadcn/ui + Tailwind.
  *
- * Developer: Beiqi Dai
+ * Developer: Beiqi Dai (migrated)
  */
-
-
 import React from "react";
-import "./PubContestCard.css";
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Button,
-  Typography,
-  IconButton,
-} from "@mui/material";
-import { Favorite, HowToVote, Flag, Category } from "@mui/icons-material";
-import apiClient from '../api/apiClient';
+import { Heart, Flag, ThumbsUp, Tag } from "lucide-react";
+import { toast } from "sonner";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import apiClient from "../api/apiClient";
 
 function ContestCard({ contest, onCardClick, onLoginRequest }) {
   const handleCardClick = () => {
@@ -31,22 +22,20 @@ function ContestCard({ contest, onCardClick, onLoginRequest }) {
 
   const handleVoteClick = async (e) => {
     e.stopPropagation();
-
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        alert("Please log in first!");
+        toast.warning("Please log in first!");
         return;
       }
-
       await apiClient.post(`/api/contest/${contest.id}/votes`);
-      alert("Vote success!");
+      toast.success("Vote success!");
     } catch (error) {
       const errData = error.response?.data;
       if (errData?.error === "Already voted") {
-        alert("You have already voted!");
+        toast.info("You have already voted!");
       } else {
-        alert("Vote failed, network or server error.");
+        toast.error("Vote failed, network or server error.");
       }
     }
   };
@@ -60,87 +49,79 @@ function ContestCard({ contest, onCardClick, onLoginRequest }) {
       if (onLoginRequest) {
         onLoginRequest();
       } else {
-        alert("Please log in first!");
+        toast.warning("Please log in first!");
       }
       return;
     }
 
     try {
       await apiClient.post(`/api/contest/${contest.id}/join`);
-      alert("Join success!");
+      toast.success("Join success!");
     } catch (error) {
       const errData = error.response?.data;
       if (errData?.error === "Already JOIN!") {
-        alert("You have already joined!");
+        toast.info("You have already joined!");
       } else {
-        alert("Join failed, network or server error.");
+        toast.error("Join failed, network or server error.");
       }
     }
   };
 
   return (
     <Card
-      className="contest-card"
       onClick={handleCardClick}
-      sx={{ maxWidth: 345, boxShadow: 3, cursor: "pointer" }}
+      className="group max-w-sm cursor-pointer overflow-hidden border-border/60 transition-all hover:-translate-y-1 hover:shadow-xl"
     >
-      <CardMedia
-        component="img"
-        height="200"
-        image={contest.image}
-        alt={contest.title}
-      />
+      <div className="relative h-48 w-full overflow-hidden bg-muted">
+        <img
+          src={contest.image}
+          alt={contest.title}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+      </div>
 
-      <CardContent>
-        <Typography variant="h6" component="div">
+      <CardContent className="space-y-2 p-5">
+        <h3 className="line-clamp-1 text-lg font-semibold text-foreground">
           {contest.title}
-        </Typography>
-        <Typography variant="subtitle2" color="text.secondary">
-          <strong>Organizer:</strong> {contest.organizer}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          <strong>Date:</strong> {contest.date}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{ display: "flex", alignItems: "center", mt: 1 }}
-        >
-          <Category sx={{ fontSize: 18, marginRight: 1, color: "gray" }} />
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Organizer:</span>{" "}
+          {contest.organizer}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Date:</span> {contest.date}
+        </p>
+        <Badge variant="secondary" className="mt-1 inline-flex items-center gap-1">
+          <Tag className="h-3 w-3" />
           {contest.category}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
+        </Badge>
+        <p className="line-clamp-2 pt-1 text-sm text-muted-foreground">
           {contest.description}
-        </Typography>
+        </p>
       </CardContent>
 
-      <CardActions sx={{ justifyContent: "space-between" }}>
-        <IconButton color="primary" onClick={handleVoteClick}>
-          <HowToVote />
-          <Typography variant="body2" sx={{ ml: 0.5 }}>
-            {contest.votes}
-          </Typography>
-        </IconButton>
-        <div>
-          <Button
-            className="vote-button"
-            variant="outlined"
-            startIcon={<Favorite />}
-            onClick={handleVoteClick}
-          >
+      <CardFooter className="flex items-center justify-between gap-2 px-5 pb-5 pt-0">
+        <button
+          type="button"
+          onClick={handleVoteClick}
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+        >
+          <ThumbsUp className="h-4 w-4" />
+          {contest.votes ?? 0}
+        </button>
+
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleVoteClick}>
+            <Heart className="mr-1.5 h-4 w-4" />
             Vote
           </Button>
-
-          <Button
-            className="join-button"
-            variant="contained"
-            startIcon={<Flag />}
-            sx={{ ml: 1 }}
-            onClick={handleJoinClick}
-          >
+          <Button size="sm" onClick={handleJoinClick}>
+            <Flag className="mr-1.5 h-4 w-4" />
             Join
           </Button>
         </div>
-      </CardActions>
+      </CardFooter>
     </Card>
   );
 }

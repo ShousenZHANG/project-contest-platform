@@ -1,22 +1,13 @@
 import React from 'react';
-import { Box, CircularProgress, Pagination, Typography } from '@mui/material';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import CommentItem from './CommentItem';
 
 /**
  * Renders a paginated list of CommentItems.
- *
- * @param {object} props
- * @param {Array}    props.comments         - list returned by useCommentThread
- * @param {boolean}  [props.loading]
- * @param {string}   [props.error]
- * @param {number}   [props.page]
- * @param {number}   [props.totalPages]
- * @param {function} [props.onPageChange]
- * @param {string}   [props.currentUserId]
- * @param {function} [props.onEdit]
- * @param {function} [props.onDelete]
- * @param {function} [props.onReply]
- * @param {string}   [props.emptyMessage]   - shown when not loading and list empty
+ * shadcn rewrite of the previous MUI version. Pagination is rendered as a
+ * compact prev/next + numeric strip without bringing in a heavy primitive.
  */
 function CommentList({
   comments = [],
@@ -33,30 +24,31 @@ function CommentList({
 }) {
   if (loading && comments.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <CircularProgress size={32} />
-      </Box>
+      <div className="flex justify-center py-8" role="status" aria-busy="true">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+        <span className="sr-only">Loading comments…</span>
+      </div>
     );
   }
 
   if (error) {
-    return (
-      <Typography variant="body2" sx={{ color: 'error.main', py: 2 }}>
-        {error}
-      </Typography>
-    );
+    return <p className="py-3 text-sm text-destructive">{error}</p>;
   }
 
   if (comments.length === 0) {
     return (
-      <Typography variant="body2" sx={{ color: '#888', py: 2, textAlign: 'center' }}>
-        {emptyMessage}
-      </Typography>
+      <p className="py-3 text-center text-sm text-muted-foreground">{emptyMessage}</p>
     );
   }
 
+  const handlePage = (next) => {
+    if (!onPageChange) return;
+    if (next < 1 || next > totalPages) return;
+    onPageChange(next);
+  };
+
   return (
-    <Box>
+    <div>
       {comments.map((c) => (
         <CommentItem
           key={c.id}
@@ -69,17 +61,45 @@ function CommentList({
       ))}
 
       {totalPages > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={onPageChange}
-            color="warning"
-            shape="rounded"
-          />
-        </Box>
+        <nav
+          className="mt-4 flex items-center justify-center gap-1"
+          aria-label="Comment pagination"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePage(page - 1)}
+            disabled={page <= 1}
+          >
+            Previous
+          </Button>
+          {Array.from({ length: totalPages }).map((_, i) => {
+            const n = i + 1;
+            const isActive = n === page;
+            return (
+              <Button
+                key={n}
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handlePage(n)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn('min-w-9', isActive && 'bg-amber-500 hover:bg-amber-600')}
+              >
+                {n}
+              </Button>
+            );
+          })}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePage(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Next
+          </Button>
+        </nav>
       )}
-    </Box>
+    </div>
   );
 }
 

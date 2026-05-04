@@ -1,7 +1,11 @@
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
-import { ErrorOutline } from '@mui/icons-material';
+import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
+/**
+ * Top-level error boundary. Renders a minimal fallback when a child throws.
+ * shadcn/ui rewrite of the previous MUI version.
+ */
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -23,19 +27,16 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <Box sx={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', minHeight: '50vh', gap: 2, p: 4, textAlign: 'center',
-        }}>
-          <ErrorOutline sx={{ fontSize: 64, color: 'error.main' }} />
-          <Typography variant="h5" fontWeight={600}>Something went wrong</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400 }}>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-8 text-center">
+          <AlertTriangle className="h-16 w-16 text-destructive" />
+          <h2 className="text-2xl font-semibold tracking-tight">Something went wrong</h2>
+          <p className="max-w-md text-sm text-muted-foreground">
             An unexpected error occurred. Please try again or contact support if the problem persists.
-          </Typography>
-          <Button variant="contained" onClick={this.handleReset} sx={{ mt: 2 }}>
+          </p>
+          <Button onClick={this.handleReset} className="mt-2">
             Try Again
           </Button>
-        </Box>
+        </div>
       );
     }
     return this.props.children;

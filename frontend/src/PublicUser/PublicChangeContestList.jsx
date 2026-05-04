@@ -1,99 +1,74 @@
 /**
- * PublicChangeContestList.js
- * 
- * This component displays a list of contests for public users with the ability to view contest details, vote, and join.
- * It provides:
- * - Contest information: title, category, date, and status.
- * - Vote and Join buttons with a unified login prompt for unauthenticated users.
- * - Snackbar notifications to inform users about the login requirement.
- * 
+ * PublicChangeContestList.jsx
+ *
+ * Single contest row inside PublicChangeContestTable. Provides Vote/Join
+ * buttons that prompt the user to log in. Migrated from MUI to shadcn/ui +
+ * Tailwind.
+ *
  * Role: Public User
- * Developer: Beiqi Dai
+ * Developer: Beiqi Dai (migrated)
  */
+import React from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-
-import React, { useState } from "react";
-import {
-  TableRow,
-  TableCell,
-  Button,
-  Snackbar,
-  Alert,
-} from "@mui/material";
-import "./PublicChangeContestList.css";
+const statusDotColor = (status = "") => {
+  const s = status.toLowerCase();
+  if (s.includes("upcoming")) return "bg-amber-400";
+  if (s.includes("ongoing") || s.includes("active") || s.includes("open"))
+    return "bg-emerald-500";
+  if (s.includes("end") || s.includes("closed") || s.includes("complete"))
+    return "bg-slate-400";
+  return "bg-primary";
+};
 
 function PublicChangeContestList({ contest, onClick }) {
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
-
   const handleRowClick = (e) => {
     if (onClick) onClick(e);
   };
 
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleSnackbarClose = (event, reason) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  // ✅ Add a unified pop-up prompt
   const handleLoginReminder = (e) => {
     e.stopPropagation();
-    showSnackbar("Please log in first!", "warning");
+    toast.warning("Please log in first!");
   };
 
   if (!contest) return null;
 
   return (
-    <>
-      <TableRow hover className="publicuser-contest-table-row" onClick={handleRowClick}>
-        <TableCell className="publicuser-table-cell">{contest.title}</TableCell>
-        <TableCell className="publicuser-table-cell">{contest.category}</TableCell>
-        <TableCell className="publicuser-table-cell">{contest.date}</TableCell>
-        <TableCell className="publicuser-table-cell">
-          <span className={`publicuser-status-dot ${contest.status.toLowerCase()}`}></span>
+    <tr
+      className="cursor-pointer border-b border-border/60 transition-colors hover:bg-muted/40 last:border-b-0"
+      onClick={handleRowClick}
+    >
+      <td className="px-4 py-3 font-medium text-foreground">{contest.title}</td>
+      <td className="px-4 py-3 text-muted-foreground">{contest.category}</td>
+      <td className="px-4 py-3 text-muted-foreground">{contest.date}</td>
+      <td className="px-4 py-3 text-foreground">
+        <span className="inline-flex items-center gap-2">
+          <span
+            className={cn("inline-block h-2.5 w-2.5 rounded-full", statusDotColor(contest.status))}
+          />
           {contest.status}
-        </TableCell>
-        <TableCell className="publicuser-table-cell">
-          <div className="publicuser-button-group">
-            <Button
-              className="publicuser-vote-button"
-              size="small"
-              onClick={handleLoginReminder} // ✨ Change to a unified login prompt
-            >
-              Vote
-            </Button>
-            <Button
-              className="publicuser-join-button"
-              size="small"
-              onClick={handleLoginReminder} // ✨ Change to a unified login prompt
-            >
-              Join
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-
-      {/* Snackbar for feedback */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert
-          onClose={handleSnackbarClose}
-          severity={snackbar.severity}
-          sx={{ width: "100%" }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleLoginReminder}
+          >
+            Vote
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleLoginReminder}
+          >
+            Join
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }
 

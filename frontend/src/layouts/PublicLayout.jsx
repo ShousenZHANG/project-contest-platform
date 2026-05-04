@@ -1,11 +1,14 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Box } from '@mui/material';
 
+/**
+ * PublicLayout — minimal wrapper for unauthenticated routes (no sidebar).
+ * Per-page hero/topbar markup is owned by the route itself.
+ */
 export default function PublicLayout() {
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <div className="min-h-screen bg-background text-foreground">
       <Outlet />
-    </Box>
+    </div>
   );
 }

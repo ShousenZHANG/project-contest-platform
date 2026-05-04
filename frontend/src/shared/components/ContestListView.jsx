@@ -1,38 +1,16 @@
 import React, { useState } from 'react';
-import { IconButton, Typography, Pagination } from '@mui/material';
-import { Close, FilterAlt, ViewList } from '@mui/icons-material';
-import SearchIcon from '@mui/icons-material/Search';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import { X, Filter, List as ListIcon, Search, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 /**
  * Shared presentational component for contest list pages.
  *
  * Receives all state + handlers from useContestFiltering and role-specific
- * props for navigation and custom card rendering.
- *
- * @param {object} props
- * @param {Array}    props.contests
- * @param {boolean}  props.loading
- * @param {string|null} props.error
- * @param {number}   props.page
- * @param {number}   props.totalPages
- * @param {string}   props.searchQuery
- * @param {string[]} props.selectedCategories
- * @param {string}   props.selectedStatus
- * @param {string}   props.selectedParticipationType
- * @param {boolean}  props.isFilterVisible
- * @param {function} props.handleSearch
- * @param {function} props.handleCategoryChange
- * @param {function} props.handleStatusChange
- * @param {function} props.handleParticipationTypeChange
- * @param {function} props.handlePageChange
- * @param {function} props.toggleFilter
- * @param {function} props.resetFilters
- * @param {function} props.onContestClick          - called with the raw contest object when a card is clicked
- * @param {function} props.renderContest           - (contest, onContestClick) => ReactNode; renders one contest entry
- * @param {string}   [props.title]                 - optional heading rendered above the list
- * @param {React.ReactNode} [props.headerExtra]    - optional extra content in the header row (e.g. Create button)
- * @param {string}   [props.accentColor]           - MUI color for pagination/icons (default '#FF9800')
+ * props for navigation and custom card rendering. shadcn rewrite of the
+ * previous MUI version; semantics and prop shape are unchanged.
  */
 function ContestListView({
   contests,
@@ -61,42 +39,41 @@ function ContestListView({
   const [searchInput, setSearchInput] = useState(searchQuery || '');
   const [isListView, setIsListView] = useState(false);
 
-  const iconBtnSx = {
+  const accentStyle = {
     color: accentColor,
-    border: `1px solid ${accentColor}`,
-    borderRadius: '8px',
-    marginLeft: '8px',
-    ':hover': { backgroundColor: '#FFE0B2' },
-  };
-
-  const paginationSx = {
-    '& .MuiPaginationItem-root': { color: accentColor, borderColor: accentColor },
-    '& .MuiPaginationItem-root.Mui-selected': {
-      backgroundColor: accentColor,
-      color: '#fff',
-      borderColor: accentColor,
-      '&:hover': { backgroundColor: '#FB8C00' },
-    },
+    borderColor: accentColor,
   };
 
   const allCategories = Array.from(new Set(contests.map((c) => c.category))).sort();
 
+  const handlePage = (next) => {
+    if (!handlePageChange) return;
+    if (next < 1 || next > totalPages) return;
+    // emulate the MUI Pagination signature (event, value)
+    handlePageChange(null, next);
+  };
+
   return (
     <div className="contest-list-view">
       {title && (
-        <Typography variant="h4" align="center" fontWeight="bold" sx={{ mb: 3 }}>
-          {title}
-        </Typography>
+        <h2 className="mb-4 text-center text-3xl font-bold tracking-tight">{title}</h2>
       )}
 
       {/* Search + action bar */}
-      <div className="contest-list-view__header" style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-        <IconButton onClick={resetFilters} sx={{ ...iconBtnSx, marginLeft: 0, marginRight: '8px' }}>
-          <RefreshIcon />
-        </IconButton>
+      <div className="contest-list-view__header mb-3 flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={resetFilters}
+          style={accentStyle}
+          aria-label="Reset filters"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
 
-        <input
-          style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px' }}
+        <Input
+          className="flex-1"
           type="text"
           placeholder="Search..."
           value={searchInput}
@@ -106,49 +83,61 @@ function ContestListView({
           }}
         />
 
-        <IconButton onClick={() => handleSearch(searchInput)} sx={iconBtnSx}>
-          <SearchIcon />
-        </IconButton>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => handleSearch(searchInput)}
+          style={accentStyle}
+          aria-label="Search"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
 
-        <IconButton onClick={toggleFilter} sx={iconBtnSx}>
-          <FilterAlt />
-        </IconButton>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={toggleFilter}
+          style={accentStyle}
+          aria-label="Toggle filters"
+        >
+          <Filter className="h-4 w-4" />
+        </Button>
 
-        <IconButton onClick={() => setIsListView((v) => !v)} sx={iconBtnSx}>
-          <ViewList />
-        </IconButton>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setIsListView((v) => !v)}
+          style={accentStyle}
+          aria-label="Toggle list view"
+        >
+          <ListIcon className="h-4 w-4" />
+        </Button>
 
-        {headerExtra && <div style={{ marginLeft: '8px' }}>{headerExtra}</div>}
+        {headerExtra && <div className="ml-2">{headerExtra}</div>}
       </div>
 
       {/* Filter sidebar */}
       {isFilterVisible && (
-        <div
-          className="contest-list-view__filter-sidebar"
-          style={{
-            border: '1px solid #eee',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '12px',
-            backgroundColor: '#fafafa',
-            position: 'relative',
-          }}
-        >
-          <IconButton
+        <div className="contest-list-view__filter-sidebar relative mb-3 rounded-lg border border-border bg-muted/30 p-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={toggleFilter}
-            size="small"
-            style={{ position: 'absolute', top: 8, right: 8 }}
+            className="absolute right-2 top-2 h-7 w-7"
+            aria-label="Close filters"
           >
-            <Close fontSize="small" />
-          </IconButton>
+            <X className="h-4 w-4" />
+          </Button>
 
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-            Filter by Status
-          </Typography>
+          <Label className="mb-1 block font-bold">Filter by Status</Label>
           <select
             value={selectedStatus}
             onChange={(e) => handleStatusChange(e.target.value)}
-            style={{ width: '100%', padding: '6px', marginBottom: '12px', borderRadius: '4px', border: '1px solid #ccc' }}
+            className="mb-3 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           >
             <option value="">All</option>
             <option value="UPCOMING">UPCOMING</option>
@@ -157,13 +146,11 @@ function ContestListView({
             <option value="AWARDED">AWARDED</option>
           </select>
 
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-            Filter by Participation Type
-          </Typography>
+          <Label className="mb-1 block font-bold">Filter by Participation Type</Label>
           <select
             value={selectedParticipationType}
             onChange={(e) => handleParticipationTypeChange(e.target.value)}
-            style={{ width: '100%', padding: '6px', marginBottom: '12px', borderRadius: '4px', border: '1px solid #ccc' }}
+            className="mb-3 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           >
             <option value="">All</option>
             <option value="INDIVIDUAL">INDIVIDUAL</option>
@@ -172,12 +159,13 @@ function ContestListView({
 
           {allCategories.length > 0 && (
             <>
-              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-                Filter by Category
-              </Typography>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <Label className="mb-1 block font-bold">Filter by Category</Label>
+              <div className="flex flex-col gap-1">
                 {allCategories.map((cat) => (
-                  <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <label
+                    key={cat}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
                     <input
                       type="checkbox"
                       checked={selectedCategories.includes(cat)}
@@ -193,25 +181,19 @@ function ContestListView({
       )}
 
       {/* Content area */}
-      {loading && (
-        <Typography sx={{ mt: 2 }}>Loading competitions...</Typography>
-      )}
+      {loading && <p className="mt-2 text-sm text-muted-foreground">Loading competitions...</p>}
 
-      {error && !loading && (
-        <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>
-      )}
+      {error && !loading && <p className="mt-2 text-sm text-destructive">{error}</p>}
 
       {!loading && !error && (
         <div
-          className="contest-list-view__cards"
-          style={
-            isListView
-              ? {}
-              : { display: 'flex', flexWrap: 'wrap', gap: '16px' }
-          }
+          className={cn(
+            'contest-list-view__cards',
+            !isListView && 'flex flex-wrap gap-4'
+          )}
         >
           {contests.length === 0 ? (
-            <Typography sx={{ mt: 2 }}>No competitions found.</Typography>
+            <p className="mt-2 text-sm text-muted-foreground">No competitions found.</p>
           ) : (
             contests.map((contest) => renderContest(contest, onContestClick, isListView))
           )}
@@ -220,14 +202,44 @@ function ContestListView({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={handlePageChange}
-            sx={paginationSx}
-          />
-        </div>
+        <nav className="mt-5 flex items-center justify-center gap-1" aria-label="Contest pagination">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => handlePage(page - 1)}
+            disabled={page <= 1}
+          >
+            Previous
+          </Button>
+          {Array.from({ length: totalPages }).map((_, i) => {
+            const n = i + 1;
+            const isActive = n === page;
+            return (
+              <Button
+                key={n}
+                type="button"
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handlePage(n)}
+                aria-current={isActive ? 'page' : undefined}
+                className="min-w-9"
+                style={isActive ? { backgroundColor: accentColor, color: '#fff' } : accentStyle}
+              >
+                {n}
+              </Button>
+            );
+          })}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => handlePage(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Next
+          </Button>
+        </nav>
       )}
     </div>
   );

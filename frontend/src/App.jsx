@@ -1,14 +1,13 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { Loader2 } from 'lucide-react';
 import './App.css';
 
-import { AppThemeProvider } from './theme/ThemeProvider';
 import { AuthProvider } from './context/AuthContext';
-import { ErrorBoundary, ToastProvider } from './shared/components';
+import { ErrorBoundary } from './shared/components';
 import ProtectedRoute from './components/ProtectedRoute';
-import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
+import AuthenticatedShell from './layouts/AuthenticatedShell';
 
 /* Lazy-loaded route pages */
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
@@ -62,85 +61,82 @@ const HomePage = lazy(() => import('./Homepages/Homepage'));
 
 function LoadingFallback() {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <CircularProgress />
-    </Box>
+    <div className="flex h-screen items-center justify-center" role="status" aria-busy="true">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <span className="sr-only">Loading…</span>
+    </div>
   );
 }
 
 function App() {
   return (
-    <AppThemeProvider>
     <ErrorBoundary>
-    <ToastProvider>
-    <AuthProvider>
-      <Router>
-        <Suspense fallback={<LoadingFallback />}>
-        <Routes>
-          {/* ── Public routes (no sidebar) ── */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginForm />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/oauth/callback" element={<OAuthCallback />} />
-            <Route path="/how-to-use" element={<HowToUse />} />
-            <Route path="/contest-list" element={<ContestList />} />
-            <Route path="/publiccontest-detail/:id" element={<PublicContestDetail />} />
-            <Route path="/work-list" element={<WorkList />} />
-            <Route path="/publicusercoments/:submissionId" element={<PublicuserComents />} />
-            <Route path="/public-teams/:contestId" element={<TeamListPage />} />
-            <Route path="/public-team-detail/:competitionId/:teamId" element={<TeamPublicDetail />} />
-          </Route>
+      <AuthProvider>
+        <Router>
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              {/* ── Public routes (no sidebar) ── */}
+              <Route element={<PublicLayout />}>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/login" element={<LoginForm />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/oauth/callback" element={<OAuthCallback />} />
+                <Route path="/how-to-use" element={<HowToUse />} />
+                <Route path="/contest-list" element={<ContestList />} />
+                <Route path="/publiccontest-detail/:id" element={<PublicContestDetail />} />
+                <Route path="/work-list" element={<WorkList />} />
+                <Route path="/publicusercoments/:submissionId" element={<PublicuserComents />} />
+                <Route path="/public-teams/:contestId" element={<TeamListPage />} />
+                <Route path="/public-team-detail/:competitionId/:teamId" element={<TeamPublicDetail />} />
+              </Route>
 
-          {/* ── Participant routes (dashboard layout) ── */}
-          <Route element={<ProtectedRoute roles={["Participant"]}><DashboardLayout /></ProtectedRoute>}>
-            <Route path="/profile/:email" element={<Profile />} />
-            <Route path="/contest/:email" element={<Contest />} />
-            <Route path="/teams/:email" element={<TeamPage />} />
-            <Route path="/project/:email" element={<Project />} />
-            <Route path="/rating/:email" element={<Rating />} />
-          </Route>
+              {/* ── Participant routes (authenticated shell) ── */}
+              <Route element={<ProtectedRoute roles={["Participant"]}><AuthenticatedShell /></ProtectedRoute>}>
+                <Route path="/profile/:email" element={<Profile />} />
+                <Route path="/contest/:email" element={<Contest />} />
+                <Route path="/teams/:email" element={<TeamPage />} />
+                <Route path="/project/:email" element={<Project />} />
+                <Route path="/rating/:email" element={<Rating />} />
+              </Route>
 
-          {/* Participant sub-pages (also use dashboard layout) */}
-          <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-            <Route path="/contest-detail/:id" element={<PContestDetail />} />
-            <Route path="/JudgeSubmissions/:competitionId" element={<JudgeSubmissions />} />
-            <Route path="/RatingDetail/:competitionId/:submissionId" element={<RatingDetail />} />
-            <Route path="/ReRating/:competitionId/:submissionId" element={<ReRating />} />
-            <Route path="/view-submission/:competitionId" element={<ViewSubmission />} />
-            <Route path="/comments/:submissionId" element={<CommentsPage />} />
-            <Route path="/team-project-detail/:competitionId/team/:teamId" element={<TeamProjectDetail />} />
-            <Route path="/project-detail/:competitionId" element={<ProjectDetail />} />
-          </Route>
+              {/* Participant sub-pages (authenticated shell, any role) */}
+              <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
+                <Route path="/contest-detail/:id" element={<PContestDetail />} />
+                <Route path="/JudgeSubmissions/:competitionId" element={<JudgeSubmissions />} />
+                <Route path="/RatingDetail/:competitionId/:submissionId" element={<RatingDetail />} />
+                <Route path="/ReRating/:competitionId/:submissionId" element={<ReRating />} />
+                <Route path="/view-submission/:competitionId" element={<ViewSubmission />} />
+                <Route path="/comments/:submissionId" element={<CommentsPage />} />
+                <Route path="/team-project-detail/:competitionId/team/:teamId" element={<TeamProjectDetail />} />
+                <Route path="/project-detail/:competitionId" element={<ProjectDetail />} />
+              </Route>
 
-          {/* ── Organizer routes (dashboard layout) ── */}
-          <Route element={<ProtectedRoute roles={["Organizer"]}><DashboardLayout /></ProtectedRoute>}>
-            <Route path="/OrganizerProfile/:email" element={<OrganizerProfile />} />
-            <Route path="/OrganizerDashboard/:email" element={<OrganizerDashboard />} />
-            <Route path="/OrganizerContestList/:email" element={<OrganizerContestList />} />
-            <Route path="/OrganizerContest/:email" element={<OrganizerContest />} />
-            <Route path="/OrganizerEditContest/:email" element={<OrganizerEditContest />} />
-            <Route path="/OrganizerUploadMedia/:id" element={<OrganizerUploadMedia />} />
-            <Route path="/OrganizerParticipantList/:competitionId" element={<OrganizerParticipantList />} />
-            <Route path="/OrganizerSubmissions/:competitionId" element={<OrganizerSubmissions />} />
-            <Route path="/submissions/:competitionId/ratings" element={<SubmissionRatings />} />
-            <Route path="/OrganizerAddJudge/:competitionId" element={<OrganizerAddJudge />} />
-          </Route>
+              {/* ── Organizer routes ── */}
+              <Route element={<ProtectedRoute roles={["Organizer"]}><AuthenticatedShell /></ProtectedRoute>}>
+                <Route path="/OrganizerProfile/:email" element={<OrganizerProfile />} />
+                <Route path="/OrganizerDashboard/:email" element={<OrganizerDashboard />} />
+                <Route path="/OrganizerContestList/:email" element={<OrganizerContestList />} />
+                <Route path="/OrganizerContest/:email" element={<OrganizerContest />} />
+                <Route path="/OrganizerEditContest/:email" element={<OrganizerEditContest />} />
+                <Route path="/OrganizerUploadMedia/:id" element={<OrganizerUploadMedia />} />
+                <Route path="/OrganizerParticipantList/:competitionId" element={<OrganizerParticipantList />} />
+                <Route path="/OrganizerSubmissions/:competitionId" element={<OrganizerSubmissions />} />
+                <Route path="/submissions/:competitionId/ratings" element={<SubmissionRatings />} />
+                <Route path="/OrganizerAddJudge/:competitionId" element={<OrganizerAddJudge />} />
+              </Route>
 
-          {/* ── Admin routes (dashboard layout) ── */}
-          <Route element={<ProtectedRoute roles={["Admin"]}><DashboardLayout /></ProtectedRoute>}>
-            <Route path="/AdminProfile" element={<AdminProfile />} />
-            <Route path="/AdminAccountManage" element={<AdminAccountManage />} />
-            <Route path="/AllCompetitions" element={<AdminCompetitionsManage />} />
-            <Route path="/AdminDashboard" element={<AdminDashboard />} />
-          </Route>
-        </Routes>
-        </Suspense>
-      </Router>
-    </AuthProvider>
-    </ToastProvider>
+              {/* ── Admin routes ── */}
+              <Route element={<ProtectedRoute roles={["Admin"]}><AuthenticatedShell /></ProtectedRoute>}>
+                <Route path="/AdminProfile" element={<AdminProfile />} />
+                <Route path="/AdminAccountManage" element={<AdminAccountManage />} />
+                <Route path="/AllCompetitions" element={<AdminCompetitionsManage />} />
+                <Route path="/AdminDashboard" element={<AdminDashboard />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </Router>
+      </AuthProvider>
     </ErrorBoundary>
-    </AppThemeProvider>
   );
 }
 

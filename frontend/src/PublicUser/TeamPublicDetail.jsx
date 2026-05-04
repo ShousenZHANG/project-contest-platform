@@ -1,23 +1,22 @@
 /**
- * TeamPublicDetail.js
- * 
- * This component displays the details of a team and its submission for a specific competition. It includes:
- * - The team name and description (passed from navigation state).
- * - The submission details including title, description, file (if available), review status, and total score.
- * 
- * It fetches the submission data from the backend using the competition and team IDs.
- * Displays loading state while fetching data and shows error if no submission is found.
- * 
+ * TeamPublicDetail.jsx
+ *
+ * Public-facing detail view for a team's submission within a competition.
+ * Migrated from MUI to shadcn/ui + Tailwind.
+ *
  * Role: Public User
- * Developer: Ziqi Yi
+ * Developer: Ziqi Yi (migrated)
  */
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { Typography, CircularProgress, Button, Box, Paper } from "@mui/material";
+import { ArrowLeft, Loader2, FileText, Pin, Paperclip, Award } from "lucide-react";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import "./TeamPublicDetail.css";
-import apiClient from '../api/apiClient';
+import apiClient from "../api/apiClient";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 function TeamPublicDetail() {
   const { competitionId, teamId } = useParams();
@@ -45,53 +44,101 @@ function TeamPublicDetail() {
   return (
     <>
       <Navbar />
-      <div className="pu-team-detail-container">
-        <Button variant="text" onClick={() => navigate(-1)} className="pu-back-button">
-          ← Back to Team List
-        </Button>
+      <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
+        <div className="mx-auto max-w-4xl">
+          <Button variant="outline" onClick={() => navigate(-1)} className="mb-6">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Team List
+          </Button>
 
-        <Paper elevation={4} className="pu-submission-card">
-          <Typography variant="h5" className="pu-title">
-            {teamName || "Unnamed Team"}
-          </Typography>
-          <Typography className="pu-description">
-            {teamDescription || "No description provided."}
-          </Typography>
-
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 5 }}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Typography align="center" color="error" sx={{ mt: 5 }}>
-              No submission found for this team.
-            </Typography>
-          ) : (
-            <>
-              <Typography className="pu-sub-label">📌 Submission Title:</Typography>
-              <Typography>{submission.title || "No title"}</Typography>
-
-              <Typography className="pu-sub-label">📝 Description:</Typography>
-              <Typography>{submission.description || "No description"}</Typography>
-
-              <Typography className="pu-sub-label">📎 File:</Typography>
-              {submission.fileUrl ? (
-                <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
-                  {submission.fileName || "Download File"}
-                </a>
+          <Card className="border-border/60 shadow-lg">
+            <CardHeader className="space-y-2">
+              <CardTitle className="text-3xl font-bold tracking-tight">
+                {teamName || "Unnamed Team"}
+              </CardTitle>
+              <CardDescription className="text-base leading-relaxed">
+                {teamDescription || "No description provided."}
+              </CardDescription>
+            </CardHeader>
+            <Separator />
+            <CardContent className="pt-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : error ? (
+                <p className="py-12 text-center text-destructive">
+                  No submission found for this team.
+                </p>
               ) : (
-                <Typography>No file submitted.</Typography>
-              )}
+                <div className="space-y-5">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Pin className="h-4 w-4 text-primary" />
+                      Submission Title
+                    </div>
+                    <p className="mt-1 text-base text-muted-foreground">
+                      {submission.title || "No title"}
+                    </p>
+                  </div>
 
-              <Typography sx={{ mt: 2 }}>
-                <strong>Review Status:</strong> {submission.reviewStatus}
-              </Typography>
-              <Typography>
-                <strong>Total Score:</strong> {submission.totalScore ?? "N/A"}
-              </Typography>
-            </>
-          )}
-        </Paper>
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <FileText className="h-4 w-4 text-primary" />
+                      Description
+                    </div>
+                    <p className="mt-1 text-base text-muted-foreground">
+                      {submission.description || "No description"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Paperclip className="h-4 w-4 text-primary" />
+                      File
+                    </div>
+                    {submission.fileUrl ? (
+                      <a
+                        href={submission.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block text-sm font-medium text-primary hover:underline"
+                      >
+                        {submission.fileName || "Download File"}
+                      </a>
+                    ) : (
+                      <p className="mt-1 text-base text-muted-foreground">
+                        No file submitted.
+                      </p>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Review Status
+                      </p>
+                      <div className="mt-2">
+                        <Badge variant="secondary">{submission.reviewStatus || "—"}</Badge>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Total Score
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-foreground">
+                        <Award className="h-5 w-5 text-amber-500" />
+                        {submission.totalScore ?? "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
       <Footer />
     </>

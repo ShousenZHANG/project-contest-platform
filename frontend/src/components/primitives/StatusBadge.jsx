@@ -1,31 +1,25 @@
-import { Chip } from '@mui/material';
-import tokens from '../../theme/tokens';
+import React from 'react';
+import { Badge } from '@/components/ui/badge';
 
-const STATUS_COLORS = {
-  UPCOMING:  { bg: tokens.colors.primary.light,  text: tokens.colors.primary.dark },
-  ONGOING:   { bg: tokens.colors.success.light,  text: tokens.colors.success.dark },
-  ENDED:     { bg: tokens.colors.grey[300],       text: tokens.colors.grey[700]   },
-  CANCELLED: { bg: tokens.colors.error.light,    text: tokens.colors.error.dark   },
-  DEFAULT:   { bg: tokens.colors.grey[200],       text: tokens.colors.grey[600]   },
+const STATUS_VARIANT = {
+  UPCOMING: 'default',
+  ONGOING: 'success',
+  ENDED: 'secondary',
+  COMPLETED: 'secondary',
+  AWARDED: 'success',
+  CANCELLED: 'destructive',
 };
 
 /**
- * Consistent status badge for competition/submission statuses.
+ * Status pill for competition / submission statuses.
+ * Wraps shadcn Badge with status-keyed variants.
  */
-export default function StatusBadge({ status, label, sx = {} }) {
-  const colors = STATUS_COLORS[status?.toUpperCase()] ?? STATUS_COLORS.DEFAULT;
+export default function StatusBadge({ status, label, className }) {
+  const key = (status || '').toUpperCase();
+  const variant = STATUS_VARIANT[key] || 'outline';
   return (
-    <Chip
-      label={label ?? status}
-      size="small"
-      sx={{
-        backgroundColor: colors.bg,
-        color: colors.text,
-        fontWeight: tokens.typography.weights.semibold,
-        fontSize: tokens.typography.sizes.xs,
-        borderRadius: tokens.radius.full,
-        ...sx,
-      }}
-    />
+    <Badge variant={variant} className={className}>
+      {label ?? status}
+    </Badge>
   );
 }

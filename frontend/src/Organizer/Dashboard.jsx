@@ -1,33 +1,14 @@
 /**
- * @file OrganizerDashboard.js
- * @description 
- * This component displays an analytical dashboard for organizers to monitor their competitions.
- * It allows organizers to:
- *  - View overall metrics such as number of participants, submissions, judges, and approval rate.
- *  - Visualize the distribution of competition statuses using a pie chart.
- *  - Select individual competitions to view participant or submission trend over time.
- * 
- * The component fetches detailed statistics from backend APIs,
- * processes aggregated metrics and trends,
- * and uses Material-UI and Recharts for visualization and interactive controls.
- * 
+ * @file Dashboard.jsx
+ * @description
+ * Organizer analytical dashboard. Migrated from MUI to shadcn/ui.
+ * Recharts (kept) for pie/line visualisations. Tooltip via shadcn primitive.
+ *
  * Role: Organizer
- * Developer: Zhaoyi Yang
  */
 
-
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Box,
-  Typography,
-  CircularProgress,
-  Paper,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Tooltip,
-} from "@mui/material";
+import React, { useEffect, useState, useMemo } from 'react';
+import { Loader2 } from 'lucide-react';
 import {
   PieChart,
   Pie,
@@ -40,29 +21,73 @@ import {
   YAxis,
   LineChart,
   Line,
-} from "recharts";
+} from 'recharts';
 import apiClient from '../api/apiClient';
+import { Card, CardContent } from '../components/ui/card';
+import { Label } from '../components/ui/label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/ui/tooltip';
 
 const COLORS = [
-  "#0088FE",
-  "#00C49F",
-  "#FFBB28",
-  "#FF8042",
-  "#8884d8",
-  "#82ca9d",
-  "#a4de6c",
-  "#d0ed57",
+  '#0088FE',
+  '#00C49F',
+  '#FFBB28',
+  '#FF8042',
+  '#8884d8',
+  '#82ca9d',
+  '#a4de6c',
+  '#d0ed57',
 ];
+
+const SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+
+function MetricCard({ label, value, unit = '', tooltipRows = [] }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Card className="cursor-default transition-colors hover:bg-accent/40">
+            <CardContent className="flex flex-col gap-1 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {label}
+              </p>
+              <p className="text-2xl font-bold text-foreground">
+                {value}
+                {unit}
+              </p>
+            </CardContent>
+          </Card>
+        </TooltipTrigger>
+        {tooltipRows.length > 0 && (
+          <TooltipContent side="top" className="max-w-xs">
+            <div className="space-y-1">
+              {tooltipRows.map((r) => (
+                <p key={r.name} className="text-xs">
+                  {r.name}: <strong>{r.value}</strong>
+                </p>
+              ))}
+            </div>
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 function OrganizerDashboard() {
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedComp, setSelectedComp] = useState("");
+  const [selectedComp, setSelectedComp] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get("/competitions/achieve/my?page=1&size=100");
+        const res = await apiClient.get('/competitions/achieve/my?page=1&size=100');
         const { data: competitions = [] } = res.data;
 
         const list = await Promise.all(
@@ -80,9 +105,9 @@ function OrganizerDashboard() {
             return {
               id: c.id,
               name: c.name,
-              status: (detail.status || detail.competitionStatus || "UNKNOWN").toUpperCase(),
+              status: (detail.status || detail.competitionStatus || 'UNKNOWN').toUpperCase(),
               regs:
-                stat.participationType === "INDIVIDUAL"
+                stat.participationType === 'INDIVIDUAL'
                   ? stat.individualParticipantCount || 0
                   : stat.teamParticipantCount || 0,
               subs: totalSubs,
@@ -128,12 +153,12 @@ function OrganizerDashboard() {
     const approvePct =
       sum.subs > 0
         ? Number(
-          (
-            (stats.reduce((acc, s) => acc + s.subs * (s.approvePct / 100), 0) /
-              sum.subs) *
-            100
-          ).toFixed(1)
-        )
+            (
+              (stats.reduce((acc, s) => acc + s.subs * (s.approvePct / 100), 0) /
+                sum.subs) *
+              100
+            ).toFixed(1)
+          )
         : 0;
 
     return {
@@ -170,191 +195,116 @@ function OrganizerDashboard() {
     return Object.entries(t.trend || {}).map(([date, count]) => ({ date, count }));
   }, [selectedComp, stats]);
 
-  const MetricCard = ({ label1, label2, value, unit = "", tooltipKey }) => {
-    const rows = tooltipMap[tooltipKey] || [];
-    const title = (
-      <Box>
-        {rows.map((r) => (
-          <Typography key={r.name} fontSize={13}>
-            {r.name}: <strong>{r.value}</strong>
-          </Typography>
-        ))}
-      </Box>
-    );
-
-    return (
-      <Tooltip arrow placement="top" title={title}>
-        <Paper
-          elevation={1}
-          sx={{
-            p: 2,
-            width: 180,
-            height: 110,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            borderRadius: 2,
-            backgroundColor: "#f0f0f0",
-            cursor: "default",
-          }}
-        >
-          <Typography variant="body2" color="text.secondary">
-            {label1}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mb={1}>
-            {label2}
-          </Typography>
-          <Typography variant="h5" fontWeight={700} color="#22507a">
-            {value}
-            {unit}
-          </Typography>
-        </Paper>
-      </Tooltip>
-    );
-  };
-
   return (
-    <>
-      
-      <div className="dashboard-container" style={{ display: "flex" }}>
-        
-        <Box flex={1} p={2} className="dashboard-content">
-          <Typography variant="h5" gutterBottom>
-            📊 Competition Dashboard
-          </Typography>
-
-          {loading ? (
-            <Box display="flex" justifyContent="center" mt={6}>
-              <CircularProgress />
-            </Box>
-          ) : stats.length === 0 ? (
-            <Typography color="text.secondary">(No competitions yet)</Typography>
-          ) : (
-            <>
-              <Box mb={4}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Overall Metrics
-                </Typography>
-                <Box
-                  display="flex"
-                  gap={2}
-                  flexWrap="wrap"
-                  justifyContent="center"
-                >
-                  <MetricCard
-                    label1="Participants"
-                    label2="Number"
-                    value={totals.regs}
-                    tooltipKey="regs"
-                  />
-                  <MetricCard
-                    label1="Submissions"
-                    label2="Number"
-                    value={totals.subs}
-                    tooltipKey="subs"
-                  />
-                  <MetricCard
-                    label1="Judges"
-                    label2="Number"
-                    value={totals.judges}
-                    tooltipKey="judges"
-                  />
-                  <MetricCard
-                    label1="Approval"
-                    label2="Rate"
-                    value={totals.approvePct}
-                    unit="%"
-                    tooltipKey="approvePct"
-                  />
-                </Box>
-              </Box>
-
-              <Box mb={2}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 4,
-                    width: "100%",
-                  }}
-                >
-                  <Box flex="1 1 0" minWidth={0}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Status Distribution
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={statusPie}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius="75%"
-                          label
-                        >
-                          {statusPie.map((d, i) => (
-                            <Cell key={i} fill={d.fill} />
-                          ))}
-                        </Pie>
-                        <ReTooltip />
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Box>
-
-                  {hasTrendData && (
-                    <Box flex="1 1 0" minWidth={0}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Trend Viewer
-                      </Typography>
-                      <FormControl size="small" sx={{ minWidth: 240, mb: 1 }}>
-                        <InputLabel id="comp-select-label">Select competition</InputLabel>
-                        <Select
-                          labelId="comp-select-label"
-                          value={selectedComp}
-                          label="Select competition"
-                          onChange={(e) => setSelectedComp(e.target.value)}
-                        >
-                          {stats
-                            .filter((s) => Object.keys(s.trend || {}).length > 0)
-                            .map((s) => (
-                              <MenuItem key={s.id} value={s.id}>
-                                {s.name}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
-
-                      {currentTrend.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={260}>
-                          <LineChart data={currentTrend}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="date" fontSize={11} />
-                            <YAxis allowDecimals={false} fontSize={11} />
-                            <ReTooltip />
-                            <Line
-                              type="monotone"
-                              dataKey="count"
-                              stroke="#8884d8"
-                              dot={{ r: 2 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <Typography color="text.secondary" fontSize={12}>
-                          (No trend data)
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                </Box>
-              </Box>
-            </>
-          )}
-        </Box>
+    <div className="mx-auto max-w-7xl px-6 py-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Competition Dashboard</h1>
+        <p className="text-sm text-muted-foreground">
+          Aggregated metrics across your competitions.
+        </p>
       </div>
-    </>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : stats.length === 0 ? (
+        <p className="text-sm text-muted-foreground">(No competitions yet)</p>
+      ) : (
+        <>
+          <section className="mb-8">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Overall Metrics</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <MetricCard label="Participants" value={totals.regs} tooltipRows={tooltipMap.regs} />
+              <MetricCard label="Submissions" value={totals.subs} tooltipRows={tooltipMap.subs} />
+              <MetricCard label="Judges" value={totals.judges} tooltipRows={tooltipMap.judges} />
+              <MetricCard
+                label="Approval Rate"
+                value={totals.approvePct}
+                unit="%"
+                tooltipRows={tooltipMap.approvePct}
+              />
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card>
+              <CardContent className="p-4">
+                <h2 className="mb-2 text-sm font-semibold text-foreground">Status Distribution</h2>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={statusPie}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius="75%"
+                      label
+                    >
+                      {statusPie.map((d, i) => (
+                        <Cell key={i} fill={d.fill} />
+                      ))}
+                    </Pie>
+                    <ReTooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {hasTrendData && (
+              <Card>
+                <CardContent className="p-4">
+                  <h2 className="mb-2 text-sm font-semibold text-foreground">Trend Viewer</h2>
+                  <div className="mb-3 max-w-xs space-y-1.5">
+                    <Label htmlFor="comp-select" className="text-xs">
+                      Select competition
+                    </Label>
+                    <select
+                      id="comp-select"
+                      value={selectedComp}
+                      onChange={(e) => setSelectedComp(e.target.value)}
+                      className={SELECT_CLASS}
+                    >
+                      <option value="" disabled>
+                        Select a competition
+                      </option>
+                      {stats
+                        .filter((s) => Object.keys(s.trend || {}).length > 0)
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {currentTrend.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={currentTrend}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" fontSize={11} />
+                        <YAxis allowDecimals={false} fontSize={11} />
+                        <ReTooltip />
+                        <Line
+                          type="monotone"
+                          dataKey="count"
+                          stroke="#8884d8"
+                          dot={{ r: 2 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">(No trend data)</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </section>
+        </>
+      )}
+    </div>
   );
 }
 

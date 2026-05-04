@@ -1,8 +1,10 @@
-import { Box, CircularProgress, Alert, Button } from '@mui/material';
+import { Loader2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 /**
  * AsyncBoundary — wraps async content with unified loading/error states.
- * Use instead of per-component CircularProgress + try-catch patterns.
+ * shadcn rewrite of the previous MUI version.
  *
  * Usage:
  *   <AsyncBoundary loading={loading} error={error} onRetry={refetch}>
@@ -13,34 +15,39 @@ export default function AsyncBoundary({
   loading = false,
   error = null,
   onRetry,
-  loadingSize = 40,
   minHeight = 200,
   children,
 }) {
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
-        <CircularProgress size={loadingSize} />
-      </Box>
+      <div
+        className="flex w-full items-center justify-center"
+        style={{ minHeight }}
+        role="status"
+        aria-busy="true"
+      >
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <span className="sr-only">Loading…</span>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Box p={2}>
-        <Alert
-          severity="error"
-          action={
-            onRetry ? (
-              <Button color="inherit" size="small" onClick={onRetry}>
-                Retry
-              </Button>
-            ) : undefined
-          }
-        >
-          {typeof error === 'string' ? error : 'An unexpected error occurred. Please try again.'}
-        </Alert>
-      </Box>
+      <Card className="border-destructive/40 bg-destructive/5">
+        <CardContent className="flex items-center justify-between gap-4 p-4">
+          <p className="text-sm text-destructive">
+            {typeof error === 'string'
+              ? error
+              : 'An unexpected error occurred. Please try again.'}
+          </p>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     );
   }
 

@@ -1,39 +1,32 @@
 /**
- * WorkList.js
- * 
- * This component displays the approved works for a given competition.
- * It includes:
- * - Search functionality for filtering works by title/description
- * - A table with work title, description, type, file link, votes count, vote button, comment button
- * - Loading spinner while fetching
- * 
+ * WorkList.jsx
+ *
+ * Public-facing browse view for approved submissions in a competition.
+ * Migrated from MUI to shadcn/ui + Tailwind.
+ *
  * Role: Public User
- * Developer: Zhaoyi Yang
+ * Developer: Zhaoyi Yang (migrated)
  */
-
 import React, { useState, useEffect } from "react";
 import {
-  Box,
-  Typography,
-  IconButton,
-  TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Button,
-  CircularProgress,
-  Snackbar,
-} from "@mui/material";
-import { Search, PictureAsPdf, Image, Code, InsertDriveFile } from "@mui/icons-material";
+  Search,
+  FileText,
+  Image as ImageIcon,
+  Code,
+  File as FileIcon,
+  Loader2,
+  ExternalLink,
+  Heart,
+  MessageCircle,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import { useLocation, useNavigate } from "react-router-dom";
-import "./WorkList.css";
-import apiClient from '../api/apiClient';
+import apiClient from "../api/apiClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
 function WorkList() {
   const location = useLocation();
@@ -43,7 +36,6 @@ function WorkList() {
   const [filteredWorks, setFilteredWorks] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
@@ -62,25 +54,27 @@ function WorkList() {
           params: { competitionId },
         });
         const items = res.data.data || [];
-        const mappedWorks = await Promise.all(items.map(async (item, idx) => {
-          let voteCount = 0;
-          try {
-            const voteRes = await apiClient.get(`/interactions/votes/count`, {
-              params: { submissionId: item.id },
-            });
-            voteCount = parseInt(voteRes.data, 10) || 0;
-          } catch {
-            // vote count fetch failed — default to 0
-          }
-          return {
-            id: item.id || String(idx),
-            title: item.title || `Work ${idx}`,
-            description: item.description || "No description.",
-            fileType: item.fileType || "",
-            fileUrl: item.fileUrl || "",
-            voteCount,
-          };
-        }));
+        const mappedWorks = await Promise.all(
+          items.map(async (item, idx) => {
+            let voteCount = 0;
+            try {
+              const voteRes = await apiClient.get(`/interactions/votes/count`, {
+                params: { submissionId: item.id },
+              });
+              voteCount = parseInt(voteRes.data, 10) || 0;
+            } catch {
+              // vote count fetch failed — default to 0
+            }
+            return {
+              id: item.id || String(idx),
+              title: item.title || `Work ${idx}`,
+              description: item.description || "No description.",
+              fileType: item.fileType || "",
+              fileUrl: item.fileUrl || "",
+              voteCount,
+            };
+          })
+        );
         setWorks(mappedWorks);
         setFilteredWorks(mappedWorks);
       } catch (err) {
@@ -95,30 +89,41 @@ function WorkList() {
   const handleSearchClick = () => {
     const term = searchInput.trim().toLowerCase();
     if (!term) {
-      setFilteredWorks(works); // 输入为空，恢复全量
+      setFilteredWorks(works);
     } else {
-      const filtered = works.filter(w =>
-        w.title.toLowerCase().includes(term) || w.description.toLowerCase().includes(term)
+      const filtered = works.filter(
+        (w) =>
+          w.title.toLowerCase().includes(term) ||
+          w.description.toLowerCase().includes(term)
       );
       setFilteredWorks(filtered);
     }
   };
 
-  const handleVoteClick = () => {
-    setSnackbarOpen(true);
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSearchClick();
+    }
   };
 
-  const handleSnackbarClose = () => setSnackbarOpen(false);
+  const handleVoteClick = () => {
+    toast.warning("Please log in first.");
+  };
 
   const handleViewCommentClick = (id) => {
     navigate(`/publicusercoments/${id}`);
   };
 
   const getFileTypeIcon = (type) => {
-    if (type.startsWith("image/")) return <Image />;
-    if (type === "application/pdf") return <PictureAsPdf />;
-    if (type.includes("code") || type.includes("json") || type.includes("python")) return <Code />;
-    return <InsertDriveFile />;
+    if (!type) return <FileIcon className="h-4 w-4 text-muted-foreground" />;
+    if (type.startsWith("image/"))
+      return <ImageIcon className="h-4 w-4 text-blue-500" />;
+    if (type === "application/pdf")
+      return <FileText className="h-4 w-4 text-red-500" />;
+    if (type.includes("code") || type.includes("json") || type.includes("python"))
+      return <Code className="h-4 w-4 text-emerald-500" />;
+    return <FileIcon className="h-4 w-4 text-muted-foreground" />;
   };
 
   if (!competitionId) return null;
@@ -126,120 +131,123 @@ function WorkList() {
   return (
     <>
       <Navbar />
-      <div className="work-wrapper">
-        <div className="work-container">
-          <Typography
-            variant="h4"
-            align="center"
-            gutterBottom
-            fontWeight="bold"
-            sx={{ marginTop: "20px", marginBottom: "30px" }}
-          >
+      <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="mb-8 text-center text-3xl font-bold tracking-tight text-foreground">
             Approved Submissions
-          </Typography>
+          </h1>
 
           {/* Search bar */}
-          <Box display="flex" justifyContent="center" alignItems="center" sx={{ mb: 3 }}>
-            <TextField
-              variant="outlined"
-              placeholder="Search by title or description..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              size="small"
-              sx={{ width: "300px", mr: 2 }}
-            />
-            <IconButton onClick={handleSearchClick}>
-              <Search />
-            </IconButton>
-          </Box>
+          <div className="mb-6 flex items-center justify-center gap-2">
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by title or description..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="pl-9"
+              />
+            </div>
+            <Button onClick={handleSearchClick} variant="default">
+              <Search className="mr-1.5 h-4 w-4" />
+              Search
+            </Button>
+          </div>
 
-          {/* Table */}
           {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-              <CircularProgress />
-            </Box>
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
           ) : (
-            <TableContainer component={Paper} sx={{ maxWidth: "90%", margin: "auto", mt: 4, backgroundColor: "#fff", boxShadow: 3, borderRadius: 2 }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "#FF9800" }}>
-                    <TableCell align="center" sx={{ color: "white" }}>Title</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>Description</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>Type</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>View File</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>Votes count</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>Vote</TableCell>
-                    <TableCell align="center" sx={{ color: "white" }}>Comment</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredWorks.map((w) => (
-                    <TableRow key={w.id}>
-                      <TableCell align="center">{w.title}</TableCell>
-                      <TableCell align="center">{w.description}</TableCell>
-                      <TableCell align="center">{getFileTypeIcon(w.fileType)}</TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          size="small"
-                          href={w.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+            <Card className="overflow-hidden border-border/60 shadow-md">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-amber-500 text-white">
+                      <th className="px-4 py-3 text-center font-semibold">Title</th>
+                      <th className="px-4 py-3 text-center font-semibold">Description</th>
+                      <th className="px-4 py-3 text-center font-semibold">Type</th>
+                      <th className="px-4 py-3 text-center font-semibold">View File</th>
+                      <th className="px-4 py-3 text-center font-semibold">Votes</th>
+                      <th className="px-4 py-3 text-center font-semibold">Vote</th>
+                      <th className="px-4 py-3 text-center font-semibold">Comment</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredWorks.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                          No submissions found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredWorks.map((w) => (
+                        <tr
+                          key={w.id}
+                          className="border-b border-border/60 transition-colors hover:bg-muted/40 last:border-b-0"
                         >
-                          View
-                        </Button>
-                      </TableCell>
-                      <TableCell align="center">{w.voteCount}</TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          size="small"
-                          onClick={() => handleVoteClick(w)}
-                        >
-                          Vote
-                        </Button>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => handleViewCommentClick(w.id)}
-                          sx={{
-                            color: "#FF9800",
-                            borderColor: "#FF9800",
-                            "&:hover": {
-                              backgroundColor: "rgba(255,152,0,0.08)",
-                              borderColor: "#e68900",
-                              color: "#e68900",
-                            },
-                          }}
-                        >
-                          View comment
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          <td className="px-4 py-3 text-center font-medium text-foreground">
+                            {w.title}
+                          </td>
+                          <td className="px-4 py-3 text-center text-muted-foreground">
+                            {w.description}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center">
+                              {getFileTypeIcon(w.fileType)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              size="sm"
+                              className="bg-amber-500 hover:bg-amber-600"
+                              asChild
+                            >
+                              <a
+                                href={w.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                                View
+                              </a>
+                            </Button>
+                          </td>
+                          <td className="px-4 py-3 text-center font-semibold text-foreground">
+                            {w.voteCount}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              size="sm"
+                              className="bg-amber-500 hover:bg-amber-600"
+                              onClick={() => handleVoteClick(w)}
+                            >
+                              <Heart className="mr-1 h-3.5 w-3.5" />
+                              Vote
+                            </Button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                              onClick={() => handleViewCommentClick(w.id)}
+                            >
+                              <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                              View
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </div>
       </div>
-
-      {/* Snackbar for Vote clicked */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={1000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Box sx={{ bgcolor: "orange", color: "white", px: 2, py: 1, borderRadius: 1, fontWeight: "bold" }}>
-          Please login first.
-        </Box>
-      </Snackbar>
-
       <Footer />
     </>
   );

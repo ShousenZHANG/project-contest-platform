@@ -1,22 +1,23 @@
 /**
  * ProtectedRoute — guards routes that require authentication.
  *
- * Usage:
- *   <ProtectedRoute>          — any authenticated user
- *     <MyPage />
- *   </ProtectedRoute>
- *
- *   <ProtectedRoute roles={["Organizer", "Admin"]}>
+ * Usage A (wrap a single child):
+ *   <ProtectedRoute roles={["Organizer"]}>
  *     <OrganizerPage />
  *   </ProtectedRoute>
+ *
+ * Usage B (route layout — renders nested routes via <Outlet />):
+ *   <Route element={<ProtectedRoute roles={["Admin"]} />}>
+ *     <Route path="/foo" element={<Foo />} />
+ *   </Route>
  *
  * Unauthenticated users are redirected to /login.
  * Authenticated users without the required role are redirected to /.
  */
 
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import React from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 function ProtectedRoute({ children, roles }) {
   const { isAuthenticated, user } = useAuth();
@@ -32,7 +33,7 @@ function ProtectedRoute({ children, roles }) {
     }
   }
 
-  return children;
+  return children ?? <Outlet />;
 }
 
 export default ProtectedRoute;

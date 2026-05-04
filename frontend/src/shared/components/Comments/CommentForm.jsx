@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { Button, TextField, Typography } from '@mui/material';
-
-const ACCENT = '#FF9800';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 /**
  * Textarea + submit button for adding or editing a comment/reply.
+ * shadcn rewrite of the previous MUI version. The accent palette is supplied
+ * via Tailwind classes that match the rest of the comments UI.
  *
  * @param {object} props
- * @param {string}   [props.label]         - field label (default 'Write your comment')
- * @param {string}   [props.initialValue]  - pre-filled content (for edit mode)
- * @param {function} props.onSubmit        - async (content: string) => void
- * @param {function} [props.onCancel]      - if provided a Cancel button is shown
- * @param {string}   [props.submitLabel]   - button label (default 'Submit')
- * @param {number}   [props.rows]          - textarea rows (default 3)
+ * @param {string}   [props.label]         field label (default 'Write your comment')
+ * @param {string}   [props.initialValue]  pre-filled content (for edit mode)
+ * @param {function} props.onSubmit        async (content: string) => void
+ * @param {function} [props.onCancel]      if provided a Cancel button is shown
+ * @param {string}   [props.submitLabel]   button label (default 'Submit')
+ * @param {number}   [props.rows]          textarea rows (default 3)
  */
 function CommentForm({
   label = 'Write your comment',
@@ -42,15 +44,9 @@ function CommentForm({
   };
 
   return (
-    <div style={{ marginTop: '12px' }}>
-      {label && (
-        <Typography variant="h6" sx={{ mb: 1, color: 'black' }}>
-          {label}
-        </Typography>
-      )}
-      <TextField
-        fullWidth
-        multiline
+    <div className="mt-3 flex flex-col gap-2">
+      {label && <Label className="text-base font-semibold text-foreground">{label}</Label>}
+      <textarea
         rows={rows}
         placeholder="Type here..."
         value={content}
@@ -58,40 +54,31 @@ function CommentForm({
           setContent(e.target.value);
           if (fieldError) setFieldError('');
         }}
-        variant="outlined"
-        error={Boolean(fieldError)}
-        helperText={fieldError}
-        sx={{
-          mb: 1,
-          bgcolor: '#fff8e1',
-          borderRadius: '8px',
-          '& .MuiOutlinedInput-root': {
-            '& fieldset': { borderColor: '#FFB74D' },
-            '&:hover fieldset': { borderColor: '#FFA726' },
-            '&.Mui-focused fieldset': { borderColor: '#FB8C00', borderWidth: '2px' },
-          },
-          '& .MuiInputLabel-root': { color: '#FB8C00', fontWeight: 'bold' },
-          '& .MuiInputLabel-root.Mui-focused': { color: '#E65100' },
-        }}
+        aria-invalid={Boolean(fieldError) || undefined}
+        className={cn(
+          'flex w-full rounded-md border bg-amber-50 px-3 py-2 text-sm shadow-sm transition-colors',
+          'border-amber-300 placeholder:text-muted-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          fieldError && 'border-destructive focus-visible:ring-destructive'
+        )}
       />
-      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+      {fieldError && <p className="text-xs text-destructive">{fieldError}</p>}
+      <div className="mt-1 flex gap-2">
         <Button
-          variant="contained"
+          type="button"
           disabled={submitting}
           onClick={handleSubmit}
-          sx={{ backgroundColor: ACCENT, '&:hover': { backgroundColor: '#e68900' } }}
+          className="bg-amber-500 text-white hover:bg-amber-600"
         >
           {submitting ? 'Saving…' : submitLabel}
         </Button>
         {onCancel && (
           <Button
-            variant="outlined"
+            type="button"
+            variant="outline"
             onClick={onCancel}
-            sx={{
-              color: ACCENT,
-              borderColor: ACCENT,
-              '&:hover': { backgroundColor: 'rgba(255,152,0,0.1)', borderColor: '#e68900', color: '#e68900' },
-            }}
+            className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
           >
             Cancel
           </Button>

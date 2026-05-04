@@ -1,7 +1,6 @@
 /**
- * Primitive UI components built on MUI + design tokens.
- * Use these instead of raw MUI components to get consistent token-bound styling.
+ * Shared primitive wrappers. Currently exposes a status badge tuned to the
+ * platform's status vocabulary; raw shadcn components are imported from
+ * '@/components/ui/*' directly.
  */
-export { default as PrimaryButton } from './PrimaryButton';
-export { default as Card } from './Card';
 export { default as StatusBadge } from './StatusBadge';

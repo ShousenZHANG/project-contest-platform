@@ -1,89 +1,44 @@
 /**
- * PublicChangeContestTable.js
- * 
- * This component renders a table displaying a list of contests for public users. 
- * It shows:
- * - Contest name, category, date, status, and action buttons (Vote, Join).
- * - Each contest row links to its respective actions (Vote/Join) and displays a unified login prompt for unauthenticated users.
- * 
+ * PublicChangeContestTable.jsx
+ *
+ * Table wrapper that renders contest rows for public users.
+ * Migrated from MUI to native table + Tailwind.
+ *
  * Role: Public User
- * Developer: Beiqi Dai
+ * Developer: Beiqi Dai (migrated)
  */
-
-
 import React from "react";
-import "./PublicChangeContestList.css";
-import { Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
+import { Card } from "@/components/ui/card";
 import ChangeContestList from "./PublicChangeContestList";
 
 function PublicChangeContestTable({ contests, onRowClick }) {
   return (
-    <div className="table-container">
-      <Table>
-        <TableHead>
-          <TableRow
-            sx={{
-              backgroundColor: "#ffa680",
-            }}
-          >
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Competition Name
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Category
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Date
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Status
-            </TableCell>
-            <TableCell
-              sx={{
-                fontSize: "18px",
-                fontWeight: "700",
-                color: "white",
-              }}
-            >
-              Actions
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {contests.map((contest, index) => (
-            <ChangeContestList
-              key={index}
-              contest={contest}
-              onClick={() => onRowClick && onRowClick(contest)}
-            />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <Card className="overflow-hidden border-border/60 shadow-md">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-orange-300 text-white">
+              <th className="px-4 py-3 text-left text-base font-bold">
+                Competition Name
+              </th>
+              <th className="px-4 py-3 text-left text-base font-bold">Category</th>
+              <th className="px-4 py-3 text-left text-base font-bold">Date</th>
+              <th className="px-4 py-3 text-left text-base font-bold">Status</th>
+              <th className="px-4 py-3 text-left text-base font-bold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contests.map((contest, index) => (
+              <ChangeContestList
+                key={index}
+                contest={contest}
+                onClick={() => onRowClick && onRowClick(contest)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

@@ -1,79 +1,69 @@
 /**
- * @file OrganizerAddJudge.js
+ * @file OrganizerAddJudge.jsx
  * @description
- * This component allows organizers to manage the judges of a specific competition.
- * Organizers can:
- *  - Add one or multiple judges by email (comma-separated).
- *  - Prevent participants of the competition from being assigned as judges.
- *  - View a paginated list of assigned judges.
- *  - Delete a judge assignment.
- * 
- * It fetches competition details, current judges, and participant lists to handle conflict checks.
- * Material-UI components are used for the interface and feedback (Snackbar/Alert).
- * 
+ * Manage judges for a specific competition. Add (with conflict check vs participants),
+ * paginate, and delete. Migrated from MUI to shadcn/ui.
+ *
  * Role: Organizer
- * Developer: Zhaoyi Yang
  */
 
-
-import { useEffect, useState, useCallback } from "react";
-import {
-  Typography,
-  TextField,
-  Button,
-  Paper,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Snackbar,
-  Alert,
-  Pagination,
-} from "@mui/material";
-import { useParams, useNavigate } from "react-router-dom";
-import "./ContestList.css";
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 
 function OrganizerAddJudge() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const email = localStorage.getItem("email");
+  const email = localStorage.getItem('email');
 
-  const [judgeEmail, setJudgeEmail] = useState("");
+  const [judgeEmail, setJudgeEmail] = useState('');
   const [judges, setJudges] = useState([]);
-  const [competitionName, setCompetitionName] = useState("");
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
-
+  const [competitionName, setCompetitionName] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
   const [participantsEmails, setParticipantsEmails] = useState(new Set());
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   useEffect(() => {
     (async () => {
       try {
         const res = await apiClient.get(`/competitions/${competitionId}`);
-        setCompetitionName(res.data.name || "Unnamed Competition");
+        setCompetitionName(res.data.name || 'Unnamed Competition');
       } catch {
         // fetch error handled silently
       }
     })();
   }, [competitionId]);
 
-  const fetchJudges = useCallback(async (currentPage = 1) => {
-    try {
-      const res = await apiClient.get(
-        `/competitions/${competitionId}/judges?page=${currentPage}&size=10`
-      );
-      const data = res.data;
-      setJudges(data.data || []);
-      setTotalPages(data.pages || 1);
-    } catch {
-      // fetch error handled silently
-    }
-  }, [competitionId]);
+  const fetchJudges = useCallback(
+    async (currentPage = 1) => {
+      try {
+        const res = await apiClient.get(
+          `/competitions/${competitionId}/judges?page=${currentPage}&size=10`
+        );
+        const data = res.data;
+        setJudges(data.data || []);
+        setTotalPages(data.pages || 1);
+      } catch {
+        // fetch error handled silently
+      }
+    },
+    [competitionId]
+  );
 
   useEffect(() => {
     fetchJudges(page);
@@ -98,22 +88,20 @@ function OrganizerAddJudge() {
 
   const handleAddJudge = async () => {
     const trimmedEmails = judgeEmail
-      .split(",")
+      .split(',')
       .map((e) => e.trim())
       .filter((e) => e);
 
     if (trimmedEmails.length === 0) {
-      setSnackbar({ open: true, message: "Judge email(s) cannot be empty", severity: "warning" });
+      toast.warning('Judge email(s) cannot be empty');
       return;
     }
 
     const conflict = trimmedEmails.find((e) => participantsEmails.has(e));
     if (conflict) {
-      setSnackbar({
-        open: true,
-        message: `❌ ${conflict} is already a participant in this competition and cannot be assigned as a judge.`,
-        severity: "error",
-      });
+      toast.error(
+        `${conflict} is already a participant in this competition and cannot be assigned as a judge.`
+      );
       return;
     }
 
@@ -122,116 +110,163 @@ function OrganizerAddJudge() {
         `/competitions/${competitionId}/assign-judges`,
         { judgeEmails: trimmedEmails }
       );
-      const text = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
-      setSnackbar({ open: true, message: "✅ " + text, severity: "success" });
-      setJudgeEmail("");
+      const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+      toast.success(text);
+      setJudgeEmail('');
       fetchJudges(page);
     } catch (error) {
       const errData = error.response?.data;
-      const errorMessage = typeof errData === "string"
-        ? errData
-        : errData?.error ? "❌ " + errData.error : "❌ Error assigning judge";
-      setSnackbar({ open: true, message: errorMessage, severity: "error" });
+      const errorMessage =
+        typeof errData === 'string'
+          ? errData
+          : errData?.error
+            ? errData.error
+            : 'Error assigning judge';
+      toast.error(errorMessage);
     }
   };
 
-  const handleDeleteJudge = async (judgeId) => {
-    if (!window.confirm("Are you sure you want to remove this judge?")) return;
-
+  const handleConfirmDelete = async () => {
+    const judgeId = confirmDelete.id;
+    if (!judgeId) return;
     try {
       const res = await apiClient.delete(
         `/competitions/${competitionId}/judges/${judgeId}`
       );
-      const msg = typeof res.data === "string" ? res.data : "Judge removed";
-      setSnackbar({ open: true, message: "✅ " + msg, severity: "success" });
+      const msg = typeof res.data === 'string' ? res.data : 'Judge removed';
+      toast.success(msg);
       fetchJudges(page);
     } catch {
-      setSnackbar({ open: true, message: "❌ Error deleting judge", severity: "error" });
+      toast.error('Error deleting judge');
+    } finally {
+      setConfirmDelete({ open: false, id: null });
     }
   };
 
   return (
-    <>
-      
-      <div className="dashboard-container">
-        
-        <div className="dashboard-content">
-          <Typography variant="h5" gutterBottom>
-            Judges for: {competitionName}
-          </Typography>
+    <div className="mx-auto max-w-5xl px-6 py-6">
+      <div className="mb-4">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Judges <span className="text-muted-foreground">— {competitionName}</span>
+        </h1>
+      </div>
 
-          <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-            <TextField
-              label="Judge Email(s)"
-              variant="outlined"
-              value={judgeEmail}
-              onChange={(e) => setJudgeEmail(e.target.value)}
-              fullWidth
-              helperText="You can enter multiple emails separated by commas"
-            />
-            <Button variant="contained" color="primary" onClick={handleAddJudge}>
-              Add Judge
-            </Button>
-          </div>
-
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>#</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Delete</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {judges.map((judge, index) => (
-                  <TableRow key={judge.id || index}>
-                    <TableCell>{(page - 1) * 10 + index + 1}</TableCell>
-                    <TableCell>{judge.email}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        onClick={() => handleDeleteJudge(judge.id)}
-                      >
-                        Delete
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          <Pagination
-            sx={{ mt: 2 }}
-            count={totalPages}
-            page={page}
-            onChange={(e, val) => setPage(val)}
-            color="primary"
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor="judgeEmail">Judge Email(s)</Label>
+          <Input
+            id="judgeEmail"
+            value={judgeEmail}
+            onChange={(e) => setJudgeEmail(e.target.value)}
+            placeholder="judge1@example.com, judge2@example.com"
           />
+          <p className="text-xs text-muted-foreground">
+            You can enter multiple emails separated by commas.
+          </p>
+        </div>
+        <Button onClick={handleAddJudge}>Add Judge</Button>
+      </div>
 
+      <Card className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2">#</th>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {judges.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
+                  No judges assigned yet.
+                </td>
+              </tr>
+            ) : (
+              judges.map((judge, index) => (
+                <tr
+                  key={judge.id || index}
+                  className="border-b border-border last:border-0 hover:bg-muted/40"
+                >
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {(page - 1) * 10 + index + 1}
+                  </td>
+                  <td className="px-3 py-1.5 font-medium text-foreground">{judge.email}</td>
+                  <td className="px-3 py-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-destructive text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmDelete({ open: true, id: judge.id })}
+                    >
+                      Delete
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Page {page} of {totalPages}
+        </p>
+        <div className="flex gap-1">
           <Button
-            variant="outlined"
-            sx={{ mt: 2 }}
-            onClick={() => navigate(`/OrganizerContestList/${email}`)}
+            variant="outline"
+            size="icon"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            aria-label="Previous page"
           >
-            🔙 Back to Contest List
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-
-          <Snackbar
-            open={snackbar.open}
-            autoHideDuration={4000}
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            aria-label="Next page"
           >
-            <Alert severity={snackbar.severity} sx={{ width: "100%" }}>
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
-    </>
+
+      <div className="mt-4">
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/OrganizerContestList/${email}`)}
+        >
+          Back to Contest List
+        </Button>
+      </div>
+
+      <Dialog
+        open={confirmDelete.open}
+        onOpenChange={(open) => setConfirmDelete({ open, id: open ? confirmDelete.id : null })}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove judge?</DialogTitle>
+            <DialogDescription>
+              This will revoke the judge's assignment for this competition.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete({ open: false, id: null })}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

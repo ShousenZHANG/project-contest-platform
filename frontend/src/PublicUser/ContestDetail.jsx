@@ -1,95 +1,80 @@
 /**
- * ContestDetail.js
- * 
- * This component displays the detailed view of a contest. It includes:
- * - Contest information such as title, description, organizer, date, and category.
- * - A modal for login when the user is not authenticated and tries to perform certain actions.
- * - Buttons to view the contest details and to log in.
- * - A close button to exit the contest detail view.
- * 
+ * ContestDetail.jsx
+ *
+ * Public contest detail card shown in a modal-like overlay. Includes a Login
+ * modal trigger for unauthenticated users. Migrated from MUI to shadcn/ui +
+ * Tailwind.
+ *
  * Role: Public User
- * Developer: Beiqi Dai
+ * Developer: Beiqi Dai (migrated)
  */
-
-
-// ContestDetail.js
 import React, { useState } from "react";
-import { Typography, Card, CardMedia, CardContent, IconButton, Button, Box } from "@mui/material";
-import { Close } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom"; // ✅ Ensure correct import of useNavigate
+import { useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 import LoginModal from "../Homepages/Login";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 function ContestDetail({ contest, onClose }) {
-  const navigate = useNavigate(); // ✅ Define navigate inside the component
-  const [isLoginOpen, setIsLoginOpen] = useState(false); // ✅ Fix useState
+  const navigate = useNavigate();
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Open login modal
   const handleOpenLogin = () => {
     setIsLoginOpen(true);
   };
 
-  // Close login modal, reopen Contest Detail
   const handleCloseLogin = () => {
     setIsLoginOpen(false);
   };
 
   return (
-    <div style={{ position: "relative" }}>
-      {/* Close button with gray rectangular background */}
-      <IconButton
+    <div className="relative">
+      <Button
+        variant="secondary"
+        size="icon"
         onClick={onClose}
-        sx={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          zIndex: 1,
-          backgroundColor: "blue.300", // use Material UI's built-in gray
-          color: "white",
-          borderRadius: 0, // rectangular shape, no border radius
-          padding: "4px",
-          "&:hover": {
-            backgroundColor: "grey.500",
-          },
-        }}
+        aria-label="Close"
+        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-md bg-foreground/80 text-background hover:bg-foreground"
       >
-        <Close />
-      </IconButton>
-      <Card sx={{ maxWidth: "100%", boxShadow: 3, marginTop: "10px" }}>
-        <CardMedia
-          component="img"
-          height="300"
-          image={contest.image}
-          alt={contest.title}
-        />
-        <CardContent>
-          <Typography variant="h4" component="div" gutterBottom>
+        <X className="h-4 w-4" />
+      </Button>
+
+      <Card className="overflow-hidden border-border/60 shadow-lg">
+        <div className="h-72 w-full overflow-hidden bg-muted">
+          <img
+            src={contest.image}
+            alt={contest.title}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <CardContent className="space-y-3 p-6">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
             {contest.title}
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-            Organizer: {contest.organizer}
-          </Typography>
-          <Typography variant="body1" color="text.secondary" gutterBottom>
-            Date: {contest.date}
-          </Typography>
-          <Typography variant="body1" color="text.secondary" gutterBottom>
-            Category: {contest.category}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Organizer:</span>{" "}
+            {contest.organizer}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Date:</span> {contest.date}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Category:</span>{" "}
+            {contest.category}
+          </p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {contest.description}
-          </Typography>
-          {/* Buttons at the bottom right */}
-          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 3 }}>
-            <Button variant="contained" color="primary" onClick={() => navigate("/work-list")}>
-              View Details
-            </Button>
-            <Button variant="outlined" color="primary" onClick={handleOpenLogin}>
+          </p>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button onClick={() => navigate("/work-list")}>View Details</Button>
+            <Button variant="outline" onClick={handleOpenLogin}>
               Login
             </Button>
-          </Box>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Login modal - ensure it is not nested inside CardContent to avoid z-index issues */}
       {isLoginOpen && <LoginModal onClose={handleCloseLogin} />}
     </div>
   );
