@@ -147,7 +147,7 @@ function OrganizerAddJudge() {
     <div className="mx-auto max-w-5xl px-6 py-6">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Judges <span className="text-muted-foreground">— {competitionName}</span>
+          Judges for: {competitionName}
         </h1>
       </div>
 

@@ -61,9 +61,14 @@ const HomePage = lazy(() => import('./Homepages/Homepage'));
 
 function LoadingFallback() {
   return (
-    <div className="flex h-screen items-center justify-center" role="status" aria-busy="true">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      <span className="sr-only">Loading…</span>
+    <div
+      className="flex h-screen items-center justify-center"
+      role="progressbar"
+      aria-label="Loading application"
+      aria-busy="true"
+    >
+      <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden="true" />
+      <span className="sr-only">Loading...</span>
     </div>
   );
 }
@@ -75,7 +80,7 @@ function App() {
         <Router>
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
-              {/* ── Public routes (no sidebar) ── */}
+              {/* Public routes (no sidebar) */}
               <Route element={<PublicLayout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<LoginForm />} />
@@ -90,7 +95,7 @@ function App() {
                 <Route path="/public-team-detail/:competitionId/:teamId" element={<TeamPublicDetail />} />
               </Route>
 
-              {/* ── Participant routes (authenticated shell) ── */}
+              {/* Participant routes (authenticated shell) */}
               <Route element={<ProtectedRoute roles={["Participant"]}><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/profile/:email" element={<Profile />} />
                 <Route path="/contest/:email" element={<Contest />} />
@@ -111,7 +116,7 @@ function App() {
                 <Route path="/project-detail/:competitionId" element={<ProjectDetail />} />
               </Route>
 
-              {/* ── Organizer routes ── */}
+              {/* Organizer routes */}
               <Route element={<ProtectedRoute roles={["Organizer"]}><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/OrganizerProfile/:email" element={<OrganizerProfile />} />
                 <Route path="/OrganizerDashboard/:email" element={<OrganizerDashboard />} />
@@ -125,7 +130,7 @@ function App() {
                 <Route path="/OrganizerAddJudge/:competitionId" element={<OrganizerAddJudge />} />
               </Route>
 
-              {/* ── Admin routes ── */}
+              {/* Admin routes */}
               <Route element={<ProtectedRoute roles={["Admin"]}><AuthenticatedShell /></ProtectedRoute>}>
                 <Route path="/AdminProfile" element={<AdminProfile />} />
                 <Route path="/AdminAccountManage" element={<AdminAccountManage />} />

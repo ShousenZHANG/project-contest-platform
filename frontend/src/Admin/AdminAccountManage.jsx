@@ -126,7 +126,7 @@ function AdminAccountManage() {
             <Input
               id="user-search"
               type="search"
-              placeholder="Search by name or email…"
+              placeholder="Search by name or email..."
               value={keyword}
               onChange={(e) => {
                 setPage(1);
@@ -181,16 +181,23 @@ function AdminAccountManage() {
             </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={`s-${idx}`}>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-6" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-40" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-7 w-12 ml-auto" /></td>
+                <>
+                  <tr>
+                    <td colSpan={6} className="sr-only">
+                      Loading users...
+                    </td>
                   </tr>
-                ))
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={`s-${idx}`}>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-6" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-32" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-7 w-12 ml-auto" /></td>
+                    </tr>
+                  ))}
+                </>
               ) : visibleUsers.length === 0 ? (
                 <tr>
                   <td
@@ -212,7 +219,7 @@ function AdminAccountManage() {
                     <td className="px-3 py-1.5 font-medium">{user.name}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{user.email}</td>
                     <td className="px-3 py-1.5 text-muted-foreground max-w-xs truncate">
-                      {user.description || '—'}
+                      {user.description || '-'}
                     </td>
                     <td className="px-3 py-1.5">
                       <Badge variant={roleBadgeVariant(user.role)} className="text-[10px]">
@@ -295,7 +302,7 @@ function AdminAccountManage() {
               onClick={confirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting…' : 'Delete user'}
+              {deleting ? 'Deleting...' : 'Delete user'}
             </Button>
           </DialogFooter>
         </DialogContent>

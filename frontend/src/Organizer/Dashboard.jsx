@@ -205,8 +205,13 @@ function OrganizerDashboard() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div
+          className="flex justify-center py-12"
+          role="progressbar"
+          aria-label="Loading competition dashboard"
+          aria-busy="true"
+        >
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
         </div>
       ) : stats.length === 0 ? (
         <p className="text-sm text-muted-foreground">(No competitions yet)</p>

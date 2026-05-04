@@ -13,20 +13,34 @@ import {
 } from '../components/ui/dropdown-menu';
 import { ThemeToggle } from '../components/ThemeToggle';
 import AuthTokenManager from '../auth/authTokenManager';
+import { useAuth } from '../context/AuthContext';
 
 interface TopbarProps {
+  role?: string;
   userName?: string;
   userEmail?: string;
   userAvatar?: string;
   onSearch?: (query: string) => void;
 }
 
-export function Topbar({ userName, userEmail, userAvatar, onSearch }: TopbarProps) {
+function profilePathForRole(role?: string, userEmail?: string) {
+  const normalizedRole = (role || '').trim().toUpperCase();
+  const email = encodeURIComponent(userEmail || '');
+
+  if (normalizedRole === 'ADMIN') return '/AdminProfile';
+  if (normalizedRole === 'ORGANIZER') return `/OrganizerProfile/${email}`;
+  if (normalizedRole === 'PARTICIPANT') return `/profile/${email}`;
+  return '/';
+}
+
+export function Topbar({ role, userName, userEmail, userAvatar, onSearch }: TopbarProps) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     AuthTokenManager.clearSession();
-    navigate('/login');
+    logout();
+    navigate('/login', { replace: true });
   };
 
   const initials = (userName || userEmail || 'U')
@@ -36,35 +50,31 @@ export function Topbar({ userName, userEmail, userAvatar, onSearch }: TopbarProp
     .join('');
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {/* Search */}
-      <div className="relative ml-auto flex-1 md:grow-0 md:basis-80">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b bg-background/95 px-3 pl-14 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:gap-4 md:px-4">
+      <div className="relative hidden min-w-0 flex-1 sm:block md:ml-auto md:max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
-          placeholder="Search competitions, teams…"
+          placeholder="Search competitions, teams..."
           className="pl-9"
           onChange={(e) => onSearch?.(e.target.value)}
           aria-label="Search"
         />
       </div>
 
-      {/* Theme toggle */}
       <ThemeToggle />
 
-      {/* Notifications */}
       <Button variant="ghost" size="icon" aria-label="Notifications">
         <Bell className="h-4 w-4" />
       </Button>
 
-      {/* User menu */}
       {userName || userEmail ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Account menu" className="rounded-full">
               <Avatar className="h-8 w-8">
                 {userAvatar && <AvatarImage src={userAvatar} alt={userName || ''} />}
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                <AvatarFallback className="bg-primary text-xs text-primary-foreground">
                   {initials || 'U'}
                 </AvatarFallback>
               </Avatar>
@@ -80,7 +90,7 @@ export function Topbar({ userName, userEmail, userAvatar, onSearch }: TopbarProp
               )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/profile')}>
+            <DropdownMenuItem onClick={() => navigate(profilePathForRole(role, userEmail))}>
               <User className="h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>

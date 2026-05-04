@@ -206,8 +206,7 @@ function ParticipantList() {
     <div className="mx-auto max-w-7xl px-6 py-6">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">
-          {participationType === 'TEAM' ? 'Teams' : 'Participants'}{' '}
-          <span className="text-muted-foreground">— {competitionInfo.name}</span>
+          {participationType === 'TEAM' ? 'Teams' : 'Participants'} for: {competitionInfo.name}
         </h1>
         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div>
@@ -228,18 +227,23 @@ function ParticipantList() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Input
-          placeholder="Search by name"
-          value={keyword}
-          onChange={handleSearch}
-          className="max-w-md"
-        />
+        <div className="min-w-[220px] flex-1 max-w-md space-y-1.5">
+          <label htmlFor="participant-search" className="sr-only">
+            Search by name
+          </label>
+          <Input
+            id="participant-search"
+            placeholder="Search by name"
+            value={keyword}
+            onChange={handleSearch}
+          />
+        </div>
         <Button variant="outline" onClick={handleSortToggle}>
           Sort: {sortOrder.toUpperCase()}
         </Button>
         <Button variant="default" onClick={exportToExcel} className="bg-success text-success-foreground hover:bg-success/90">
           <Download className="mr-1 h-4 w-4" />
-          Export Excel
+          Export to Excel
         </Button>
       </div>
 

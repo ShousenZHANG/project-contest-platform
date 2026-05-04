@@ -11,8 +11,8 @@ interface AppShellProps {
 }
 
 /**
- * Authenticated app shell — sidebar + topbar + main content.
- * Mobile: sidebar collapses to a Sheet (handled inside Sidebar).
+ * Authenticated app shell: sidebar, topbar, and main content.
+ * Mobile: sidebar collapses to a Sheet handled inside Sidebar.
  *
  * Wrap protected routes:
  *   <AppShell role={user.role}><Outlet /></AppShell>
@@ -23,10 +23,14 @@ export function AppShell({ children, role, userName, userEmail, userAvatar }: Ap
       <a href="#main" className="skip-link">
         Skip to main content
       </a>
-      <Sidebar role={role} />
+      <Sidebar role={role} userEmail={userEmail} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar userName={userName} userEmail={userEmail} userAvatar={userAvatar} />
-        <main id="main" className="flex-1 overflow-auto p-4 md:p-6 lg:p-8" tabIndex={-1}>
+        <Topbar role={role} userName={userName} userEmail={userEmail} userAvatar={userAvatar} />
+        <main
+          id="main"
+          className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8"
+          tabIndex={-1}
+        >
           {children}
         </main>
       </div>

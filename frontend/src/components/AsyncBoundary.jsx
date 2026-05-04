@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 /**
- * AsyncBoundary — wraps async content with unified loading/error states.
+ * AsyncBoundary wraps async content with unified loading/error states.
  * shadcn rewrite of the previous MUI version.
  *
  * Usage:
@@ -23,11 +23,12 @@ export default function AsyncBoundary({
       <div
         className="flex w-full items-center justify-center"
         style={{ minHeight }}
-        role="status"
+        role="progressbar"
+        aria-label="Loading content"
         aria-busy="true"
       >
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <span className="sr-only">Loading…</span>
+        <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden="true" />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

@@ -1,76 +1,101 @@
-/**
- * HowToUse.js
- * 
- * This component provides instructions on how to use the Questora platform for different user roles.
- * It explains the platform features for:
- * - Public Users: Browsing contests, searching, viewing details, registering, and voting.
- * - Participants: Creating profiles, joining contests, submitting projects, receiving feedback, and celebrating achievements.
- * - Organizers: Creating contests, managing participants, reviewing submissions, and publishing results.
- * 
- * Role: Public User
- * Developer: Beiqi Dai
- */
-
-
 import React from 'react';
+import { BookOpen, Briefcase, CheckCircle2, Trophy, Users } from 'lucide-react';
 import Navbar from '../Homepages/Navbar';
 import Footer from '../Homepages/Footer';
-import './HowToUse.css';
+
+const sections = [
+  {
+    title: 'Public users',
+    icon: Users,
+    items: [
+      'Browse all public competitions without signing in.',
+      'Search and filter competitions by name, status, category, and participation type.',
+      'Open competition details to review requirements, timelines, awards, teams, and submissions.',
+      'Create an account when you are ready to join, vote, or comment.',
+    ],
+  },
+  {
+    title: 'Participants',
+    icon: Trophy,
+    items: [
+      'Manage your profile and keep your account details current.',
+      'Join individual or team competitions from the participant workspace.',
+      'Submit projects, track submission status, and review judging feedback.',
+      'Follow ratings and comments so you can improve before final evaluation.',
+    ],
+  },
+  {
+    title: 'Organizers',
+    icon: Briefcase,
+    items: [
+      'Create competitions with rules, timelines, media, and scoring criteria.',
+      'Manage participants, teams, judges, and submitted work from one workspace.',
+      'Review and approve submissions before public display or final scoring.',
+      'Publish results and monitor competition health through dashboard metrics.',
+    ],
+  },
+];
 
 function HowToUse() {
   return (
     <>
       <Navbar />
-      <div className="how-to-use-container">
-        <div className="how-to-use-wrapper">
+      <main className="min-h-screen bg-gradient-to-b from-background via-muted/30 to-background px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <section className="mb-8 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <div className="grid gap-8 p-6 md:grid-cols-[1.2fr_0.8fr] md:p-10">
+              <div>
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Platform guide
+                </div>
+                <h1 className="max-w-3xl text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                  How to use Questora
+                </h1>
+                <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
+                  Questora supports the full competition lifecycle: public discovery,
+                  participant submissions, organizer operations, and judge-ready review flows.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+                {['Discover', 'Submit', 'Evaluate'].map((step) => (
+                  <div key={step} className="rounded-lg border border-border bg-muted/40 p-4">
+                    <CheckCircle2 className="mb-3 h-5 w-5 text-primary" />
+                    <p className="text-sm font-semibold text-foreground">{step}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Clear workflows for every role.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
 
-          {/* Top white box: Title + subtitle */}
-          <div className="how-to-use-header-card">
-            <h1 className="how-to-use-title">❤️ How to Use Questora</h1>
-            <p className="how-to-use-subtitle">
-              Your all-in-one platform for exploring, creating, managing, and participating in exciting project contests.
-            </p>
-          </div>
-
-          {/* Public Users Section */}
-          <div className="how-to-use-card">
-            <h2 className="how-to-use-section-title">👥 Public Users</h2>
-            <ul className="how-to-use-list">
-              <li><strong>Browse Contests:</strong> Easily explore all contests without logging in.</li>
-              <li><strong>Search & Filter:</strong> Find contests by <em>name</em>, <em>status</em>, or <em>category</em>.</li>
-              <li><strong>View Details:</strong> Access contest requirements, timelines, and awards.</li>
-              <li><strong>Register:</strong> Create an account to join contests and vote for submissions.</li>
-            </ul>
-          </div>
-
-          {/* Participants Section */}
-          <div className="how-to-use-card">
-            <h2 className="how-to-use-section-title">🧑‍💻 Participants</h2>
-            <ul className="how-to-use-list">
-              <li><strong>Create Your Profile:</strong> Set up your interests and skills.</li>
-              <li><strong>Join Contests:</strong> Quickly register and join contests.</li>
-              <li><strong>Submit Projects:</strong> Upload your best work and showcase your talent.</li>
-              <li><strong>Receive Notifications:</strong> Stay updated on deadlines and announcements.</li>
-              <li><strong>View Ratings & Feedback:</strong> Learn and improve through reviews.</li>
-              <li><strong>Celebrate Your Success:</strong> Win certificates and badges.</li>
-              <li><strong>Vote for Others:</strong> Engage and support community creativity.</li>
-            </ul>
-          </div>
-
-          {/* Organizers Section */}
-          <div className="how-to-use-card">
-            <h2 className="how-to-use-section-title">🏆 Organizers</h2>
-            <ul className="how-to-use-list">
-              <li><strong>Create Contests:</strong> Set up rules, themes, and judging criteria.</li>
-              <li><strong>Manage Participants:</strong> Monitor contest activity and submissions.</li>
-              <li><strong>Review Projects:</strong> Approve, reject, and provide feedback easily.</li>
-              <li><strong>Publish Results:</strong> Announce winners and awards effortlessly.</li>
-            </ul>
-          </div>
-
+          <section className="grid gap-4 md:grid-cols-3">
+            {sections.map(({ title, icon: Icon, items }) => (
+              <article
+                key={title}
+                className="rounded-lg border border-border bg-card p-6 shadow-sm transition-colors hover:bg-accent/30"
+              >
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+                </div>
+                <ul className="space-y-3 text-sm leading-6 text-muted-foreground">
+                  {items.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </section>
         </div>
-      </div>
-
+      </main>
       <Footer />
     </>
   );

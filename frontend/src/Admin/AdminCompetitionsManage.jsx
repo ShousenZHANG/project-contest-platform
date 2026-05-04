@@ -165,7 +165,7 @@ function AdminCompetitionsManage() {
             <Input
               id="comp-search"
               type="search"
-              placeholder="Search competitions…"
+              placeholder="Search competitions..."
               value={keyword}
               onChange={(e) => {
                 setPage(1);
@@ -250,17 +250,24 @@ function AdminCompetitionsManage() {
             </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={`s-${idx}`}>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-6" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-40" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-20" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-20" /></td>
-                    <td className="px-3 py-1.5"><Skeleton className="h-7 w-12 ml-auto" /></td>
+                <>
+                  <tr>
+                    <td colSpan={7} className="sr-only">
+                      Loading competitions...
+                    </td>
                   </tr>
-                ))
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={`s-${idx}`}>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-6" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-32" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-3 py-1.5"><Skeleton className="h-7 w-12 ml-auto" /></td>
+                    </tr>
+                  ))}
+                </>
               ) : competitions.length === 0 ? (
                 <tr>
                   <td
@@ -509,7 +516,7 @@ function AdminCompetitionsManage() {
               onClick={confirmDelete}
               disabled={deleting}
             >
-              {deleting ? 'Deleting…' : 'Delete competition'}
+              {deleting ? 'Deleting...' : 'Delete competition'}
             </Button>
           </DialogFooter>
         </DialogContent>

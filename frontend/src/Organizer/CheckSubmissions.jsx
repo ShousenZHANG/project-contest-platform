@@ -132,7 +132,7 @@ function OrganizerSubmissions() {
     <div className="mx-auto max-w-7xl px-6 py-6">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Submissions <span className="text-muted-foreground">— {competitionName}</span>
+          Submissions for: {competitionName}
         </h1>
       </div>
 
@@ -149,8 +149,13 @@ function OrganizerSubmissions() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div
+          className="flex justify-center py-12"
+          role="progressbar"
+          aria-label="Loading submissions"
+          aria-busy="true"
+        >
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
         </div>
       ) : (
         <>
