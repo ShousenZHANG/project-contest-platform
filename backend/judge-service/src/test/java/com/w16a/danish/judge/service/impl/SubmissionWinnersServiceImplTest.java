@@ -3,6 +3,7 @@ package com.w16a.danish.judge.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.config.AwardNotifier;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
@@ -50,6 +51,10 @@ class SubmissionWinnersServiceImplTest {
     @Mock private AwardNotifier awardNotifier;
     @Mock private SubmissionWinnersMapper submissionWinnersMapper;
 
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
@@ -89,7 +94,7 @@ class SubmissionWinnersServiceImplTest {
 
         // Act
         PageResponse<?> response = winnersService.listScoredSubmissions(
-                "userId", "ORGANIZER", "comp-id", null, "totalScore", "desc", 1, 10);
+                ctx("userId", "ORGANIZER"), "comp-id", null, "totalScore", "desc", 1, 10);
 
         // Assert
         assertThat(response).isNotNull();
@@ -105,7 +110,7 @@ class SubmissionWinnersServiceImplTest {
                 .thenReturn(ResponseEntity.ok(false));
 
         assertThatThrownBy(() -> winnersService.listScoredSubmissions(
-                "userId", "PARTICIPANT", "comp-id", null, "totalScore", "desc", 1, 10))
+                ctx("userId", "PARTICIPANT"), "comp-id", null, "totalScore", "desc", 1, 10))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Only organizers or admins can view scored submissions");
     }
@@ -154,7 +159,7 @@ class SubmissionWinnersServiceImplTest {
         doNothing().when(awardNotifier).sendAwardWinner(any());
 
         // Act
-        winnersService.autoAward("userId", "ADMIN", "comp-id");
+        winnersService.autoAward(ctx("userId", "ADMIN"), "comp-id");
 
         // Assert: Verify critical interactions
         verify(winnersService, times(1)).saveBatch(anyList());
@@ -168,7 +173,7 @@ class SubmissionWinnersServiceImplTest {
         when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
                 .thenReturn(ResponseEntity.ok(false));
 
-        assertThatThrownBy(() -> winnersService.autoAward("userId", "PARTICIPANT", "comp-id"))
+        assertThatThrownBy(() -> winnersService.autoAward(ctx("userId", "PARTICIPANT"), "comp-id"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Only organizers or admins can auto-award");
     }

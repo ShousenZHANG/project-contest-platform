@@ -11,8 +11,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Trash2, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -135,45 +133,51 @@ function ParticipantList() {
     setPage(1);
   };
 
-  const exportToExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Participants');
+  const exportToCsv = () => {
+    const escapeCsvValue = (value) => {
+      const text = value == null ? '' : String(value);
+      return `"${text.replace(/"/g, '""')}"`;
+    };
 
-    if (participationType === 'TEAM') {
-      worksheet.columns = [
-        { header: 'Team Name', key: 'name' },
-        { header: 'Description', key: 'description' },
-        { header: 'Created At', key: 'createdAt' },
-      ];
-      teams.forEach((team) => {
-        worksheet.addRow({
-          name: team.name,
-          description: team.description || '',
-          createdAt: new Date(team.createdAt).toLocaleString(),
-        });
-      });
-    } else {
-      worksheet.columns = [
-        { header: 'Name', key: 'name' },
-        { header: 'Email', key: 'email' },
-        { header: 'Description', key: 'description' },
-        { header: 'Registered At', key: 'registeredAt' },
-      ];
-      participants.forEach((p) => {
-        worksheet.addRow({
-          name: p.name,
-          email: p.email,
-          description: p.description,
-          registeredAt: new Date(p.registeredAt).toLocaleString(),
-        });
-      });
+    const rows = participationType === 'TEAM'
+      ? [
+          ['Team Name', 'Description', 'Created At'],
+          ...teams.map((team) => [
+            team.name,
+            team.description || '',
+            team.createdAt ? new Date(team.createdAt).toLocaleString() : '',
+          ]),
+        ]
+      : [
+          ['Name', 'Email', 'Description', 'Registered At'],
+          ...participants.map((participant) => [
+            participant.name,
+            participant.email,
+            participant.description || '',
+            participant.registeredAt
+              ? new Date(participant.registeredAt).toLocaleString()
+              : '',
+          ]),
+        ];
+
+    const csv = rows
+      .map((row) => row.map(escapeCsvValue).join(','))
+      .join('\r\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = (competitionInfo.name || 'competition')
+      .replace(/[^a-z0-9-_]+/gi, '_')
+      .replace(/^_+|_+$/g, '');
+
+    link.href = url;
+    link.download = `${safeName || 'competition'}_${participationType}_List.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(url);
     }
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(
-      new Blob([buffer]),
-      `${competitionInfo.name}_${participationType}_List.xlsx`
-    );
   };
 
   const handleDeleteConfirm = async () => {
@@ -241,9 +245,9 @@ function ParticipantList() {
         <Button variant="outline" onClick={handleSortToggle}>
           Sort: {sortOrder.toUpperCase()}
         </Button>
-        <Button variant="default" onClick={exportToExcel} className="bg-success text-success-foreground hover:bg-success/90">
+        <Button variant="default" onClick={exportToCsv} className="bg-success text-success-foreground hover:bg-success/90">
           <Download className="mr-1 h-4 w-4" />
-          Export to Excel
+          Export CSV
         </Button>
       </div>
 

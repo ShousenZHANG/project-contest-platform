@@ -3,6 +3,7 @@ package com.w16a.danish.registration.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.config.RegistrationNotifier;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
@@ -48,6 +49,10 @@ class CompetitionParticipantsServiceImplTest {
     private ISubmissionRecordsService submissionService;
     private RegistrationNotifier registrationNotifier;
     private ICompetitionTeamsService competitionTeamsService;
+
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
 
     // we'll reuse this stub for all calls to service.lambdaQuery()
     @SuppressWarnings("unchecked")
@@ -110,7 +115,7 @@ class CompetitionParticipantsServiceImplTest {
 
         // exercise
         assertThatCode(() -> service.register(
-                "comp-1", "user-1", "PARTICIPANT"))
+                "comp-1", ctx("user-1", "PARTICIPANT")))
                 .doesNotThrowAnyException();
     }
 
@@ -132,7 +137,7 @@ class CompetitionParticipantsServiceImplTest {
         doReturn(true).when(service).removeById("some-id");
 
         assertThatCode(() -> service.cancelRegistration(
-                "comp-1", "user-1", "PARTICIPANT"))
+                "comp-1", ctx("user-1", "PARTICIPANT")))
                 .doesNotThrowAnyException();
     }
 
@@ -143,7 +148,7 @@ class CompetitionParticipantsServiceImplTest {
         when(partQuery.exists()).thenReturn(true);
 
         assertThatCode(() -> service.isRegistered(
-                "comp-1", "user-1", "PARTICIPANT"))
+                "comp-1", ctx("user-1", "PARTICIPANT")))
                 .doesNotThrowAnyException();
     }
 
@@ -163,7 +168,7 @@ class CompetitionParticipantsServiceImplTest {
                 .thenReturn(ResponseEntity.ok(Collections.emptyList()));
 
         assertThatCode(() -> service.getMyCompetitionsWithSearch(
-                "user-1","PARTICIPANT",1,10,null,null,null))
+                ctx("user-1","PARTICIPANT"),1,10,null,null,null))
                 .doesNotThrowAnyException();
     }
 
@@ -198,7 +203,7 @@ class CompetitionParticipantsServiceImplTest {
                 .thenReturn(ResponseEntity.ok(new CompetitionResponseVO()));
 
         assertThatCode(() -> service.cancelByOrganizer(
-                "comp-1","user-2","org-1","ORGANIZER"))
+                "comp-1","user-2", ctx("org-1","ORGANIZER")))
                 .doesNotThrowAnyException();
     }
 
@@ -235,7 +240,7 @@ class CompetitionParticipantsServiceImplTest {
                 .thenReturn(ResponseEntity.ok(user));
 
         assertThatCode(() -> service.registerTeam(
-                "comp-1","team-1","user-1","PARTICIPANT"))
+                "comp-1","team-1", ctx("user-1","PARTICIPANT")))
                 .doesNotThrowAnyException();
     }
 
@@ -267,7 +272,7 @@ class CompetitionParticipantsServiceImplTest {
         when(competitionTeamsService.removeById("r1")).thenReturn(true);
 
         assertThatCode(() -> service.cancelTeamRegistration(
-                "comp-1","team-1","user-1","PARTICIPANT"))
+                "comp-1","team-1", ctx("user-1","PARTICIPANT")))
                 .doesNotThrowAnyException();
     }
 
@@ -385,8 +390,7 @@ class CompetitionParticipantsServiceImplTest {
         // Act & Assert: should not throw
         assertThatCode(() -> service.getParticipantsByCompetitionWithSearch(
                 "comp-1",
-                "org-1",
-                "ORGANIZER",
+                ctx("org-1", "ORGANIZER"),
                 1, 10,
                 null,
                 "registeredAt",
@@ -517,9 +521,9 @@ class CompetitionParticipantsServiceImplTest {
     @DisplayName("❌ cancelTeamByOrganizer throws FORBIDDEN if wrong role")
     void testCancelTeamByOrganizer_WrongRole() {
         assertThatThrownBy(() ->
-                service.cancelTeamByOrganizer("comp-1", "team-1", "user-1", "PARTICIPANT")
+                service.cancelTeamByOrganizer("comp-1", "team-1", ctx("user-1", "PARTICIPANT"))
         ).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only ORGANIZER or ADMIN");
+                .hasMessageContaining("required role(s): ORGANIZER, ADMIN");
     }
 
     @Test
@@ -532,7 +536,7 @@ class CompetitionParticipantsServiceImplTest {
         when(orgQ.exists()).thenReturn(false);
 
         assertThatThrownBy(() ->
-                service.cancelTeamByOrganizer("comp-1","team-1","admin-1","ORGANIZER")
+                service.cancelTeamByOrganizer("comp-1","team-1", ctx("admin-1","ORGANIZER"))
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not authorized");
     }
@@ -553,7 +557,7 @@ class CompetitionParticipantsServiceImplTest {
         when(findQ.one()).thenReturn(null);
 
         assertThatThrownBy(() ->
-                service.cancelTeamByOrganizer("comp-1","team-1","admin-1","ORGANIZER")
+                service.cancelTeamByOrganizer("comp-1","team-1", ctx("admin-1","ORGANIZER"))
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not registered");
     }
@@ -570,7 +574,7 @@ class CompetitionParticipantsServiceImplTest {
         when(partQ.list()).thenReturn(Collections.emptyList());
 
         var resp = service.getMyCompetitionsWithSearch(
-                "user-1", "PARTICIPANT",
+                ctx("user-1", "PARTICIPANT"),
                 1, 10,
                 null, null, null);
 
@@ -621,7 +625,7 @@ class CompetitionParticipantsServiceImplTest {
 
         // Act: filter by keyword "be" (matches "Beta") and sort descending by competitionName
         var resp = service.getMyCompetitionsWithSearch(
-                "user-1", "PARTICIPANT",
+                ctx("user-1", "PARTICIPANT"),
                 1, 10,
                 "be",          // keyword
                 "competitionName",
@@ -637,18 +641,18 @@ class CompetitionParticipantsServiceImplTest {
     @DisplayName("❌ register throws if not PARTICIPANT")
     void testRegister_WrongRole() {
         assertThatThrownBy(() ->
-                service.register("c","u","ADMIN")
+                service.register("c", ctx("u","ADMIN"))
         ).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only PARTICIPANT");
+                .hasMessageContaining("required role(s): PARTICIPANT");
     }
 
     @Test
     @DisplayName("❌ isRegistered throws if not PARTICIPANT")
     void testIsRegistered_WrongRole() {
         assertThatThrownBy(() ->
-                service.isRegistered("c","u","ORGANIZER")
+                service.isRegistered("c", ctx("u","ORGANIZER"))
         ).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only PARTICIPANT");
+                .hasMessageContaining("required role(s): PARTICIPANT");
     }
 
 }

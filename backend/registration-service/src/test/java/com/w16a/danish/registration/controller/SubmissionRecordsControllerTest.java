@@ -1,6 +1,7 @@
 package com.w16a.danish.registration.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -58,7 +59,7 @@ class SubmissionRecordsControllerTest {
     void testUploadSubmission() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "file.txt", "text/plain", "content".getBytes());
 
-        doNothing().when(submissionService).submitWork(any(), any(), any(), any(), any(), any());
+        doNothing().when(submissionService).submitWork(any(RequestContext.class), any(), any(), any(), any());
 
         mockMvc.perform(multipart("/submissions/upload")
                         .file(file)
@@ -73,7 +74,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Delete submission successfully")
     void testDeleteSubmission() throws Exception {
-        doNothing().when(submissionService).deleteSubmission(any(), any(), any());
+        doNothing().when(submissionService).deleteSubmission(any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/submissions/{submissionId}", "sub-1")
                         .header("User-ID", "user-1")
@@ -84,7 +85,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ View submitted work successfully")
     void testGetMySubmission() throws Exception {
-        when(submissionService.getMySubmission(any(), any(), any()))
+        when(submissionService.getMySubmission(any(), any(RequestContext.class)))
                 .thenReturn(new SubmissionInfoVO());
 
         mockMvc.perform(get("/submissions/{competitionId}", "comp-1")
@@ -96,7 +97,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ List submissions for a competition successfully")
     void testListSubmissionsForCompetition() throws Exception {
-        when(submissionService.listSubmissionsByRole(any(), any(), any(), anyInt(), anyInt(), any(), any(), any()))
+        when(submissionService.listSubmissionsByRole(any(), any(RequestContext.class), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 1, 10, 0));
 
         mockMvc.perform(get("/submissions/public")
@@ -122,7 +123,7 @@ class SubmissionRecordsControllerTest {
     void testReviewSubmission() throws Exception {
         SubmissionReviewDTO dto = new SubmissionReviewDTO();
 
-        doNothing().when(submissionService).reviewSubmission(any(), any(), any());
+        doNothing().when(submissionService).reviewSubmission(any(), any(RequestContext.class));
 
         mockMvc.perform(post("/submissions/review")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -150,7 +151,7 @@ class SubmissionRecordsControllerTest {
     void testUploadTeamSubmission() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "teamfile.txt", "text/plain", "team content".getBytes());
 
-        doNothing().when(submissionService).submitTeamWork(any(), any(), any(), any(), any(), any(), any());
+        doNothing().when(submissionService).submitTeamWork(any(RequestContext.class), any(), any(), any(), any(), any());
 
         mockMvc.perform(multipart("/submissions/teams/upload")
                         .file(file)
@@ -176,7 +177,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Delete team submission successfully")
     void testDeleteTeamSubmission() throws Exception {
-        doNothing().when(submissionService).deleteTeamSubmission(any(), any(), any());
+        doNothing().when(submissionService).deleteTeamSubmission(any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/submissions/teams/{submissionId}", "sub-1")
                         .header("User-ID", "user-1")
@@ -187,7 +188,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ List all team submissions successfully")
     void testListTeamSubmissions() throws Exception {
-        when(submissionService.listTeamSubmissionsByRole(any(), any(), any(), anyInt(), anyInt(), any(), any(), any()))
+        when(submissionService.listTeamSubmissionsByRole(any(), any(RequestContext.class), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 1, 10, 0));
 
         mockMvc.perform(get("/submissions/teams/list")

@@ -1,6 +1,7 @@
 package com.w16a.danish.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.vo.*;
@@ -68,6 +69,7 @@ class TeamControllerTest {
 
         mockMvc.perform(post("/teams/create")
                         .header("User-ID", "creator-1")
+                        .header("User-Role", "PARTICIPANT")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isCreated());
@@ -79,7 +81,8 @@ class TeamControllerTest {
         doNothing().when(teamService).removeTeamMember("leader-1", "team-1", "member-1");
 
         mockMvc.perform(delete("/teams/team-1/members/member-1")
-                        .header("User-ID", "leader-1"))
+                        .header("User-ID", "leader-1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Member removed"));
     }
@@ -87,7 +90,10 @@ class TeamControllerTest {
     @Test
     @DisplayName("✅ Should delete team successfully")
     void testDeleteTeam() throws Exception {
-        doNothing().when(teamService).deleteTeam("admin-1", "ADMIN", "team-1");
+        doNothing().when(teamService).deleteTeam(
+                argThat((RequestContext ctx) -> "admin-1".equals(ctx.userId()) && "ADMIN".equals(ctx.role())),
+                eq("team-1")
+        );
 
         mockMvc.perform(delete("/teams/team-1")
                         .header("User-ID", "admin-1")
@@ -106,6 +112,7 @@ class TeamControllerTest {
 
         mockMvc.perform(put("/teams/team-1")
                         .header("User-ID", "leader-1")
+                        .header("User-Role", "PARTICIPANT")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -118,7 +125,8 @@ class TeamControllerTest {
         doNothing().when(teamService).joinTeam("team-1", "user-1");
 
         mockMvc.perform(post("/teams/team-1/join")
-                        .header("User-ID", "user-1"))
+                        .header("User-ID", "user-1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Joined successfully"));
     }
@@ -129,7 +137,8 @@ class TeamControllerTest {
         doNothing().when(teamService).leaveTeam("team-1", "user-1");
 
         mockMvc.perform(post("/teams/team-1/leave")
-                        .header("User-ID", "user-1"))
+                        .header("User-ID", "user-1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Left the team"));
     }
@@ -164,6 +173,7 @@ class TeamControllerTest {
 
         mockMvc.perform(get("/teams/my-joined")
                         .header("User-ID", "user-1")
+                        .header("User-Role", "PARTICIPANT")
                         .param("page", "1")
                         .param("size", "10"))
                 .andExpect(status().isOk());
@@ -281,6 +291,7 @@ class TeamControllerTest {
 
         mockMvc.perform(get("/teams/my-joined")
                         .header("User-ID", "user-1")
+                        .header("User-Role", "PARTICIPANT")
                         .param("keyword", "AI")
                         .param("page", "1")
                         .param("size", "10"))

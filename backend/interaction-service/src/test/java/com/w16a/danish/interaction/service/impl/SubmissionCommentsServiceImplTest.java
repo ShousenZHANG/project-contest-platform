@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -48,6 +49,10 @@ class SubmissionCommentsServiceImplTest {
     @Mock
     private SubmissionCommentsMapper submissionCommentsMapper;
 
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
@@ -87,7 +92,7 @@ class SubmissionCommentsServiceImplTest {
         when(submissionCommentsService.getById(anyString())).thenReturn(comment);
         when(submissionCommentsService.removeById(anyString())).thenReturn(true);
 
-        submissionCommentsService.deleteComment("commentId", "adminUser", "ADMIN");
+        submissionCommentsService.deleteComment("commentId", ctx("adminUser", "ADMIN"));
 
         verify(submissionCommentsService).removeById("commentId");
     }
@@ -99,7 +104,7 @@ class SubmissionCommentsServiceImplTest {
         when(submissionCommentsService.getById(anyString())).thenReturn(comment);
         when(submissionCommentsService.removeById(anyString())).thenReturn(true);
 
-        submissionCommentsService.deleteComment("commentId", "ownerUser", "PARTICIPANT");
+        submissionCommentsService.deleteComment("commentId", ctx("ownerUser", "PARTICIPANT"));
 
         verify(submissionCommentsService).removeById("commentId");
     }
@@ -112,7 +117,7 @@ class SubmissionCommentsServiceImplTest {
         when(registrationServiceClient.isUserOrganizerOfSubmission(anyString(), anyString())).thenReturn(true);
         when(submissionCommentsService.removeById(anyString())).thenReturn(true);
 
-        submissionCommentsService.deleteComment("commentId", "organizerUser", "PARTICIPANT");
+        submissionCommentsService.deleteComment("commentId", ctx("organizerUser", "PARTICIPANT"));
 
         verify(submissionCommentsService).removeById("commentId");
     }
@@ -124,7 +129,7 @@ class SubmissionCommentsServiceImplTest {
         when(submissionCommentsService.getById(anyString())).thenReturn(comment);
         when(registrationServiceClient.isUserOrganizerOfSubmission(anyString(), anyString())).thenReturn(false);
 
-        assertThatThrownBy(() -> submissionCommentsService.deleteComment("commentId", "randomUser", "PARTICIPANT"))
+        assertThatThrownBy(() -> submissionCommentsService.deleteComment("commentId", ctx("randomUser", "PARTICIPANT")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("do not have permission"); // 👈 改成和实际异常一致
     }

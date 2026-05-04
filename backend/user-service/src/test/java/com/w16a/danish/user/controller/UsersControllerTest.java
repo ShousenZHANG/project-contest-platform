@@ -1,6 +1,7 @@
 package com.w16a.danish.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.config.FrontendProperties;
 import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.GoogleOAuthProperties;
@@ -157,7 +158,8 @@ class UsersControllerTest {
         when(userService.getUserProfile("1")).thenReturn(profileVO);
 
         mockMvc.perform(get("/users/profile")
-                        .header("User-ID", "1"))
+                        .header("User-ID", "1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Test User"));
     }
@@ -173,14 +175,18 @@ class UsersControllerTest {
 
         mockMvc.perform(multipart("/users/profile/avatar")
                         .file(file)
-                        .header("User-ID", "1"))
+                        .header("User-ID", "1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk());
     }
 
     @Test
     @DisplayName("✅ Should delete user successfully")
     void testDeleteUser() throws Exception {
-        when(userService.deleteUserById("1", "1", "ADMIN")).thenReturn("User deleted successfully");
+        when(userService.deleteUserById(
+                eq("1"),
+                argThat((RequestContext ctx) -> "1".equals(ctx.userId()) && "ADMIN".equals(ctx.role()))
+        )).thenReturn("User deleted successfully");
 
         mockMvc.perform(delete("/users/1")
                         .header("User-ID", "1")
@@ -248,7 +254,8 @@ class UsersControllerTest {
     @Test
     @DisplayName("✅ Should list users for admin")
     void testListAllUsersAdmin() throws Exception {
-        when(userService.listUsersAdmin(anyString(), anyString(), any(), any(), anyInt(), anyInt(), any(), any())).thenReturn(new PageResponse<>());
+        when(userService.listUsersAdmin(any(RequestContext.class), any(), any(), anyInt(), anyInt(), any(), any()))
+                .thenReturn(new PageResponse<>());
 
         mockMvc.perform(get("/users/admin/list")
                         .header("User-ID", "1")
@@ -353,7 +360,8 @@ class UsersControllerTest {
 
         mockMvc.perform(multipart("/users/profile/avatar")
                         .file(file)
-                        .header("User-ID", "1"))
+                        .header("User-ID", "1")
+                        .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk());
 
         verify(fileServiceClient, times(1)).deleteFile("mock-folder", "old-avatar.png");

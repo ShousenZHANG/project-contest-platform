@@ -48,14 +48,20 @@ describe("AdminProfile", () => {
     fireEvent.change(await screen.findByPlaceholderText("Enter your name"), {
       target: { value: "New Admin" },
     });
-    fireEvent.change(await screen.findByPlaceholderText("Enter your new password"), {
+    fireEvent.change(await screen.findByPlaceholderText("Leave blank to keep current"), {
       target: { value: "NewPassword123" },
     });
 
-    fireEvent.click(screen.getByText("Save"));
+    fireEvent.click(screen.getByRole("button", { name: /Save changes/i }));
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith("Profile updated successfully");
+      expect(apiClient.put).toHaveBeenCalledWith(
+        "/users/profile",
+        expect.objectContaining({
+          name: "New Admin",
+          password: "NewPassword123",
+        })
+      );
     });
   });
 });

@@ -51,9 +51,14 @@ frontend/.cache/
 frontend/.eslintcache
 frontend/.parcel-cache
 frontend/dist/
+frontend/coverage-summary/
+frontend/playwright-report/
+frontend/test-results/
 frontend/yarn.lock
 frontend/package-lock.json
 frontend/.vscode/
+!frontend/src/lib/
+!frontend/src/lib/**
 
 ### Docker Data Volumes ###
 .mysql-data/
@@ -69,6 +74,9 @@ frontend/.vscode/
 .env.production
 .env.test
 
+### OS generated files ###
+.DS_Store
+**/.DS_Store
 
 node_modules/
 

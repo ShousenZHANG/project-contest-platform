@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.config.CompetitionNotifier;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
@@ -65,6 +66,10 @@ class CompetitionServiceImplTest {
         when(mockQuery.list()).thenReturn(Collections.emptyList());
     }
 
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
+
 
     @Test
     @DisplayName("✅ Create competition success")
@@ -78,7 +83,7 @@ class CompetitionServiceImplTest {
         when(competitionQuery.eq(any(), any())).thenReturn(competitionQuery);
         when(competitionQuery.exists()).thenReturn(false);
 
-        CompetitionResponseVO response = competitionsService.createCompetition(dto, "ADMIN", "userId");
+        CompetitionResponseVO response = competitionsService.createCompetition(dto, ctx("userId", "ADMIN"));
 
         assertThat(response).isNotNull();
         verify(competitionsMapper).insert(any(Competitions.class));
@@ -97,7 +102,7 @@ class CompetitionServiceImplTest {
         when(competitionQuery.eq(any(), any())).thenReturn(competitionQuery);
         when(competitionQuery.exists()).thenReturn(true);
 
-        assertThatThrownBy(() -> competitionsService.createCompetition(dto, "ADMIN", "userId"))
+        assertThatThrownBy(() -> competitionsService.createCompetition(dto, ctx("userId", "ADMIN")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("already exists");
     }
@@ -112,7 +117,7 @@ class CompetitionServiceImplTest {
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
         when(competitionsMapper.deleteById(anyString())).thenReturn(1);
 
-        competitionsService.deleteCompetition("comp-id", "ADMIN", "userId");
+        competitionsService.deleteCompetition("comp-id", ctx("userId", "ADMIN"));
 
         verify(competitionsMapper).deleteById("comp-id");
     }
@@ -120,9 +125,9 @@ class CompetitionServiceImplTest {
     @Test
     @DisplayName("❌ Delete competition - No permission")
     void testDeleteCompetitionNoPermission() {
-        assertThatThrownBy(() -> competitionsService.deleteCompetition("comp-id", "PARTICIPANT", "userId"))
+        assertThatThrownBy(() -> competitionsService.deleteCompetition("comp-id", ctx("userId", "PARTICIPANT")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("authorized");
+                .hasMessageContaining("required role");
     }
 
     @Test
@@ -160,7 +165,7 @@ class CompetitionServiceImplTest {
 
         MockMultipartFile file = new MockMultipartFile("file", "video.mp4", "video/mp4", "test".getBytes());
 
-        CompetitionResponseVO response = competitionsService.uploadCompetitionMedia("comp-id", "userId", "ADMIN", "VIDEO", file);
+        CompetitionResponseVO response = competitionsService.uploadCompetitionMedia("comp-id", ctx("userId", "ADMIN"), "VIDEO", file);
 
         assertThat(response).isNotNull();
     }
@@ -175,7 +180,7 @@ class CompetitionServiceImplTest {
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
         when(competitionsMapper.update(any(), any())).thenReturn(1);
 
-        CompetitionResponseVO response = competitionsService.deleteIntroVideo("comp-id", "userId", "ADMIN");
+        CompetitionResponseVO response = competitionsService.deleteIntroVideo("comp-id", ctx("userId", "ADMIN"));
 
         assertThat(response).isNotNull();
     }
@@ -213,7 +218,7 @@ class CompetitionServiceImplTest {
 
         when(competitionJudgesService.saveBatch(anyList())).thenReturn(true);
 
-        competitionsService.assignJudges("comp-id", "userId", "ADMIN", dto);
+        competitionsService.assignJudges("comp-id", ctx("userId", "ADMIN"), dto);
 
         verify(competitionNotifier, atLeastOnce()).sendJudgeAssigned(any());
     }
@@ -250,7 +255,7 @@ class CompetitionServiceImplTest {
                                 .build()
                 ));
 
-        competitionsService.removeJudge("comp-id", "userId", "ADMIN", "judgeId");
+        competitionsService.removeJudge("comp-id", ctx("userId", "ADMIN"), "judgeId");
 
         verify(competitionNotifier).sendJudgeRemoved(any());
     }
@@ -337,7 +342,7 @@ class CompetitionServiceImplTest {
         when(organizerQuery.exists()).thenReturn(true);
 
         CompetitionResponseVO response = competitionsService.deleteCompetitionImage(
-                "comp-id", "userId", "ORGANIZER", "http://mock.com/image.jpg"
+                "comp-id", ctx("userId", "ORGANIZER"), "http://mock.com/image.jpg"
         );
 
         assertThat(response).isNotNull();
@@ -359,7 +364,7 @@ class CompetitionServiceImplTest {
         when(organizerQuery.eq(any(), any())).thenReturn(organizerQuery);
         when(organizerQuery.exists()).thenReturn(false);
 
-        assertThatThrownBy(() -> competitionsService.deleteCompetitionImage("comp-id", "userId", "ORGANIZER", "http://mock.com/img1.jpg"))
+        assertThatThrownBy(() -> competitionsService.deleteCompetitionImage("comp-id", ctx("userId", "ORGANIZER"), "http://mock.com/img1.jpg"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not authorized");
     }
@@ -379,7 +384,7 @@ class CompetitionServiceImplTest {
         when(organizerQuery.exists()).thenReturn(true);
 
         assertThatThrownBy(() -> competitionsService.deleteCompetitionImage(
-                "comp-id", "userId", "ORGANIZER", "http://mock.com/non-exist.jpg"))
+                "comp-id", ctx("userId", "ORGANIZER"), "http://mock.com/non-exist.jpg"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Image URL not found");
     }
@@ -446,7 +451,7 @@ class CompetitionServiceImplTest {
         when(organizerQuery.list()).thenReturn(Collections.emptyList());
 
         PageResponse<CompetitionResponseVO> result = competitionsService.listCompetitionsByOrganizer(
-                "userId", "ORGANIZER", 1, 10);
+                ctx("userId", "ORGANIZER"), 1, 10);
 
         assertThat(result).isNotNull();
         assertThat(result.getData()).isEmpty();
@@ -468,7 +473,7 @@ class CompetitionServiceImplTest {
                 .thenReturn(page);
 
         PageResponse<CompetitionResponseVO> result = competitionsService.listCompetitionsByOrganizer(
-                "userId", "ORGANIZER", 1, 10);
+                ctx("userId", "ORGANIZER"), 1, 10);
 
         assertThat(result).isNotNull();
     }
@@ -493,7 +498,7 @@ class CompetitionServiceImplTest {
         when(judgeQuery.page(any(Page.class))).thenReturn(judgePage);
 
         PageResponse<UserBriefVO> result = competitionsService.listAssignedJudges(
-                "comp-id", "userId", "ORGANIZER", 1, 10);
+                "comp-id", ctx("userId", "ORGANIZER"), 1, 10);
 
         assertThat(result).isNotNull();
         assertThat(result.getData()).isEmpty();

@@ -21,7 +21,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  */
 public class RequestContextArgumentResolver implements HandlerMethodArgumentResolver {
 
-    private static final String HEADER_USER_ID   = "User-ID";
+    private static final String HEADER_USER_ID = "User-ID";
     private static final String HEADER_USER_ROLE = "User-Role";
 
     @Override
@@ -36,12 +36,12 @@ public class RequestContextArgumentResolver implements HandlerMethodArgumentReso
                                   NativeWebRequest webRequest,
                                   WebDataBinderFactory binderFactory) {
         String userId = webRequest.getHeader(HEADER_USER_ID);
-        String role   = webRequest.getHeader(HEADER_USER_ROLE);
+        String role = webRequest.getHeader(HEADER_USER_ROLE);
 
         if (userId == null || userId.isBlank() || role == null || role.isBlank()) {
             throw new BusinessException(
                     HttpStatus.UNAUTHORIZED,
-                    "Missing identity context — ensure the request is routed through the API gateway"
+                    "Missing identity context - ensure the request is routed through the API gateway"
             );
         }
 

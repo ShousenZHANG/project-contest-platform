@@ -1,6 +1,7 @@
 package com.w16a.danish.registration.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
@@ -49,7 +50,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Register for competition successfully")
     void testRegisterForCompetition() throws Exception {
-        doNothing().when(participantsService).register(any(), any(), any());
+        doNothing().when(participantsService).register(any(), any(RequestContext.class));
 
         mockMvc.perform(post("/registrations/{competitionId}", "comp-1")
                         .header("User-ID", "user-1")
@@ -60,7 +61,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Cancel registration successfully")
     void testCancelRegistration() throws Exception {
-        doNothing().when(participantsService).cancelRegistration(any(), any(), any());
+        doNothing().when(participantsService).cancelRegistration(any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/registrations/{competitionId}", "comp-1")
                         .header("User-ID", "user-1")
@@ -71,7 +72,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ List participants successfully")
     void testListParticipantsByCompetition() throws Exception {
-        when(participantsService.getParticipantsByCompetitionWithSearch(any(), any(), any(), anyInt(), anyInt(), any(), any(), any()))
+        when(participantsService.getParticipantsByCompetitionWithSearch(any(), any(RequestContext.class), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(PageResponse.<ParticipantInfoVO>builder()
                         .page(1).size(10).total(1L).pages(1)
                         .data(List.of(new ParticipantInfoVO()))
@@ -88,7 +89,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Cancel participant by organizer successfully")
     void testCancelParticipantByOrganizer() throws Exception {
-        doNothing().when(participantsService).cancelByOrganizer(any(), any(), any(), any());
+        doNothing().when(participantsService).cancelByOrganizer(any(), any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/registrations/{competitionId}/participants/{participantUserId}", "comp-1", "user-2")
                         .header("User-ID", "organizer-1")
@@ -99,7 +100,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Check registration status successfully")
     void testIsRegistered() throws Exception {
-        when(participantsService.isRegistered(any(), any(), any())).thenReturn(true);
+        when(participantsService.isRegistered(any(), any(RequestContext.class))).thenReturn(true);
 
         mockMvc.perform(get("/registrations/{competitionId}/status", "comp-1")
                         .header("User-ID", "user-1")
@@ -111,7 +112,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Get competitions user registered successfully")
     void testGetMyCompetitions() throws Exception {
-        when(participantsService.getMyCompetitionsWithSearch(any(), any(), anyInt(), anyInt(), any(), any(), any()))
+        when(participantsService.getMyCompetitionsWithSearch(any(RequestContext.class), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(PageResponse.<CompetitionParticipationVO>builder()
                         .page(1).size(10).total(1L).pages(1)
                         .data(List.of(new CompetitionParticipationVO()))
@@ -128,7 +129,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Register a team successfully")
     void testRegisterTeam() throws Exception {
-        doNothing().when(participantsService).registerTeam(any(), any(), any(), any());
+        doNothing().when(participantsService).registerTeam(any(), any(), any(RequestContext.class));
 
         mockMvc.perform(post("/registrations/teams/{competitionId}/{teamId}", "comp-1", "team-1")
                         .header("User-ID", "user-1")
@@ -139,7 +140,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Cancel team registration successfully")
     void testCancelTeamRegistration() throws Exception {
-        doNothing().when(participantsService).cancelTeamRegistration(any(), any(), any(), any());
+        doNothing().when(participantsService).cancelTeamRegistration(any(), any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/registrations/teams/{competitionId}/{teamId}", "comp-1", "team-1")
                         .header("User-ID", "user-1")
@@ -190,7 +191,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Cancel team registration by organizer successfully")
     void testCancelTeamByOrganizer() throws Exception {
-        doNothing().when(participantsService).cancelTeamByOrganizer(any(), any(), any(), any());
+        doNothing().when(participantsService).cancelTeamByOrganizer(any(), any(), any(RequestContext.class));
 
         mockMvc.perform(delete("/registrations/teams/{competitionId}/team/{teamId}/by-organizer", "comp-1", "team-1")
                         .header("User-ID", "organizer-1")

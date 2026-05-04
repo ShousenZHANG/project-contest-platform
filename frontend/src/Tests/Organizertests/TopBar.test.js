@@ -60,8 +60,10 @@ describe("TopBar", () => {
       </MemoryRouter>
     );
 
-    const avatar = await screen.findByAltText("User Avatar");
-    expect(avatar.src).toContain("/mock-avatar.jpg");
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith("/users/profile");
+    });
+    expect(screen.getByRole("button", { name: /Open profile/i })).toBeInTheDocument();
   });
 
   it("navigates to profile page when clicking avatar", async () => {
@@ -71,8 +73,7 @@ describe("TopBar", () => {
       </MemoryRouter>
     );
 
-    const avatar = await screen.findByAltText("User Avatar");
-    fireEvent.click(avatar);
+    fireEvent.click(await screen.findByRole("button", { name: /Open profile/i }));
 
     expect(mockNavigate).toHaveBeenCalledWith("/OrganizerProfile/test@example.com");
   });
@@ -84,8 +85,7 @@ describe("TopBar", () => {
       </MemoryRouter>
     );
 
-    const logoutIcon = document.querySelector(".logout-icon");
-    fireEvent.click(logoutIcon);
+    fireEvent.click(screen.getByRole("button", { name: /Log out/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Log out reminder")).toBeInTheDocument();
@@ -100,8 +100,7 @@ describe("TopBar", () => {
       </MemoryRouter>
     );
 
-    const logoutIcon = document.querySelector(".logout-icon");
-    fireEvent.click(logoutIcon);
+    fireEvent.click(screen.getByRole("button", { name: /Log out/i }));
 
     const logoutButton = await screen.findByText("Log out");
     fireEvent.click(logoutButton);

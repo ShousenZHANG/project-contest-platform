@@ -1,6 +1,7 @@
 package com.w16a.danish.competition.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
@@ -54,7 +55,7 @@ class CompetitionControllerTest {
         dto.setName("Test Competition");
         dto.setStartDate(java.time.LocalDateTime.now().plusDays(1));
         dto.setEndDate(java.time.LocalDateTime.now().plusDays(30));
-        when(competitionService.createCompetition(any(), any(), any()))
+        when(competitionService.createCompetition(any(), any(RequestContext.class)))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(post("/competitions")
@@ -88,7 +89,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should delete competition successfully")
     void testDeleteCompetition() throws Exception {
-        doNothing().when(competitionService).deleteCompetition(anyString(), anyString(), anyString());
+        doNothing().when(competitionService).deleteCompetition(anyString(), any(RequestContext.class));
 
         mockMvc.perform(delete("/competitions/delete/{id}", "test-id")
                         .header("User-ID", "userId")
@@ -100,7 +101,7 @@ class CompetitionControllerTest {
     @DisplayName("✅ Should update competition successfully")
     void testUpdateCompetition() throws Exception {
         CompetitionUpdateDTO dto = new CompetitionUpdateDTO();
-        when(competitionService.updateCompetition(anyString(), anyString(), anyString(), any()))
+        when(competitionService.updateCompetition(anyString(), any(RequestContext.class), any()))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(put("/competitions/update/{id}", "test-id")
@@ -116,7 +117,7 @@ class CompetitionControllerTest {
     void testUploadCompetitionMedia() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "filename.png", "image/png", "content".getBytes());
 
-        when(competitionService.uploadCompetitionMedia(anyString(), anyString(), anyString(), anyString(), any()))
+        when(competitionService.uploadCompetitionMedia(anyString(), any(RequestContext.class), anyString(), any()))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(multipart("/competitions/{id}/media", "test-id")
@@ -130,7 +131,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should delete competition image successfully")
     void testDeleteCompetitionImage() throws Exception {
-        when(competitionService.deleteCompetitionImage(anyString(), anyString(), anyString(), anyString()))
+        when(competitionService.deleteCompetitionImage(anyString(), any(RequestContext.class), anyString()))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(delete("/competitions/{id}/media/image", "test-id")
@@ -143,7 +144,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should delete intro video successfully")
     void testDeleteIntroVideo() throws Exception {
-        when(competitionService.deleteIntroVideo(anyString(), anyString(), anyString()))
+        when(competitionService.deleteIntroVideo(anyString(), any(RequestContext.class)))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(delete("/competitions/{id}/media/video", "test-id")
@@ -155,7 +156,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should list my competitions successfully")
     void testListMyCompetitions() throws Exception {
-        when(competitionService.listCompetitionsByOrganizer(anyString(), anyString(), anyInt(), anyInt()))
+        when(competitionService.listCompetitionsByOrganizer(any(RequestContext.class), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 1, 10, 0));
 
         mockMvc.perform(get("/competitions/achieve/my")
@@ -180,7 +181,7 @@ class CompetitionControllerTest {
     @DisplayName("✅ Should assign judges successfully")
     void testAssignJudges() throws Exception {
         AssignJudgesDTO dto = new AssignJudgesDTO();
-        doNothing().when(competitionService).assignJudges(anyString(), anyString(), anyString(), any());
+        doNothing().when(competitionService).assignJudges(anyString(), any(RequestContext.class), any());
 
         mockMvc.perform(post("/competitions/{id}/assign-judges", "comp-id")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -193,7 +194,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should list assigned judges successfully")
     void testListAssignedJudges() throws Exception {
-        when(competitionService.listAssignedJudges(anyString(), anyString(), anyString(), anyInt(), anyInt()))
+        when(competitionService.listAssignedJudges(anyString(), any(RequestContext.class), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(Collections.emptyList(), 0, 1, 10, 0));
 
         mockMvc.perform(get("/competitions/{id}/judges", "comp-id")
@@ -205,7 +206,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should remove judge successfully")
     void testRemoveJudge() throws Exception {
-        doNothing().when(competitionService).removeJudge(anyString(), anyString(), anyString(), anyString());
+        doNothing().when(competitionService).removeJudge(anyString(), any(RequestContext.class), anyString());
 
         mockMvc.perform(delete("/competitions/{id}/judges/{judgeId}", "comp-id", "judge-id")
                         .header("User-ID", "userId")

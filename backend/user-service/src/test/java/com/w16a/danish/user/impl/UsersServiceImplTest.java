@@ -2,6 +2,7 @@ package com.w16a.danish.user.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.config.FrontendProperties;
 import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.JwtConfig;
@@ -80,6 +81,10 @@ class UsersServiceImplTest {
         when(userQuery.eq(any(), any())).thenReturn(userQuery);
         when(userQuery.exists()).thenReturn(false);
         when(userQuery.one()).thenReturn(null);
+    }
+
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
     }
 
     @Test
@@ -254,7 +259,7 @@ class UsersServiceImplTest {
         when(usersService.getById(anyString())).thenReturn(user);
         when(usersService.removeById(anyString())).thenReturn(true);
 
-        String result = usersService.deleteUserById("uid", "adminUid", "ADMIN");
+        String result = usersService.deleteUserById("uid", ctx("adminUid", "ADMIN"));
 
         assertThat(result).isEqualTo("User deleted successfully");
     }
@@ -266,7 +271,7 @@ class UsersServiceImplTest {
 
         when(usersService.getById(anyString())).thenReturn(user);
 
-        assertThatThrownBy(() -> usersService.deleteUserById("uid", "otherUid", "PARTICIPANT"))
+        assertThatThrownBy(() -> usersService.deleteUserById("uid", ctx("otherUid", "PARTICIPANT")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("permission");
     }
@@ -363,7 +368,7 @@ class UsersServiceImplTest {
         emptyPage.setRecords(Collections.emptyList());
         when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
-        PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, "createdAt", "asc");
+        PageResponse<AdminUserVO> page = usersService.listUsersAdmin(ctx("adminId", "ADMIN"), null, null, 1, 10, "createdAt", "asc");
 
         assertThat(page).isNotNull();
     }
@@ -557,7 +562,7 @@ class UsersServiceImplTest {
         when(usersService.getById(anyString())).thenReturn(user);
         when(usersService.removeById(anyString())).thenReturn(false);
 
-        assertThatThrownBy(() -> usersService.deleteUserById("uid", "adminUid", "ADMIN"))
+        assertThatThrownBy(() -> usersService.deleteUserById("uid", ctx("adminUid", "ADMIN")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to delete user");
     }
@@ -588,7 +593,7 @@ class UsersServiceImplTest {
         emptyPage.setRecords(Collections.emptyList());
         when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
-        PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, null, null);
+        PageResponse<AdminUserVO> page = usersService.listUsersAdmin(ctx("adminId", "ADMIN"), null, null, 1, 10, null, null);
 
         assertThat(page).isNotNull();
     }
@@ -600,7 +605,7 @@ class UsersServiceImplTest {
         emptyPage.setRecords(Collections.emptyList());
         when(usersMapper.selectPage(any(), any())).thenReturn(emptyPage);
 
-        PageResponse<AdminUserVO> page = usersService.listUsersAdmin("adminId", "ADMIN", null, null, 1, 10, "createdAt", "desc");
+        PageResponse<AdminUserVO> page = usersService.listUsersAdmin(ctx("adminId", "ADMIN"), null, null, 1, 10, "createdAt", "desc");
 
         assertThat(page).isNotNull();
     }

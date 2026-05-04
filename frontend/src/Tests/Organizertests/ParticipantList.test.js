@@ -64,8 +64,6 @@ beforeEach(() => {
   });
 
   window.URL.createObjectURL = jest.fn();
-  jest.mock("file-saver", () => ({ saveAs: jest.fn() }));
-
   mockNavigate.mockClear();
 });
 
@@ -105,9 +103,9 @@ describe("ParticipantList", () => {
     });
   });
 
-  it("clicks export to excel button", async () => {
+  it("clicks export csv button", async () => {
     renderWithRouter();
-    const exportButton = await screen.findByRole("button", { name: /Export to Excel/i });
+    const exportButton = await screen.findByRole("button", { name: /Export CSV/i });
     fireEvent.click(exportButton);
 
     expect(exportButton).toBeInTheDocument();

@@ -56,7 +56,9 @@ describe("SubmissionRatings", () => {
     fireEvent.click(autoAwardButton);
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Auto-award completed"));
+      expect(apiClient.post).toHaveBeenCalledWith(
+        expect.stringContaining("/winners/auto-award")
+      );
     });
   });
 

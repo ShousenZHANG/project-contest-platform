@@ -113,16 +113,14 @@ describe("AdminCompetitionsManage", () => {
 
     await screen.findByText("Awesome Competition");
 
-    const compButton = screen.getByRole("button", { name: /Awesome Competition/i });
+    const compButton = screen.getByRole("button", { name: /^Awesome Competition$/i });
     fireEvent.click(compButton);
 
     await screen.findByText(/A great competition/i);
-    expect(screen.getByText(/Category:/i)).toBeInTheDocument();
+    expect(within(await screen.findByRole("dialog")).getByText(/^Category$/i)).toBeInTheDocument();
   });
 
   it("deletes a competition after confirmation", async () => {
-    window.confirm = jest.fn(() => true);
-
     render(
       <BrowserRouter>
         <AdminCompetitionsManage />
@@ -133,6 +131,7 @@ describe("AdminCompetitionsManage", () => {
 
     const deleteButton = screen.getByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
+    fireEvent.click(await screen.findByRole("button", { name: /Delete competition/i }));
 
     expect(apiClient.delete).toHaveBeenCalledWith(
       expect.stringContaining("/competitions/delete/comp-1")

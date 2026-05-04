@@ -50,6 +50,7 @@ class SubmissionInteractionControllerTest {
 
         mockMvc.perform(post("/interactions/comments")
                         .header("User-ID", "user123")
+                        .header("User-Role", "PARTICIPANT")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -76,6 +77,7 @@ class SubmissionInteractionControllerTest {
 
         mockMvc.perform(put("/interactions/comments/{id}", "comment123")
                         .header("User-ID", "user123")
+                        .header("User-Role", "PARTICIPANT")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -111,6 +113,7 @@ class SubmissionInteractionControllerTest {
     void testVote() throws Exception {
         mockMvc.perform(post("/interactions/votes")
                         .header("User-ID", "user123")
+                        .header("User-Role", "PARTICIPANT")
                         .param("submissionId", "submission123"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Voted"));
@@ -122,6 +125,7 @@ class SubmissionInteractionControllerTest {
     void testUnvote() throws Exception {
         mockMvc.perform(delete("/interactions/votes")
                         .header("User-ID", "user123")
+                        .header("User-Role", "PARTICIPANT")
                         .param("submissionId", "submission123"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Unvoted"));
@@ -147,6 +151,7 @@ class SubmissionInteractionControllerTest {
 
         mockMvc.perform(get("/interactions/votes/status")
                         .header("User-ID", "user123")
+                        .header("User-Role", "PARTICIPANT")
                         .param("submissionId", "submission123"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("true"));

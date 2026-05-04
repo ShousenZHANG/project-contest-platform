@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import OrganizerProfile from "../../Organizer/Profile";
 import { MemoryRouter } from "react-router-dom";
 import apiClient from '../../api/apiClient';
@@ -56,15 +56,21 @@ describe("OrganizerProfile", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith("Profile updated successfully");
+      expect(apiClient.put).toHaveBeenCalledWith(
+        "/users/profile",
+        expect.objectContaining({
+          name: "New Name",
+          email: "newemail@example.com",
+        })
+      );
     });
   });
 
   it("opens avatar upload dialog", async () => {
     renderProfile();
 
-    const avatars = await screen.findAllByAltText("User Avatar");
-    fireEvent.click(avatars[0]);
+    const avatarButton = await screen.findByRole("button", { name: /Change avatar/i });
+    fireEvent.click(avatarButton);
     await waitFor(() => {
       expect(screen.getByText("Upload Avatar")).toBeInTheDocument();
     });
@@ -74,10 +80,10 @@ describe("OrganizerProfile", () => {
     renderProfile();
 
     fireEvent.click(screen.getByText("Delete Account"));
-    fireEvent.click(screen.getByText("Delete"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith("Your account has been deleted.");
+      expect(apiClient.delete).toHaveBeenCalledWith("/users/fake-user-id");
     });
   });
 });

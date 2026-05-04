@@ -1,6 +1,7 @@
 package com.w16a.danish.judge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
@@ -50,7 +51,7 @@ class SubmissionWinnersControllerTest {
     @DisplayName("✅ Auto award winners successfully")
     void testAutoAward() throws Exception {
         // Arrange
-        doNothing().when(winnersService).autoAward(anyString(), anyString(), anyString());
+        doNothing().when(winnersService).autoAward(any(RequestContext.class), anyString());
 
         // Act & Assert
         mockMvc.perform(post("/winners/auto-award")
@@ -81,7 +82,7 @@ class SubmissionWinnersControllerTest {
     @DisplayName("✅ List scored submissions successfully")
     void testListScoredSubmissions() throws Exception {
         // Arrange
-        when(winnersService.listScoredSubmissions(anyString(), anyString(), anyString(), any(), any(), any(), anyInt(), anyInt()))
+        when(winnersService.listScoredSubmissions(any(RequestContext.class), anyString(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<ScoredSubmissionVO>());
 
         // Act & Assert

@@ -56,8 +56,9 @@ describe("AdminDashboard", () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText(/Platform Dashboard/i)).toBeInTheDocument();
-    await screen.findByText(/Competitions/i);
+    expect(screen.getByRole("status", { name: /Loading platform dashboard/i })).toBeInTheDocument();
+    await screen.findByText(/Platform Dashboard/i);
+    await screen.findByText(/^Competitions$/i);
   });
 
   it("renders overview cards after fetch", async () => {
@@ -102,6 +103,6 @@ describe("AdminDashboard", () => {
       </BrowserRouter>
     );
 
-    await screen.findByText("(No data)");
+    await screen.findByText(/No data available/i);
   });
 });

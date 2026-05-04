@@ -2,6 +2,7 @@ package com.w16a.danish.registration.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.config.SubmissionNotifier;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
@@ -52,6 +53,10 @@ class SubmissionRecordsServiceImplTest {
     @Mock private UserServiceClient userServiceClient;
     @Mock private ICompetitionParticipantsService competitionParticipantsService;
     @Mock private ICompetitionOrganizersService competitionOrganizersService;
+
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -123,7 +128,7 @@ class SubmissionRecordsServiceImplTest {
         when(submissionRecordsMapper.insert(any(SubmissionRecords.class))).thenReturn(1);
 
         assertThatCode(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Submission Title", "Submission Description", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Submission Title", "Submission Description", file))
                 .doesNotThrowAnyException();
 
     }
@@ -136,9 +141,9 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                "user-1", "ORGANIZER", "comp-1", "Title", "Desc", file))
+                ctx("user-1", "ORGANIZER"), "comp-1", "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only PARTICIPANT role can submit work");
+                .hasMessageContaining("required role(s): PARTICIPANT");
     }
 
     @Test
@@ -156,7 +161,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("already ended");
     }
@@ -178,7 +183,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("File upload failed");
     }
@@ -195,7 +200,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Competition not found");
     }
@@ -220,7 +225,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to save submission");
     }
@@ -249,7 +254,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to save submission");
     }
@@ -277,7 +282,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to update submission");
     }
@@ -308,7 +313,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert: Expect BusinessException with general save submission error
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to save submission"); // Correct expected message
     }
@@ -331,7 +336,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to save submission");
     }
@@ -362,7 +367,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert: Expect RuntimeException with message containing "Upload error"
         assertThatThrownBy(() -> submissionService.submitWork(
-                userId, "PARTICIPANT", competitionId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Upload error");
     }
@@ -406,7 +411,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Act & Assert
         assertThatCode(() -> submissionService.submitTeamWork(
-                userId, "PARTICIPANT", competitionId, teamId, "Title", "Desc", file))
+                ctx(userId, "PARTICIPANT"), competitionId, teamId, "Title", "Desc", file))
                 .doesNotThrowAnyException();
     }
 
@@ -569,7 +574,7 @@ class SubmissionRecordsServiceImplTest {
         when(query.one()).thenReturn(rec);
 
         // 3) Exercise
-        SubmissionInfoVO vo = submissionService.getMySubmission("c1", "u1", "PARTICIPANT");
+        SubmissionInfoVO vo = submissionService.getMySubmission("c1", ctx("u1", "PARTICIPANT"));
 
         // 4) Verify
         assertThat(vo.getId()).isEqualTo("s1");
@@ -579,9 +584,9 @@ class SubmissionRecordsServiceImplTest {
     @DisplayName("❌ getMySubmission forbidden if role wrong")
     void testGetMySubmission_Forbidden() {
         assertThatThrownBy(() ->
-                submissionService.getMySubmission("c1","u1","ADMIN")
+                submissionService.getMySubmission("c1", ctx("u1","ADMIN"))
         ).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only PARTICIPANT");
+                .hasMessageContaining("required role(s): PARTICIPANT");
     }
 
     @Test
@@ -601,7 +606,7 @@ class SubmissionRecordsServiceImplTest {
 
         // 4) Now exercise and verify we get the expected BusinessException
         assertThatThrownBy(() ->
-                submissionService.getMySubmission("c1", "u1", "PARTICIPANT")
+                submissionService.getMySubmission("c1", ctx("u1", "PARTICIPANT"))
         )
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("No submission found");
@@ -612,7 +617,7 @@ class SubmissionRecordsServiceImplTest {
     void testListSubmissionsByRole_Forbidden() {
         when(competitionOrganizersService.lambdaQuery().exists()).thenReturn(false);
         assertThatThrownBy(() ->
-                submissionService.listSubmissionsByRole("c1","u1","PARTICIPANT",1,10,null,null,null)
+                submissionService.listSubmissionsByRole("c1", ctx("u1","PARTICIPANT"),1,10,null,null,null)
         ).isInstanceOf(BusinessException.class);
     }
 
@@ -625,7 +630,7 @@ class SubmissionRecordsServiceImplTest {
         when(oq.exists()).thenReturn(false);
 
         assertThatThrownBy(() ->
-                submissionService.listTeamSubmissionsByRole("c1","u1","PARTICIPANT",1,10,null,null,null)
+                submissionService.listTeamSubmissionsByRole("c1", ctx("u1","PARTICIPANT"),1,10,null,null,null)
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Only organizers or admins");
     }
@@ -672,7 +677,7 @@ class SubmissionRecordsServiceImplTest {
 
         // Should not throw any exception
         assertThatCode(() ->
-                submissionService.reviewSubmission(dto, "rev", "ADMIN")
+                submissionService.reviewSubmission(dto, ctx("rev", "ADMIN"))
         ).doesNotThrowAnyException();
     }
 
@@ -685,7 +690,7 @@ class SubmissionRecordsServiceImplTest {
         dto.setSubmissionId("s1");
         dto.setReviewStatus("WRONG");
         assertThatThrownBy(() ->
-                submissionService.reviewSubmission(dto,"u","ADMIN")
+                submissionService.reviewSubmission(dto, ctx("u","ADMIN"))
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Invalid review status");
     }
@@ -702,7 +707,7 @@ class SubmissionRecordsServiceImplTest {
 
         // assert that a BusinessException is thrown with the expected message
         assertThatThrownBy(() ->
-                submissionService.reviewSubmission(dto, "u", "ADMIN")
+                submissionService.reviewSubmission(dto, ctx("u", "ADMIN"))
         )
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Submission not found");
@@ -737,7 +742,7 @@ class SubmissionRecordsServiceImplTest {
         when(competitionOrganizersService.lambdaQuery().exists()).thenReturn(false);
 
         assertThatThrownBy(() ->
-                submissionService.deleteSubmission("s1","other","PARTICIPANT")
+                submissionService.deleteSubmission("s1", ctx("other","PARTICIPANT"))
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not allowed to delete");
     }
@@ -747,7 +752,7 @@ class SubmissionRecordsServiceImplTest {
     void testDeleteSubmission_NotFound() {
         doReturn(null).when(submissionService).getById("bad");
         assertThatThrownBy(() ->
-                submissionService.deleteSubmission("bad","u","ADMIN")
+                submissionService.deleteSubmission("bad", ctx("u","ADMIN"))
         ).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Submission not found");
     }

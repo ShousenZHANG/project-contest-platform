@@ -270,8 +270,13 @@ function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div
+        className="flex h-64 items-center justify-center"
+        role="status"
+        aria-label="Loading platform dashboard"
+      >
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="sr-only">Loading platform dashboard</span>
       </div>
     );
   }

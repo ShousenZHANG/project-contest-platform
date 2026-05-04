@@ -1,6 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
@@ -48,6 +49,9 @@ class SubmissionJudgesServiceImplTest {
     @Mock private SubmissionServiceClient submissionServiceClient;
     @Mock private SubmissionJudgesMapper submissionJudgesMapper;
 
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -97,7 +101,7 @@ class SubmissionJudgesServiceImplTest {
 
         // Act + Assert
         SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatCode(() -> submissionJudgesService.judgeSubmission("judge-1", judgeDTO))
+        assertThatCode(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
                 .doesNotThrowAnyException();
     }
 
@@ -150,7 +154,7 @@ class SubmissionJudgesServiceImplTest {
         when(judgedQuery.list()).thenReturn(Collections.emptyList());
 
         PageResponse<SubmissionBriefVO> page = submissionJudgesService.listPendingSubmissionsForJudging(
-                "judge-1", "comp-1", null, "asc", 1, 10
+                ctx("judge-1", "JUDGE"), "comp-1", null, "asc", 1, 10
         );
 
         assertThat(page).isNotNull();
@@ -170,7 +174,7 @@ class SubmissionJudgesServiceImplTest {
                 .thenReturn(ResponseEntity.ok(List.of(mockCompetitionCompleted())));
 
         PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
-                "judge-1", null, "createdAt", "asc", 1, 10
+                ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10
         );
 
         assertThat(page).isNotNull();
@@ -186,7 +190,7 @@ class SubmissionJudgesServiceImplTest {
         when(judgeQuery.exists()).thenReturn(false);
 
         SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission("judge-1", judgeDTO))
+        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("You are not assigned as a judge");
     }
@@ -205,7 +209,7 @@ class SubmissionJudgesServiceImplTest {
         when(judgedQuery.exists()).thenReturn(true);
 
         SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission("judge-1", judgeDTO))
+        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("You have already judged");
     }
@@ -219,7 +223,7 @@ class SubmissionJudgesServiceImplTest {
         when(judgeQuery.one()).thenReturn(null);
 
         SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.updateJudgement("judge-1", "submission-1", judgeDTO))
+        assertThatThrownBy(() -> submissionJudgesService.updateJudgement(ctx("judge-1", "JUDGE"), "submission-1", judgeDTO))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("No existing judging record found");
     }
@@ -236,7 +240,7 @@ class SubmissionJudgesServiceImplTest {
                         .page(1).size(10).total(0L).pages(1).build()));
 
         PageResponse<SubmissionBriefVO> page = submissionJudgesService.listPendingSubmissionsForJudging(
-                "judge-1", "comp-1", null, "asc", 1, 10
+                ctx("judge-1", "JUDGE"), "comp-1", null, "asc", 1, 10
         );
 
         assertThat(page).isNotNull();
@@ -256,7 +260,7 @@ class SubmissionJudgesServiceImplTest {
                 .thenReturn(ResponseEntity.ok(Collections.emptyList()));
 
         PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
-                "judge-1", null, "createdAt", "asc", 1, 10
+                ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10
         );
 
         assertThat(page).isNotNull();

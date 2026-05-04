@@ -42,7 +42,7 @@ describe("OrganizerContest", () => {
     renderWithRouter();
     expect(screen.getByPlaceholderText("Enter contest name")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Describe your contest...")).toBeInTheDocument();
-    expect(screen.getByText("Create Contest")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Contest" })).toBeInTheDocument();
   });
 
   it("can add and remove scoring criteria", () => {
@@ -52,7 +52,7 @@ describe("OrganizerContest", () => {
     fireEvent.click(screen.getByText("Add"));
     expect(screen.getByText("Creativity")).toBeInTheDocument();
 
-    const deleteButton = screen.getByRole("button", { name: "delete" });
+    const deleteButton = screen.getByRole("button", { name: /Remove criterion/i });
     fireEvent.click(deleteButton);
     expect(screen.queryByText("Creativity")).not.toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe("OrganizerContest", () => {
       target: { value: "2025-05-10" },
     });
 
-    fireEvent.click(screen.getByText("Create Contest"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Contest" }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalled();

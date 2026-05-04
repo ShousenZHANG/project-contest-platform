@@ -1,6 +1,7 @@
 package com.w16a.danish.judge.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -68,6 +69,7 @@ class SubmissionJudgesControllerTest {
         mockMvc.perform(post("/judges/score")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE")
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Submission judged successfully."));
@@ -80,6 +82,7 @@ class SubmissionJudgesControllerTest {
 
         mockMvc.perform(get("/judges/is-judge")
                         .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE")
                         .param("competitionId", "comp-id"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("true"));
@@ -92,7 +95,8 @@ class SubmissionJudgesControllerTest {
                 .thenReturn(new SubmissionJudgeVO());
 
         mockMvc.perform(get("/judges/{submissionId}/detail", "sub-id")
-                        .header("User-ID", "judge-user-id"))
+                        .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
@@ -100,11 +104,12 @@ class SubmissionJudgesControllerTest {
     @Test
     @DisplayName("✅ List pending submissions for judging")
     void testListPendingSubmissionsForJudging() throws Exception {
-        when(submissionJudgesService.listPendingSubmissionsForJudging(anyString(), anyString(), any(), any(), anyInt(), anyInt()))
+        when(submissionJudgesService.listPendingSubmissionsForJudging(any(RequestContext.class), anyString(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>());
 
         mockMvc.perform(get("/judges/pending-submissions")
                         .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE")
                         .param("competitionId", "comp-id")
                         .param("keyword", "AI")
                         .param("sortOrder", "desc")
@@ -133,6 +138,7 @@ class SubmissionJudgesControllerTest {
         mockMvc.perform(put("/judges/{submissionId}", "sub-id")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE")
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Judging updated successfully."));
@@ -141,11 +147,12 @@ class SubmissionJudgesControllerTest {
     @Test
     @DisplayName("✅ List competitions where the user is assigned as judge")
     void testListMyJudgingCompetitions() throws Exception {
-        when(submissionJudgesService.listMyJudgingCompetitions(anyString(), any(), any(), any(), anyInt(), anyInt()))
+        when(submissionJudgesService.listMyJudgingCompetitions(any(RequestContext.class), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>());
 
         mockMvc.perform(get("/judges/my-competitions")
                         .header("User-ID", "judge-user-id")
+                        .header("User-Role", "JUDGE")
                         .param("keyword", "Hackathon")
                         .param("sortBy", "createdAt")
                         .param("order", "desc")

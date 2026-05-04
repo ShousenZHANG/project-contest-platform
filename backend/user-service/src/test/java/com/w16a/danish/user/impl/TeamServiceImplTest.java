@@ -2,6 +2,7 @@ package com.w16a.danish.user.impl;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.po.Team;
@@ -54,6 +55,10 @@ class TeamServiceImplTest {
         java.lang.reflect.Field baseMapperField = TeamServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
         baseMapperField.setAccessible(true);
         baseMapperField.set(teamService, teamMapper);
+    }
+
+    private static RequestContext ctx(String userId, String role) {
+        return new RequestContext(userId, role);
     }
 
     // === Create Team ===
@@ -139,7 +144,7 @@ class TeamServiceImplTest {
 
         when(teamService.removeById(anyString())).thenReturn(true);
 
-        teamService.deleteTeam("creatorId", "Participant", "teamId");
+        teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId");
     }
 
     @Test
@@ -147,7 +152,7 @@ class TeamServiceImplTest {
     void testDeleteTeam_NoPermission() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("otherUser"));
 
-        assertThatThrownBy(() -> teamService.deleteTeam("userId", "Participant", "teamId"))
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("userId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Only the team creator or an ADMIN");
     }
@@ -290,7 +295,7 @@ class TeamServiceImplTest {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
         when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(true));
 
-        assertThatThrownBy(() -> teamService.deleteTeam("creatorId", "Participant", "teamId"))
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("submitted work");
     }
@@ -302,7 +307,7 @@ class TeamServiceImplTest {
         when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
         when(submissionServiceClient.existsRegistrationByTeamId(anyString())).thenReturn(ResponseEntity.ok(true));
 
-        assertThatThrownBy(() -> teamService.deleteTeam("creatorId", "Participant", "teamId"))
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("registered for competitions");
     }
@@ -319,7 +324,7 @@ class TeamServiceImplTest {
         when(update.eq(any(), any())).thenReturn(update);
         when(update.remove()).thenReturn(false);
 
-        assertThatThrownBy(() -> teamService.deleteTeam("creatorId", "Participant", "teamId"))
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to remove team members");
     }
@@ -338,7 +343,7 @@ class TeamServiceImplTest {
 
         when(teamService.removeById(anyString())).thenReturn(false);
 
-        assertThatThrownBy(() -> teamService.deleteTeam("creatorId", "Participant", "teamId"))
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to delete the team");
     }

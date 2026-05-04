@@ -91,6 +91,7 @@ describe("OrganizerAddJudge", () => {
     expect(await screen.findByText("judge1@example.com")).toBeInTheDocument();
     const deleteButton = screen.getByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
+    fireEvent.click(await screen.findByRole("button", { name: /Remove/i }));
 
     await waitFor(() => {
       expect(apiClient.delete).toHaveBeenCalledWith(

@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 
 /**
  * Immutable identity context extracted from the JWT by the API gateway.
- * Injected into controller method parameters via {@link CurrentUser} +
+ * Injected into controller method parameters via {@link CurrentUser} and
  * {@link RequestContextArgumentResolver}.
  *
  * <p>Controllers declare:
@@ -14,7 +14,7 @@ import org.springframework.http.HttpStatus;
  * }</pre>
  *
  * @param userId the authenticated user's ID (UUID string)
- * @param role   the authenticated user's role (e.g. ADMIN, ORGANIZER, JUDGE, PARTICIPANT)
+ * @param role   the authenticated user's role (for example ADMIN, ORGANIZER, JUDGE, PARTICIPANT)
  *
  * @author Eddy ZHANG
  */
@@ -37,12 +37,14 @@ public record RequestContext(String userId, String role) {
     }
 
     /**
-     * Returns true if this context's role matches any of the supplied roles
-     * (case-insensitive).
+     * Returns true if this context's role matches any supplied role
+     * case-insensitively.
      */
     public boolean hasAnyRole(String... roles) {
-        for (String r : roles) {
-            if (r.equalsIgnoreCase(role)) return true;
+        for (String requiredRole : roles) {
+            if (requiredRole.equalsIgnoreCase(role)) {
+                return true;
+            }
         }
         return false;
     }
@@ -57,7 +59,7 @@ public record RequestContext(String userId, String role) {
         if (!hasAnyRole(roles)) {
             throw new BusinessException(
                     HttpStatus.FORBIDDEN,
-                    "Access denied — required role(s): " + String.join(", ", roles)
+                    "Access denied - required role(s): " + String.join(", ", roles)
             );
         }
     }

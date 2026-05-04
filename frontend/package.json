@@ -29,8 +29,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",
-    "exceljs": "^4.4.0",
-    "file-saver": "^2.0.5",
     "framer-motion": "^12.6.3",
     "lucide-react": "^1.14.0",
     "material-icons": "^1.13.14",

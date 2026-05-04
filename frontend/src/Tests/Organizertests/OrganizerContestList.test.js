@@ -69,7 +69,7 @@ describe("OrganizerContestList", () => {
 
   it("navigates to create new contest page", async () => {
     renderWithRouter();
-    const createButton = await screen.findByText("Create New Competition");
+    const createButton = await screen.findByRole("button", { name: /New Competition/i });
     fireEvent.click(createButton);
 
     expect(mockNavigate).toHaveBeenCalledWith("/OrganizerContest/null");

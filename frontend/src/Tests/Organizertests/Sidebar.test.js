@@ -2,6 +2,13 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Sidebar from "../../Organizer/Sidebar";
+import { toast } from "sonner";
+
+jest.mock("sonner", () => ({
+  toast: {
+    error: jest.fn(),
+  },
+}));
 
 const mockedNavigate = jest.fn();
 
@@ -42,10 +49,10 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    const dashboardLink = screen.getByText(/Dashboard/i);
+    const dashboardLink = screen.getByRole("link", { name: /Dashboard/i });
     fireEvent.click(dashboardLink);
 
-    expect(dashboardLink).toHaveClass("active-link");
+    expect(dashboardLink).toHaveClass("bg-primary");
   });
 
   it("navigates to profile page when clicking Profile link", () => {
@@ -73,6 +80,6 @@ describe("Sidebar", () => {
     const dashboardLink = screen.getByText(/Dashboard/i);
     fireEvent.click(dashboardLink);
 
-    expect(window.alert).toHaveBeenCalledWith("You are not authorized. Please log in first.");
+    expect(toast.error).toHaveBeenCalledWith("You are not authorized. Please log in first.");
   });
 });

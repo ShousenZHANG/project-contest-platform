@@ -60,6 +60,7 @@ describe("AdminAccountManage", () => {
       </BrowserRouter>
     );
 
+    await screen.findByText("Test User");
     const rows = await screen.findAllByRole("row");
     const userRow = rows.find((row) => within(row).queryByText("Test User"));
 
@@ -71,8 +72,6 @@ describe("AdminAccountManage", () => {
   });
 
   it("deletes a user after confirmation", async () => {
-    window.confirm = jest.fn(() => true);
-
     render(
       <BrowserRouter>
         <AdminAccountManage />
@@ -81,6 +80,7 @@ describe("AdminAccountManage", () => {
 
     const deleteButton = await screen.findByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
+    fireEvent.click(await screen.findByRole("button", { name: /Delete user/i }));
 
     expect(apiClient.delete).toHaveBeenCalledWith(
       expect.stringContaining("/users/user-1")
