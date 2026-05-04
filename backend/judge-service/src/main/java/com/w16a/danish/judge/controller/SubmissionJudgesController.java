@@ -1,5 +1,7 @@
 package com.w16a.danish.judge.controller;
 
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -59,10 +61,10 @@ public class SubmissionJudgesController {
     )
     @PostMapping("/score")
     public ResponseEntity<String> judgeSubmission(
-            @RequestHeader("User-ID") String judgeId,
+            @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
-        submissionJudgesService.judgeSubmission(judgeId, judgeDTO);
+        submissionJudgesService.judgeSubmission(ctx, judgeDTO);
         return ResponseEntity.ok("Submission judged successfully.");
     }
 
@@ -78,10 +80,10 @@ public class SubmissionJudgesController {
     )
     @GetMapping("/is-judge")
     public ResponseEntity<Boolean> isAssignedJudge(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId) {
 
-        boolean isJudge = submissionJudgesService.isUserAssignedAsJudge(userId, competitionId);
+        boolean isJudge = submissionJudgesService.isUserAssignedAsJudge(ctx.userId(), competitionId);
         return ResponseEntity.ok(isJudge);
     }
 
@@ -97,10 +99,10 @@ public class SubmissionJudgesController {
     )
     @GetMapping("/{submissionId}/detail")
     public ResponseEntity<SubmissionJudgeVO> getMyJudgingDetail(
-            @RequestHeader("User-ID") String judgeId,
+            @CurrentUser RequestContext ctx,
             @PathVariable("submissionId") String submissionId) {
 
-        SubmissionJudgeVO vo = submissionJudgesService.getMyJudgingDetail(judgeId, submissionId);
+        SubmissionJudgeVO vo = submissionJudgesService.getMyJudgingDetail(ctx.userId(), submissionId);
         return ResponseEntity.ok(vo);
     }
 
@@ -120,7 +122,7 @@ public class SubmissionJudgesController {
     )
     @GetMapping("/pending-submissions")
     public ResponseEntity<PageResponse<SubmissionBriefVO>> listPendingSubmissionsForJudging(
-            @RequestHeader("User-ID") String judgeId,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, defaultValue = "desc") String sortOrder,
@@ -128,7 +130,7 @@ public class SubmissionJudgesController {
             @RequestParam(defaultValue = "10") int size) {
 
         PageResponse<SubmissionBriefVO> response = submissionJudgesService.listPendingSubmissionsForJudging(
-                judgeId, competitionId, keyword, sortOrder, page, size);
+                ctx, competitionId, keyword, sortOrder, page, size);
         return ResponseEntity.ok(response);
     }
 
@@ -148,11 +150,11 @@ public class SubmissionJudgesController {
     )
     @PutMapping("/{submissionId}")
     public ResponseEntity<String> updateJudgement(
-            @RequestHeader("User-ID") String judgeId,
+            @CurrentUser RequestContext ctx,
             @PathVariable("submissionId") String submissionId,
             @RequestBody SubmissionJudgeDTO judgeDTO) {
 
-        submissionJudgesService.updateJudgement(judgeId, submissionId, judgeDTO);
+        submissionJudgesService.updateJudgement(ctx, submissionId, judgeDTO);
         return ResponseEntity.ok("Judging updated successfully.");
     }
 
@@ -172,7 +174,7 @@ public class SubmissionJudgesController {
     )
     @GetMapping("/my-competitions")
     public ResponseEntity<PageResponse<CompetitionResponseVO>> listMyJudgingCompetitions(
-            @RequestHeader("User-ID") String judgeId,
+            @CurrentUser RequestContext ctx,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order,
@@ -180,7 +182,7 @@ public class SubmissionJudgesController {
             @RequestParam(defaultValue = "10") int size) {
 
         PageResponse<CompetitionResponseVO> response = submissionJudgesService.listMyJudgingCompetitions(
-                judgeId, keyword, sortBy, order, page, size);
+                ctx, keyword, sortBy, order, page, size);
         return ResponseEntity.ok(response);
     }
 

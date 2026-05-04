@@ -4,6 +4,8 @@ package com.w16a.danish.registration.controller;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -50,10 +52,9 @@ public class CompetitionParticipantsController {
     @PostMapping("/{competitionId}")
     public ResponseEntity<String> registerForCompetition(
             @PathVariable String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        participantsService.register(competitionId, userId, userRole);
+        participantsService.register(competitionId, ctx);
         return ResponseEntity.ok("Successfully registered for competition");
     }
 
@@ -72,10 +73,9 @@ public class CompetitionParticipantsController {
     @DeleteMapping("/{competitionId}")
     public ResponseEntity<String> cancelRegistration(
             @PathVariable String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        participantsService.cancelRegistration(competitionId, userId, userRole);
+        participantsService.cancelRegistration(competitionId, ctx);
         return ResponseEntity.ok("Registration cancelled successfully");
     }
 
@@ -99,8 +99,7 @@ public class CompetitionParticipantsController {
     @GetMapping("/{competitionId}/participants")
     public ResponseEntity<PageResponse<ParticipantInfoVO>> listParticipantsByCompetition(
             @PathVariable String competitionId,
-            @RequestHeader("User-ID") String organizerId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword,
@@ -108,7 +107,7 @@ public class CompetitionParticipantsController {
             @RequestParam(defaultValue = "asc") String order
     ) {
         PageResponse<ParticipantInfoVO> result = participantsService.getParticipantsByCompetitionWithSearch(
-                competitionId, organizerId, userRole, page, size, keyword, sortBy, order
+                competitionId, ctx, page, size, keyword, sortBy, order
         );
         return ResponseEntity.ok(result);
     }
@@ -130,10 +129,9 @@ public class CompetitionParticipantsController {
     public ResponseEntity<String> cancelParticipantByOrganizer(
             @PathVariable String competitionId,
             @PathVariable String participantUserId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        participantsService.cancelByOrganizer(competitionId, participantUserId, userId, userRole);
+        participantsService.cancelByOrganizer(competitionId, participantUserId, ctx);
         return ResponseEntity.ok("Participant registration cancelled by organizer");
     }
 
@@ -152,10 +150,9 @@ public class CompetitionParticipantsController {
     @GetMapping("/{competitionId}/status")
     public ResponseEntity<Boolean> isRegistered(
             @PathVariable String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        boolean registered = participantsService.isRegistered(competitionId, userId, userRole);
+        boolean registered = participantsService.isRegistered(competitionId, ctx);
         return ResponseEntity.ok(registered);
     }
 
@@ -177,8 +174,7 @@ public class CompetitionParticipantsController {
     )
     @GetMapping("/my")
     public ResponseEntity<PageResponse<CompetitionParticipationVO>> getMyCompetitions(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword,
@@ -186,7 +182,7 @@ public class CompetitionParticipantsController {
             @RequestParam(defaultValue = "asc") String order
     ) {
         PageResponse<CompetitionParticipationVO> response = participantsService.getMyCompetitionsWithSearch(
-                userId, userRole, page, size, keyword, sortBy, order
+                ctx, page, size, keyword, sortBy, order
         );
         return ResponseEntity.ok(response);
     }
@@ -208,10 +204,9 @@ public class CompetitionParticipantsController {
     public ResponseEntity<String> registerTeam(
             @PathVariable String competitionId,
             @PathVariable String teamId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        participantsService.registerTeam(competitionId, teamId, userId, userRole);
+        participantsService.registerTeam(competitionId, teamId, ctx);
         return ResponseEntity.ok("Team successfully registered for competition");
     }
 
@@ -232,10 +227,9 @@ public class CompetitionParticipantsController {
     public ResponseEntity<String> cancelTeamRegistration(
             @PathVariable String competitionId,
             @PathVariable String teamId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        participantsService.cancelTeamRegistration(competitionId, teamId, userId, userRole);
+        participantsService.cancelTeamRegistration(competitionId, teamId, ctx);
         return ResponseEntity.ok("Team registration cancelled successfully");
     }
 
@@ -336,10 +330,9 @@ public class CompetitionParticipantsController {
     public ResponseEntity<String> cancelTeamByOrganizer(
             @PathVariable String competitionId,
             @PathVariable String teamId,
-            @RequestHeader("User-ID") String organizerId,
-            @RequestHeader("User-Role") String userRole
+            @CurrentUser RequestContext ctx
     ) {
-        participantsService.cancelTeamByOrganizer(competitionId, teamId, organizerId, userRole);
+        participantsService.cancelTeamByOrganizer(competitionId, teamId, ctx);
         return ResponseEntity.ok("Team registration removed by organizer");
     }
 

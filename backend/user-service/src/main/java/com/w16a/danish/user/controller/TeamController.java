@@ -1,5 +1,7 @@
 package com.w16a.danish.user.controller;
 
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
@@ -54,10 +56,10 @@ public class TeamController {
     )
     @PostMapping("/create")
     public ResponseEntity<TeamResponseVO> createTeam(
-            @RequestHeader("User-ID") String creatorId,
+            @CurrentUser RequestContext ctx,
             @Valid @RequestBody TeamCreateDTO dto
     ) {
-        TeamResponseVO teamInfo = teamService.createTeam(creatorId, dto);
+        TeamResponseVO teamInfo = teamService.createTeam(ctx.userId(), dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(teamInfo);
     }
 
@@ -72,11 +74,11 @@ public class TeamController {
     )
     @DeleteMapping("/{teamId}/members/{memberId}")
     public ResponseEntity<String> removeMember(
-            @RequestHeader("User-ID") String requesterId,
+            @CurrentUser RequestContext ctx,
             @PathVariable String teamId,
             @PathVariable String memberId
     ) {
-        teamService.removeTeamMember(requesterId, teamId, memberId);
+        teamService.removeTeamMember(ctx.userId(), teamId, memberId);
         return ResponseEntity.ok("Member removed");
     }
 
@@ -95,11 +97,10 @@ public class TeamController {
     )
     @DeleteMapping("/{teamId}")
     public ResponseEntity<String> deleteTeam(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
-        teamService.deleteTeam(userId, userRole, teamId);
+        teamService.deleteTeam(ctx, teamId);
         return ResponseEntity.ok("Team deleted");
     }
 
@@ -122,11 +123,11 @@ public class TeamController {
     )
     @PutMapping("/{teamId}")
     public ResponseEntity<String> updateTeam(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @PathVariable String teamId,
             @Valid @RequestBody TeamUpdateDTO dto
     ) {
-        teamService.updateTeam(userId, teamId, dto);
+        teamService.updateTeam(ctx.userId(), teamId, dto);
         return ResponseEntity.ok("Team updated");
     }
 
@@ -140,10 +141,10 @@ public class TeamController {
     )
     @PostMapping("/{teamId}/join")
     public ResponseEntity<String> joinTeam(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
-        teamService.joinTeam(teamId, userId);
+        teamService.joinTeam(teamId, ctx.userId());
         return ResponseEntity.ok("Joined successfully");
     }
 
@@ -158,10 +159,10 @@ public class TeamController {
     )
     @PostMapping("/{teamId}/leave")
     public ResponseEntity<String> leaveTeam(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
-        teamService.leaveTeam(teamId, userId);
+        teamService.leaveTeam(teamId, ctx.userId());
         return ResponseEntity.ok("Left the team");
     }
 
@@ -206,14 +207,14 @@ public class TeamController {
     )
     @GetMapping("/my-joined")
     public ResponseEntity<PageResponse<TeamSummaryVO>> getMyJoinedTeams(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "joinedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order,
             @RequestParam(required = false) String keyword
     ) {
-        return ResponseEntity.ok(teamService.getTeamsJoinedBy(userId, page, size, sortBy, order, keyword));
+        return ResponseEntity.ok(teamService.getTeamsJoinedBy(ctx.userId(), page, size, sortBy, order, keyword));
     }
 
     @Operation(

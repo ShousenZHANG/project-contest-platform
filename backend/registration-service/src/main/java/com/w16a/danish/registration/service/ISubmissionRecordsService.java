@@ -1,5 +1,6 @@
 package com.w16a.danish.registration.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -39,14 +40,13 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
 
     void deleteSubmissionsByUserAndCompetition(String userId, String competitionId);
 
-    void submitWork(String userId, String userRole, String competitionId, String title, String description, MultipartFile file);
+    void submitWork(RequestContext ctx, String competitionId, String title, String description, MultipartFile file);
 
-    SubmissionInfoVO getMySubmission(String competitionId, String userId, String userRole);
+    SubmissionInfoVO getMySubmission(String competitionId, RequestContext ctx);
 
     PageResponse<SubmissionInfoVO> listSubmissionsByRole(
             String competitionId,
-            String userId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
@@ -56,11 +56,11 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
 
     PageResponse<SubmissionInfoVO> listPublicApprovedSubmissions(String competitionId, int page, int size, String keyword, String sortBy, String order);
 
-    void reviewSubmission(SubmissionReviewDTO dto, String reviewerId, String reviewerRole);
+    void reviewSubmission(SubmissionReviewDTO dto, RequestContext ctx);
 
     boolean isUserOrganizerOfSubmission(String submissionId, String userId);
 
-    void deleteSubmission(String submissionId, String userId, String userRole);
+    void deleteSubmission(String submissionId, RequestContext ctx);
 
     /**
      * Get submission status (whether submitted) for each team in each competition.
@@ -73,8 +73,7 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
     Map<String, BigDecimal> getSubmissionScoresByTeam(List<String> teamIds, List<String> competitionIds);
 
     void submitTeamWork(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             String competitionId,
             String teamId,
             String title,
@@ -83,10 +82,10 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
 
     TeamSubmissionInfoVO getTeamSubmissionPublic(String competitionId, String teamId);
 
-    void deleteTeamSubmission(String submissionId, String userId, String userRole);
+    void deleteTeamSubmission(String submissionId, RequestContext ctx);
 
     PageResponse<SubmissionInfoVO> listTeamSubmissionsByRole(
-            String competitionId, String userId, String userRole,
+            String competitionId, RequestContext ctx,
             int page, int size, String keyword, String sortBy, String order);
 
     PageResponse<SubmissionInfoVO> listPublicApprovedTeamSubmissions(

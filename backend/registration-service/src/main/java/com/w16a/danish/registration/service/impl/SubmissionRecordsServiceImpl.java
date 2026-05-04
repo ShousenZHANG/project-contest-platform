@@ -3,6 +3,7 @@ package com.w16a.danish.registration.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.config.SubmissionNotifier;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.mq.SubmissionReviewedMessage;
@@ -119,10 +120,9 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
     @Override
     @Transactional
-    public void submitWork(String userId, String userRole, String competitionId, String title, String description, MultipartFile file) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can submit work");
-        }
+    public void submitWork(RequestContext ctx, String competitionId, String title, String description, MultipartFile file) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         boolean registered = competitionParticipantsService.lambdaQuery()
                 .eq(CompetitionParticipants::getUserId, userId)
@@ -214,10 +214,9 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     }
 
     @Override
-    public SubmissionInfoVO getMySubmission(String competitionId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT can view their submission");
-        }
+    public SubmissionInfoVO getMySubmission(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         SubmissionRecords submission = lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
@@ -236,15 +235,15 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     public PageResponse<SubmissionInfoVO> listSubmissionsByRole(
             String competitionId,
-            String userId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
             String sortBy,
             String order
     ) {
-        boolean isOrganizerOrAdmin = "ADMIN".equalsIgnoreCase(userRole) ||
+        String userId = ctx.userId();
+        boolean isOrganizerOrAdmin = ctx.isAdmin() ||
                 competitionOrganizersService.lambdaQuery()
                         .eq(CompetitionOrganizers::getCompetitionId, competitionId)
                         .eq(CompetitionOrganizers::getUserId, userId)
@@ -344,13 +343,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
     @Override
     @Transactional
-    public void reviewSubmission(SubmissionReviewDTO dto, String reviewerId, String reviewerRole) {
+    public void reviewSubmission(SubmissionReviewDTO dto, RequestContext ctx) {
+        String reviewerId = ctx.userId();
         SubmissionRecords submission = this.getById(dto.getSubmissionId());
         if (submission == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found");
         }
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(reviewerRole);
+        boolean isAdmin = ctx.isAdmin();
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, submission.getCompetitionId())
                 .eq(CompetitionOrganizers::getUserId, reviewerId)
@@ -425,13 +425,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
     @Override
     @Transactional
-    public void deleteSubmission(String submissionId, String userId, String userRole) {
+    public void deleteSubmission(String submissionId, RequestContext ctx) {
+        String userId = ctx.userId();
         SubmissionRecords submission = this.getById(submissionId);
         if (submission == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found");
         }
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        boolean isAdmin = ctx.isAdmin();
         boolean isOwner = userId.equals(submission.getUserId());
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, submission.getCompetitionId())
@@ -493,17 +494,15 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     @Transactional
     public void submitTeamWork(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             String competitionId,
             String teamId,
             String title,
             String description,
             MultipartFile file) {
 
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can submit team work.");
-        }
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         Boolean isMember = Optional.ofNullable(userServiceClient.isUserInTeam(userId, teamId).getBody())
                 .orElse(false);
@@ -619,14 +618,15 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
     @Override
     @Transactional
-    public void deleteTeamSubmission(String submissionId, String userId, String userRole) {
+    public void deleteTeamSubmission(String submissionId, RequestContext ctx) {
+        String userId = ctx.userId();
         SubmissionRecords submission = this.getById(submissionId);
 
         if (submission == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found.");
         }
 
-        if (!"ADMIN".equalsIgnoreCase(userRole)) {
+        if (!ctx.isAdmin()) {
             if (StrUtil.isBlank(submission.getTeamId())) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "This is not a team submission.");
             }
@@ -651,15 +651,15 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     public PageResponse<SubmissionInfoVO> listTeamSubmissionsByRole(
             String competitionId,
-            String userId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
             String sortBy,
             String order) {
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        String userId = ctx.userId();
+        boolean isAdmin = ctx.isAdmin();
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
                 .eq(CompetitionOrganizers::getUserId, userId)

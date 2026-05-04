@@ -8,6 +8,8 @@ import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.competition.service.ICompetitionsService;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -58,11 +60,10 @@ public class CompetitionsController {
     )
     @PostMapping
     public ResponseEntity<CompetitionResponseVO> createCompetition(
-            @RequestHeader("User-Role") String currentUserRole,
-            @RequestHeader("User-ID") String currentUserId,
+            @CurrentUser RequestContext ctx,
             @Valid @RequestBody CompetitionCreateDTO competitionDTO) {
 
-        CompetitionResponseVO response = competitionService.createCompetition(competitionDTO, currentUserRole, currentUserId);
+        CompetitionResponseVO response = competitionService.createCompetition(competitionDTO, ctx);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -128,10 +129,9 @@ public class CompetitionsController {
     public ResponseEntity<String> deleteCompetition(
             @Parameter(description = "Competition ID", example = "86594026-4d1d-4d6d-bf8c-8950e4d1cf3f", required = true)
             @PathVariable String id,
-            @RequestHeader("User-Role") String currentUserRole,
-            @RequestHeader("User-ID") String currentUserId) {
+            @CurrentUser RequestContext ctx) {
 
-        competitionService.deleteCompetition(id, currentUserRole, currentUserId);
+        competitionService.deleteCompetition(id, ctx);
         return ResponseEntity.ok("Competition deleted successfully");
     }
 
@@ -155,11 +155,10 @@ public class CompetitionsController {
     public ResponseEntity<CompetitionResponseVO> updateCompetition(
             @Parameter(description = "ID of the competition to update", example = "86594026-4d1d-4d6d-bf8c-8950e4d1cf3f", required = true)
             @PathVariable String id,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @Valid @RequestBody CompetitionUpdateDTO updateDTO) {
 
-        CompetitionResponseVO updated = competitionService.updateCompetition(id, userId, userRole, updateDTO);
+        CompetitionResponseVO updated = competitionService.updateCompetition(id, ctx, updateDTO);
         return ResponseEntity.ok(updated);
     }
 
@@ -183,12 +182,11 @@ public class CompetitionsController {
     @PostMapping("/{id}/media")
     public ResponseEntity<CompetitionResponseVO> uploadCompetitionMedia(
             @PathVariable String id,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("mediaType") String mediaType,
             @RequestParam("file") MultipartFile file) {
 
-        CompetitionResponseVO updated = competitionService.uploadCompetitionMedia(id, userId, userRole, mediaType, file);
+        CompetitionResponseVO updated = competitionService.uploadCompetitionMedia(id, ctx, mediaType, file);
         return ResponseEntity.ok(updated);
     }
 
@@ -212,11 +210,10 @@ public class CompetitionsController {
     @DeleteMapping("/{id}/media/image")
     public ResponseEntity<CompetitionResponseVO> deleteCompetitionImage(
             @PathVariable String id,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("imageUrl") String imageUrl) {
 
-        CompetitionResponseVO updated = competitionService.deleteCompetitionImage(id, userId, userRole, imageUrl);
+        CompetitionResponseVO updated = competitionService.deleteCompetitionImage(id, ctx, imageUrl);
         return ResponseEntity.ok(updated);
     }
 
@@ -243,10 +240,9 @@ public class CompetitionsController {
     @DeleteMapping("/{id}/media/video")
     public ResponseEntity<CompetitionResponseVO> deleteIntroVideo(
             @PathVariable String id,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        CompetitionResponseVO updated = competitionService.deleteIntroVideo(id, userId, userRole);
+        CompetitionResponseVO updated = competitionService.deleteIntroVideo(id, ctx);
         return ResponseEntity.ok(updated);
     }
 
@@ -267,12 +263,11 @@ public class CompetitionsController {
     )
     @GetMapping("/achieve/my")
     public ResponseEntity<PageResponse<CompetitionResponseVO>> listMyCompetitions(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        PageResponse<CompetitionResponseVO> response = competitionService.listCompetitionsByOrganizer(userId, userRole, page, size);
+        PageResponse<CompetitionResponseVO> response = competitionService.listCompetitionsByOrganizer(ctx, page, size);
         return ResponseEntity.ok(response);
     }
 
@@ -317,12 +312,11 @@ public class CompetitionsController {
     )
     @PostMapping("/{id}/assign-judges")
     public ResponseEntity<String> assignJudges(
-            @RequestHeader("User-ID") String currentUserId,
-            @RequestHeader("User-Role") String currentUserRole,
+            @CurrentUser RequestContext ctx,
             @PathVariable String id,
             @RequestBody AssignJudgesDTO dto) {
 
-        competitionService.assignJudges(id, currentUserId, currentUserRole, dto);
+        competitionService.assignJudges(id, ctx, dto);
         return ResponseEntity.ok("Judges assigned successfully");
     }
 
@@ -340,13 +334,12 @@ public class CompetitionsController {
     )
     @GetMapping("/{id}/judges")
     public ResponseEntity<PageResponse<UserBriefVO>> listAssignedJudges(
-            @RequestHeader("User-ID") String currentUserId,
-            @RequestHeader("User-Role") String currentUserRole,
+            @CurrentUser RequestContext ctx,
             @PathVariable String id,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        PageResponse<UserBriefVO> response = competitionService.listAssignedJudges(id, currentUserId, currentUserRole, page, size);
+        PageResponse<UserBriefVO> response = competitionService.listAssignedJudges(id, ctx, page, size);
         return ResponseEntity.ok(response);
     }
 
@@ -363,12 +356,11 @@ public class CompetitionsController {
     )
     @DeleteMapping("/{id}/judges/{judgeId}")
     public ResponseEntity<String> removeJudge(
-            @RequestHeader("User-ID") String currentUserId,
-            @RequestHeader("User-Role") String currentUserRole,
+            @CurrentUser RequestContext ctx,
             @PathVariable String id,
             @PathVariable String judgeId) {
 
-        competitionService.removeJudge(id, currentUserId, currentUserRole, judgeId);
+        competitionService.removeJudge(id, ctx, judgeId);
         return ResponseEntity.ok("Judge removed successfully.");
     }
 

@@ -1,6 +1,7 @@
 package com.w16a.danish.interaction.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -57,19 +58,19 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
 
     @Override
     @Transactional
-    public void deleteComment(String commentId, String userId, String userRole) {
+    public void deleteComment(String commentId, RequestContext ctx) {
         SubmissionComments comment = this.getById(commentId);
         if (comment == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Comment not found");
         }
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
-        boolean isOwner = userId.equals(comment.getUserId());
+        boolean isAdmin = ctx.isAdmin();
+        boolean isOwner = ctx.userId().equals(comment.getUserId());
         boolean isOrganizer = false;
 
         if (!isAdmin && !isOwner) {
             isOrganizer = Boolean.TRUE.equals(registrationServiceClient.isUserOrganizerOfSubmission(
-                    comment.getSubmissionId(), userId));
+                    comment.getSubmissionId(), ctx.userId()));
         }
 
         if (!(isAdmin || isOwner || isOrganizer)) {

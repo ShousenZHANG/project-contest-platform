@@ -6,6 +6,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.RegexPool;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -168,7 +169,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     @Override
     @Transactional
-    public String deleteUserById(String userId, String currentUserId, String currentUserRole) {
+    public String deleteUserById(String userId, RequestContext ctx) {
         // check if user exists
         Users user = getById(userId);
         if (user == null) {
@@ -177,8 +178,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
         // check if user has permission to delete
         // only ADMIN can delete other users
-        boolean isSelf = currentUserId.equals(userId);
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUserRole);
+        boolean isSelf = ctx.userId().equals(userId);
+        boolean isAdmin = ctx.isAdmin();
         if (!isSelf && !isAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You do not have permission to delete this user");
         }
@@ -505,8 +506,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
 
     @Override
-    public PageResponse<AdminUserVO> listUsersAdmin(String adminId, String adminRole, String role, String keyword, int page, int size, String sortBy, String order) {
-        if (!"ADMIN".equalsIgnoreCase(adminRole)) {
+    public PageResponse<AdminUserVO> listUsersAdmin(RequestContext ctx, String role, String keyword, int page, int size, String sortBy, String order) {
+        if (!ctx.isAdmin()) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only ADMINs can access this resource.");
         }
 

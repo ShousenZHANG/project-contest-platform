@@ -2,6 +2,7 @@ package com.w16a.danish.user.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.po.Team;
@@ -127,14 +128,14 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     @Override
     @Transactional
-    public void deleteTeam(String userId, String userRole, String teamId) {
+    public void deleteTeam(RequestContext ctx, String teamId) {
         Team team = this.getById(teamId);
         if (team == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Team not found.");
         }
 
-        boolean isCreator = userId.equals(team.getCreatedBy());
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        boolean isCreator = ctx.userId().equals(team.getCreatedBy());
+        boolean isAdmin = ctx.isAdmin();
         if (!isCreator && !isAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only the team creator or an ADMIN can delete this team.");
         }

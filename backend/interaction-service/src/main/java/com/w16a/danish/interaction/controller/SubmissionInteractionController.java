@@ -7,6 +7,8 @@ import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
 import com.w16a.danish.interaction.service.ISubmissionCommentsService;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -45,8 +47,8 @@ public class SubmissionInteractionController {
     )
     @PostMapping("/comments")
     public ResponseEntity<String> postComment(@Valid @RequestBody SubmissionCommentDTO dto,
-                                              @RequestHeader("User-ID") String userId) {
-        commentsService.addComment(userId, dto);
+                                              @CurrentUser RequestContext ctx) {
+        commentsService.addComment(ctx.userId(), dto);
         return ResponseEntity.ok("Comment added successfully");
     }
 
@@ -60,9 +62,8 @@ public class SubmissionInteractionController {
     )
     @DeleteMapping("/comments/{id}")
     public ResponseEntity<String> deleteComment(@PathVariable String id,
-                                                @RequestHeader("User-ID") String userId,
-                                                @RequestHeader("User-Role") String role) {
-        commentsService.deleteComment(id, userId, role);
+                                                @CurrentUser RequestContext ctx) {
+        commentsService.deleteComment(id, ctx);
         return ResponseEntity.ok("Comment deleted");
     }
 
@@ -77,10 +78,10 @@ public class SubmissionInteractionController {
     @PutMapping("/comments/{id}")
     public ResponseEntity<String> updateComment(
             @PathVariable String id,
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionCommentDTO dto) {
 
-        commentsService.updateComment(id, userId, dto);
+        commentsService.updateComment(id, ctx.userId(), dto);
         return ResponseEntity.ok("Comment updated successfully");
     }
 
@@ -123,8 +124,8 @@ public class SubmissionInteractionController {
     )
     @PostMapping("/votes")
     public ResponseEntity<String> vote(@RequestParam String submissionId,
-                                       @RequestHeader("User-ID") String userId) {
-        votesService.vote(submissionId, userId);
+                                       @CurrentUser RequestContext ctx) {
+        votesService.vote(submissionId, ctx.userId());
         return ResponseEntity.ok("Voted");
     }
 
@@ -138,8 +139,8 @@ public class SubmissionInteractionController {
     )
     @DeleteMapping("/votes")
     public ResponseEntity<String> unvote(@RequestParam String submissionId,
-                                         @RequestHeader("User-ID") String userId) {
-        votesService.unvote(submissionId, userId);
+                                         @CurrentUser RequestContext ctx) {
+        votesService.unvote(submissionId, ctx.userId());
         return ResponseEntity.ok("Unvoted");
     }
 
@@ -166,8 +167,8 @@ public class SubmissionInteractionController {
     )
     @GetMapping("/votes/status")
     public ResponseEntity<Boolean> hasVoted(@RequestParam String submissionId,
-                                            @RequestHeader("User-ID") String userId) {
-        return ResponseEntity.ok(votesService.hasVoted(submissionId, userId));
+                                            @CurrentUser RequestContext ctx) {
+        return ResponseEntity.ok(votesService.hasVoted(submissionId, ctx.userId()));
     }
 
     @Operation(

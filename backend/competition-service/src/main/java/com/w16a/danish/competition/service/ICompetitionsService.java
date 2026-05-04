@@ -1,5 +1,6 @@
 package com.w16a.danish.competition.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
@@ -30,7 +31,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param currentUserId ID of the user creating the competition.
      * @return The created competition.
      */
-    CompetitionResponseVO createCompetition(CompetitionCreateDTO competitionDTO, String currentUserRole, String currentUserId);
+    CompetitionResponseVO createCompetition(CompetitionCreateDTO competitionDTO, RequestContext ctx);
 
     /**
      * Delete a competition.
@@ -39,7 +40,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param currentUserRole Role of the user requesting deletion.
      * @param currentUserId ID of the user requesting deletion.
      */
-    void deleteCompetition(String competitionId, String currentUserRole, String currentUserId);
+    void deleteCompetition(String competitionId, RequestContext ctx);
 
     /**
      * Get a competition by its ID.
@@ -70,7 +71,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param updateDTO Updated competition details.
      * @return Updated competition information.
      */
-    CompetitionResponseVO updateCompetition(String competitionId, String userId, String userRole, CompetitionUpdateDTO updateDTO);
+    CompetitionResponseVO updateCompetition(String competitionId, RequestContext ctx, CompetitionUpdateDTO updateDTO);
 
     /**
      * Upload competition promotional media (intro video or images).
@@ -82,7 +83,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param file Media file.
      * @return Updated competition information.
      */
-    CompetitionResponseVO uploadCompetitionMedia(String competitionId, String userId, String userRole, String mediaType, MultipartFile file);
+    CompetitionResponseVO uploadCompetitionMedia(String competitionId, RequestContext ctx, String mediaType, MultipartFile file);
 
     /**
      * Delete an image from a competition.
@@ -93,7 +94,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param imageUrl URL of the image to delete.
      * @return Updated competition information.
      */
-    CompetitionResponseVO deleteCompetitionImage(String competitionId, String userId, String userRole, String imageUrl);
+    CompetitionResponseVO deleteCompetitionImage(String competitionId, RequestContext ctx, String imageUrl);
 
     /**
      * List competitions created by a specific organizer.
@@ -104,7 +105,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param size Number of items per page.
      * @return Paginated list of competitions.
      */
-    PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(String userId, String userRole, int page, int size);
+    PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size);
 
     /**
      * Delete the intro video of a competition.
@@ -114,7 +115,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param userRole Role of the user requesting deletion.
      * @return Updated competition information.
      */
-    CompetitionResponseVO deleteIntroVideo(String competitionId, String userId, String userRole);
+    CompetitionResponseVO deleteIntroVideo(String competitionId, RequestContext ctx);
 
     /**
      * Get multiple competitions by their IDs.
@@ -132,7 +133,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param userRole Role of the user.
      * @param dto Judge assignment information.
      */
-    void assignJudges(String competitionId, String userId, String userRole, AssignJudgesDTO dto);
+    void assignJudges(String competitionId, RequestContext ctx, AssignJudgesDTO dto);
 
     /**
      * List judges assigned to a competition.
@@ -144,7 +145,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param size Number of items per page.
      * @return Paginated list of assigned judges.
      */
-    PageResponse<UserBriefVO> listAssignedJudges(String competitionId, String userId, String userRole, int page, int size);
+    PageResponse<UserBriefVO> listAssignedJudges(String competitionId, RequestContext ctx, int page, int size);
 
     /**
      * Remove a judge from a competition.
@@ -154,7 +155,7 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @param userRole Role of the user.
      * @param judgeId ID of the judge to remove.
      */
-    void removeJudge(String competitionId, String userId, String userRole, String judgeId);
+    void removeJudge(String competitionId, RequestContext ctx, String judgeId);
 
     /**
      * Check if a user is an organizer of a competition.

@@ -1,6 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.config.AwardNotifier;
 import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
@@ -52,8 +53,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
 
     @Override
     public PageResponse<ScoredSubmissionVO> listScoredSubmissions(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             String competitionId,
             String keyword,
             String sortBy,
@@ -61,8 +61,8 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
             int page,
             int size) {
 
-        boolean isOrganizerOrAdmin = "ADMIN".equalsIgnoreCase(userRole) ||
-                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, userId).getBody());
+        boolean isOrganizerOrAdmin = ctx.isAdmin() ||
+                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, ctx.userId()).getBody());
         if (!isOrganizerOrAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can view scored submissions.");
         }
@@ -152,9 +152,9 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
 
     @Override
     @Transactional
-    public void autoAward(String userId, String userRole, String competitionId) {
-        boolean isOrganizerOrAdmin = "ADMIN".equalsIgnoreCase(userRole) ||
-                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, userId).getBody());
+    public void autoAward(RequestContext ctx, String competitionId) {
+        boolean isOrganizerOrAdmin = ctx.isAdmin() ||
+                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, ctx.userId()).getBody());
         if (!isOrganizerOrAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can auto-award submissions.");
         }

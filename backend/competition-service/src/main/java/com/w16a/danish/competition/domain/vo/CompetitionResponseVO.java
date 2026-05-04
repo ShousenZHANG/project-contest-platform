@@ -2,8 +2,10 @@ package com.w16a.danish.competition.domain.vo;
 
 import com.w16a.danish.competition.domain.enums.CompetitionStatus;
 import com.w16a.danish.competition.domain.enums.ParticipationType;
+import com.w16a.danish.competition.domain.po.Competitions;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -17,6 +19,7 @@ import java.util.List;
  * @description Response object for competition creation
  */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(name = "CompetitionResponseVO", description = "Response object for competition creation")
@@ -63,4 +66,27 @@ public class CompetitionResponseVO {
 
     @Schema(description = "Competition creation timestamp", example = "2025-03-18T12:00:00")
     private LocalDateTime createdAt;
+
+    /**
+     * Build a {@code CompetitionResponseVO} from a {@link Competitions} entity.
+     * Eliminates the BeanUtils.copyProperties() two-step in service impls.
+     */
+    public static CompetitionResponseVO from(Competitions c) {
+        return CompetitionResponseVO.builder()
+                .id(c.getId())
+                .name(c.getName())
+                .description(c.getDescription())
+                .category(c.getCategory())
+                .startDate(c.getStartDate())
+                .endDate(c.getEndDate())
+                .isPublic(c.getIsPublic())
+                .status(c.getStatus())
+                .allowedSubmissionTypes(c.getAllowedSubmissionTypes())
+                .scoringCriteria(c.getScoringCriteria())
+                .introVideoUrl(c.getIntroVideoUrl())
+                .imageUrls(c.getImageUrls())
+                .participationType(c.getParticipationType())
+                .createdAt(c.getCreatedAt())
+                .build();
+    }
 }

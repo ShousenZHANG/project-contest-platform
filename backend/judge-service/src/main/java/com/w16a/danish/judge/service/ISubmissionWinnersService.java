@@ -1,5 +1,6 @@
 package com.w16a.danish.judge.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -24,8 +25,7 @@ public interface ISubmissionWinnersService extends IService<SubmissionWinners> {
      * Retrieves a paginated list of scored submissions for a specific competition.
      * Supports keyword search, sorting, and pagination.
      *
-     * @param userId the ID of the requesting user
-     * @param userRole the role of the requesting user
+     * @param ctx the request context of the requesting user
      * @param competitionId the ID of the competition
      * @param keyword optional keyword for search filtering
      * @param sortBy the field to sort by
@@ -35,8 +35,7 @@ public interface ISubmissionWinnersService extends IService<SubmissionWinners> {
      * @return a paginated list of scored submissions
      */
     PageResponse<ScoredSubmissionVO> listScoredSubmissions(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             String competitionId,
             String keyword,
             String sortBy,
@@ -49,11 +48,10 @@ public interface ISubmissionWinnersService extends IService<SubmissionWinners> {
      * Automatically selects and records the winners based on submission scores
      * for a given competition. Only authorized users can perform this operation.
      *
-     * @param userId the ID of the user triggering the award
-     * @param userRole the role of the user triggering the award
+     * @param ctx the request context of the user triggering the award
      * @param competitionId the ID of the competition
      */
-    void autoAward(String userId, String userRole, String competitionId);
+    void autoAward(RequestContext ctx, String competitionId);
 
     /**
      * Retrieves a paginated list of public winner information for a specific competition.

@@ -1,5 +1,6 @@
 package com.w16a.danish.interaction.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -17,7 +18,7 @@ public interface ISubmissionCommentsService extends IService<SubmissionComments>
 
     void addComment(String userId, SubmissionCommentDTO dto);
 
-    void deleteComment(String commentId, String userId, String userRole);
+    void deleteComment(String commentId, RequestContext ctx);
 
     PageResponse<SubmissionCommentVO> getPaginatedComments(String submissionId, int page, int size, String sortBy, String order);
 

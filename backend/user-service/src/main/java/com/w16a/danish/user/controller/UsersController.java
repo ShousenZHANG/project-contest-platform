@@ -1,6 +1,8 @@
 package com.w16a.danish.user.controller;
 
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.config.FrontendProperties;
@@ -154,9 +156,8 @@ public class UsersController {
     )
     @DeleteMapping("/{userId}")
     public ResponseEntity<?> deleteUser(@PathVariable String userId,
-                                        @RequestHeader("User-ID") String currentUserId,
-                                        @RequestHeader("User-Role") String currentUserRole) {
-        String response = userService.deleteUserById(userId, currentUserId, currentUserRole);
+                                        @CurrentUser RequestContext ctx) {
+        String response = userService.deleteUserById(userId, ctx);
         return ResponseEntity.ok(response);
     }
 
@@ -172,8 +173,8 @@ public class UsersController {
             }
     )
     @GetMapping("/profile")
-    public ResponseEntity<?> getUserProfile(@RequestHeader("User-ID") String currentUserId) {
-        UserProfileVO userProfile = userService.getUserProfile(currentUserId);
+    public ResponseEntity<?> getUserProfile(@CurrentUser RequestContext ctx) {
+        UserProfileVO userProfile = userService.getUserProfile(ctx.userId());
         return ResponseEntity.ok(userProfile);
     }
 
@@ -195,10 +196,10 @@ public class UsersController {
     )
     @PutMapping("/profile")
     public ResponseEntity<UserProfileVO> updateProfile(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @RequestBody UpdateUserDTO updateUserDTO) {
 
-        UserProfileVO updated = userService.updateUserProfile(userId, updateUserDTO);
+        UserProfileVO updated = userService.updateUserProfile(ctx.userId(), updateUserDTO);
         return ResponseEntity.ok(updated);
     }
 
@@ -226,10 +227,10 @@ public class UsersController {
     )
     @PostMapping("/profile/avatar")
     public ResponseEntity<UserProfileVO> uploadAndSetAvatar(
-            @RequestHeader("User-ID") String userId,
+            @CurrentUser RequestContext ctx,
             @RequestParam("file") MultipartFile file) {
         String avatarUrl = fileServiceClient.uploadAvatar(file).getBody();
-        UserProfileVO currentProfile = userService.getUserProfile(userId);
+        UserProfileVO currentProfile = userService.getUserProfile(ctx.userId());
         String oldAvatarUrl = currentProfile.getAvatarUrl();
         if (StrUtil.isNotBlank(oldAvatarUrl)) {
             URI uri = URI.create(oldAvatarUrl);
@@ -240,7 +241,7 @@ public class UsersController {
         }
         UpdateUserDTO dto = new UpdateUserDTO();
         dto.setAvatarUrl(avatarUrl);
-        UserProfileVO updated = userService.updateUserProfile(userId, dto);
+        UserProfileVO updated = userService.updateUserProfile(ctx.userId(), dto);
         return ResponseEntity.ok(updated);
     }
 
@@ -505,8 +506,7 @@ public class UsersController {
     )
     @GetMapping("/admin/list")
     public ResponseEntity<PageResponse<AdminUserVO>> listAllUsersAdmin(
-            @RequestHeader("User-ID") String adminId,
-            @RequestHeader("User-Role") String adminRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
@@ -514,7 +514,7 @@ public class UsersController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order
     ) {
-        PageResponse<AdminUserVO> users = userService.listUsersAdmin(adminId, adminRole, role, keyword, page, size, sortBy, order);
+        PageResponse<AdminUserVO> users = userService.listUsersAdmin(ctx, role, keyword, page, size, sortBy, order);
         return ResponseEntity.ok(users);
     }
 

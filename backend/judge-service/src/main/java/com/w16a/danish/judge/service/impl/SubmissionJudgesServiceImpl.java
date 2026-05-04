@@ -3,6 +3,7 @@ package com.w16a.danish.judge.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.judge.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
@@ -52,10 +53,10 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void judgeSubmission(String judgeId, SubmissionJudgeDTO judgeDTO) {
+    public void judgeSubmission(RequestContext ctx, SubmissionJudgeDTO judgeDTO) {
         boolean isAssignedJudge = competitionJudgesService.lambdaQuery()
                 .eq(CompetitionJudges::getCompetitionId, judgeDTO.getCompetitionId())
-                .eq(CompetitionJudges::getUserId, judgeId)
+                .eq(CompetitionJudges::getUserId, ctx.userId())
                 .exists();
         if (!isAssignedJudge) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not assigned as a judge for this competition.");
@@ -63,7 +64,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
         boolean alreadyJudged = this.lambdaQuery()
                 .eq(SubmissionJudges::getSubmissionId, judgeDTO.getSubmissionId())
-                .eq(SubmissionJudges::getJudgeId, judgeId)
+                .eq(SubmissionJudges::getJudgeId, ctx.userId())
                 .exists();
         if (alreadyJudged) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "You have already judged this submission.");
@@ -90,7 +91,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .setId(IdUtil.fastUUID())
                 .setCompetitionId(judgeDTO.getCompetitionId())
                 .setSubmissionId(judgeDTO.getSubmissionId())
-                .setJudgeId(judgeId)
+                .setJudgeId(ctx.userId())
                 .setTotalScore(totalScore)
                 .setJudgeComments(judgeDTO.getJudgeComments());
 
@@ -139,7 +140,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
     @Override
     public PageResponse<SubmissionBriefVO> listPendingSubmissionsForJudging(
-            String judgeId, String competitionId, String keyword, String sortOrder, int page, int size) {
+            RequestContext ctx, String competitionId, String keyword, String sortOrder, int page, int size) {
 
         // Step 1: Verify competition status (must be completed or ended)
         CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
@@ -173,7 +174,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
         // Step 3: Query all submissions already judged by current judge
         List<String> judgedSubmissionIds = this.lambdaQuery()
-                .eq(SubmissionJudges::getJudgeId, judgeId)
+                .eq(SubmissionJudges::getJudgeId, ctx.userId())
                 .eq(SubmissionJudges::getCompetitionId, competitionId)
                 .select(SubmissionJudges::getSubmissionId)
                 .list()
@@ -208,11 +209,11 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
     @Override
     @Transactional
-    public void updateJudgement(String judgeId, String submissionId, SubmissionJudgeDTO judgeDTO) {
+    public void updateJudgement(RequestContext ctx, String submissionId, SubmissionJudgeDTO judgeDTO) {
         // Step 1: Validate existence of original judging record
         SubmissionJudges existingRecord = this.lambdaQuery()
                 .eq(SubmissionJudges::getSubmissionId, submissionId)
-                .eq(SubmissionJudges::getJudgeId, judgeId)
+                .eq(SubmissionJudges::getJudgeId, ctx.userId())
                 .one();
 
         if (existingRecord == null) {
@@ -305,11 +306,11 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
     @Override
     public PageResponse<CompetitionResponseVO> listMyJudgingCompetitions(
-            String judgeId, String keyword, String sortBy, String order, int page, int size) {
+            RequestContext ctx, String keyword, String sortBy, String order, int page, int size) {
 
         // Step 1: Find all competitionIds where user is assigned as judge
         List<String> competitionIds = competitionJudgesService.lambdaQuery()
-                .eq(CompetitionJudges::getUserId, judgeId)
+                .eq(CompetitionJudges::getUserId, ctx.userId())
                 .select(CompetitionJudges::getCompetitionId)
                 .list()
                 .stream()

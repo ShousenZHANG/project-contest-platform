@@ -1,5 +1,6 @@
 package com.w16a.danish.registration.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -22,36 +23,32 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      * Register an individual user for a competition.
      *
      * @param competitionId ID of the competition
-     * @param userId ID of the user
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      */
-    void register(String competitionId, String userId, String userRole);
+    void register(String competitionId, RequestContext ctx);
 
     /**
      * Cancel an individual's registration for a competition.
      *
      * @param competitionId ID of the competition
-     * @param userId ID of the user
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      */
-    void cancelRegistration(String competitionId, String userId, String userRole);
+    void cancelRegistration(String competitionId, RequestContext ctx);
 
     /**
      * Check whether an individual is registered for a competition.
      *
      * @param competitionId ID of the competition
-     * @param userId ID of the user
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      * @return true if registered, false otherwise
      */
-    boolean isRegistered(String competitionId, String userId, String userRole);
+    boolean isRegistered(String competitionId, RequestContext ctx);
 
     /**
      * Retrieve paginated list of participants in a competition with optional search and sorting.
      *
      * @param competitionId ID of the competition
-     * @param organizerId ID of the organizer querying
-     * @param userRole Role of the querying user
+     * @param ctx identity context of the organizer querying
      * @param page Page number
      * @param size Page size
      * @param keyword Search keyword
@@ -61,8 +58,7 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      */
     PageResponse<ParticipantInfoVO> getParticipantsByCompetitionWithSearch(
             String competitionId,
-            String organizerId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
@@ -73,8 +69,7 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
     /**
      * Retrieve paginated list of competitions that a user has registered for, with optional search and sorting.
      *
-     * @param userId ID of the user
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      * @param page Page number
      * @param size Page size
      * @param keyword Search keyword
@@ -83,8 +78,7 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      * @return Paginated response of competition participation information
      */
     PageResponse<CompetitionParticipationVO> getMyCompetitionsWithSearch(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
@@ -97,30 +91,27 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      *
      * @param competitionId ID of the competition
      * @param participantUserId ID of the participant to be removed
-     * @param organizerId ID of the organizer
-     * @param userRole Role of the organizer
+     * @param ctx identity context of the organizer
      */
-    void cancelByOrganizer(String competitionId, String participantUserId, String organizerId, String userRole);
+    void cancelByOrganizer(String competitionId, String participantUserId, RequestContext ctx);
 
     /**
      * Register a team for a competition.
      *
      * @param competitionId ID of the competition
      * @param teamId ID of the team
-     * @param userId ID of the team leader
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      */
-    void registerTeam(String competitionId, String teamId, String userId, String userRole);
+    void registerTeam(String competitionId, String teamId, RequestContext ctx);
 
     /**
      * Cancel a team's registration for a competition.
      *
      * @param competitionId ID of the competition
      * @param teamId ID of the team
-     * @param userId ID of the requester
-     * @param userRole Role of the user
+     * @param ctx identity context of the caller
      */
-    void cancelTeamRegistration(String competitionId, String teamId, String userId, String userRole);
+    void cancelTeamRegistration(String competitionId, String teamId, RequestContext ctx);
 
     /**
      * Check whether a team is registered for a competition.
@@ -169,10 +160,9 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      *
      * @param competitionId ID of the competition
      * @param teamId ID of the team
-     * @param userId ID of the organizer
-     * @param userRole Role of the organizer
+     * @param ctx identity context of the organizer
      */
-    void cancelTeamByOrganizer(String competitionId, String teamId, String userId, String userRole);
+    void cancelTeamByOrganizer(String competitionId, String teamId, RequestContext ctx);
 
     /**
      * Check whether a team has any existing registrations.

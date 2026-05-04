@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.config.CompetitionNotifier;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
@@ -67,12 +68,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public CompetitionResponseVO createCompetition(CompetitionCreateDTO competitionDTO, String currentUserRole, String currentUserId) {
-        log.info("Creating competition: name='{}', userId={}, role={}", competitionDTO.getName(), currentUserId, currentUserRole);
+    public CompetitionResponseVO createCompetition(CompetitionCreateDTO competitionDTO, RequestContext ctx) {
+        log.info("Creating competition: name='{}', userId={}, role={}", competitionDTO.getName(), ctx.userId(), ctx.role());
         // validate user role
-        if (!"ADMIN".equalsIgnoreCase(currentUserRole) && !"ORGANIZER".equalsIgnoreCase(currentUserRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to create a competition");
-        }
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
 
         // check if competition name already exists
         boolean exists = lambdaQuery()
@@ -103,10 +102,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         CompetitionOrganizers competitionOrganizers = new CompetitionOrganizers();
         competitionOrganizers.setId(StrUtil.uuid());
         competitionOrganizers.setCompetitionId(competition.getId());
-        competitionOrganizers.setUserId(currentUserId);
+        competitionOrganizers.setUserId(ctx.userId());
         competitionOrganizersService.save(competitionOrganizers);
 
-        log.info("Competition created: id={}, name='{}', organizerId={}", competition.getId(), competition.getName(), currentUserId);
+        log.info("Competition created: id={}, name='{}', organizerId={}", competition.getId(), competition.getName(), ctx.userId());
         CompetitionResponseVO responseVO = new CompetitionResponseVO();
         BeanUtils.copyProperties(competition, responseVO);
         return responseVO;
@@ -114,20 +113,18 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public void deleteCompetition(String competitionId, String currentUserRole, String currentUserId) {
-        if (!"ADMIN".equalsIgnoreCase(currentUserRole) && !"ORGANIZER".equalsIgnoreCase(currentUserRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to delete a competition");
-        }
+    public void deleteCompetition(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
 
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
 
-        if ("ORGANIZER".equalsIgnoreCase(currentUserRole)) {
+        if ("ORGANIZER".equalsIgnoreCase(ctx.role())) {
             boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                     .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                    .eq(CompetitionOrganizers::getUserId, currentUserId)
+                    .eq(CompetitionOrganizers::getUserId, ctx.userId())
                     .exists();
 
             if (!isOrganizer) {
@@ -197,17 +194,17 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public CompetitionResponseVO updateCompetition(String competitionId, String userId, String userRole, CompetitionUpdateDTO updateDTO) {
+    public CompetitionResponseVO updateCompetition(String competitionId, RequestContext ctx, CompetitionUpdateDTO updateDTO) {
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
-        boolean isOrganizer = "ORGANIZER".equalsIgnoreCase(userRole) &&
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(ctx.role());
+        boolean isOrganizer = "ORGANIZER".equalsIgnoreCase(ctx.role()) &&
                 competitionOrganizersService.lambdaQuery()
                         .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                        .eq(CompetitionOrganizers::getUserId, userId)
+                        .eq(CompetitionOrganizers::getUserId, ctx.userId())
                         .exists();
 
         if (!isAdmin && !isOrganizer) {
@@ -234,21 +231,21 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public CompetitionResponseVO uploadCompetitionMedia(String competitionId, String userId, String userRole, String mediaType, MultipartFile file) {
+    public CompetitionResponseVO uploadCompetitionMedia(String competitionId, RequestContext ctx, String mediaType, MultipartFile file) {
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
 
-        if ("ORGANIZER".equalsIgnoreCase(userRole)) {
+        if ("ORGANIZER".equalsIgnoreCase(ctx.role())) {
             boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                     .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                    .eq(CompetitionOrganizers::getUserId, userId)
+                    .eq(CompetitionOrganizers::getUserId, ctx.userId())
                     .exists();
             if (!isOrganizer) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to upload media for this competition");
             }
-        } else if (!"ADMIN".equalsIgnoreCase(userRole)) {
+        } else if (!"ADMIN".equalsIgnoreCase(ctx.role())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to upload media for this competition");
         }
 
@@ -290,21 +287,21 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public CompetitionResponseVO deleteCompetitionImage(String competitionId, String userId, String userRole, String imageUrl) {
+    public CompetitionResponseVO deleteCompetitionImage(String competitionId, RequestContext ctx, String imageUrl) {
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
 
-        if ("ORGANIZER".equalsIgnoreCase(userRole)) {
+        if ("ORGANIZER".equalsIgnoreCase(ctx.role())) {
             boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                     .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                    .eq(CompetitionOrganizers::getUserId, userId)
+                    .eq(CompetitionOrganizers::getUserId, ctx.userId())
                     .exists();
             if (!isOrganizer) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to modify this competition");
             }
-        } else if (!"ADMIN".equalsIgnoreCase(userRole)) {
+        } else if (!"ADMIN".equalsIgnoreCase(ctx.role())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to modify this competition");
         }
 
@@ -325,13 +322,11 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     }
 
     @Override
-    public PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(String userId, String userRole, int page, int size) {
-        if (!"ORGANIZER".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers can access their own competitions");
-        }
+    public PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size) {
+        ctx.requireAnyRole("ORGANIZER");
 
         List<String> competitionIds = competitionOrganizersService.lambdaQuery()
-                .eq(CompetitionOrganizers::getUserId, userId)
+                .eq(CompetitionOrganizers::getUserId, ctx.userId())
                 .list()
                 .stream()
                 .map(CompetitionOrganizers::getCompetitionId)
@@ -369,13 +364,13 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public CompetitionResponseVO deleteIntroVideo(String competitionId, String userId, String userRole) {
+    public CompetitionResponseVO deleteIntroVideo(String competitionId, RequestContext ctx) {
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
 
-        if (!isAuthorizedToModify(competitionId, userId, userRole)) {
+        if (!isAuthorizedToModify(competitionId, ctx.userId(), ctx.role())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to modify this competition");
         }
 
@@ -423,7 +418,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public void assignJudges(String competitionId, String userId, String userRole, AssignJudgesDTO dto) {
+    public void assignJudges(String competitionId, RequestContext ctx, AssignJudgesDTO dto) {
         // Step 1: Validate competition existence
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -431,10 +426,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         }
 
         // Step 2: Check permission - Only ADMIN or the assigned ORGANIZER can assign judges
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(ctx.role());
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                .eq(CompetitionOrganizers::getUserId, userId)
+                .eq(CompetitionOrganizers::getUserId, ctx.userId())
                 .exists();
 
         if (!isAdmin && !isOrganizer) {
@@ -497,7 +492,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     }
 
     @Override
-    public PageResponse<UserBriefVO> listAssignedJudges(String competitionId, String userId, String userRole, int page, int size) {
+    public PageResponse<UserBriefVO> listAssignedJudges(String competitionId, RequestContext ctx, int page, int size) {
         // Step 1: Check if competition exists
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -505,10 +500,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         }
 
         // Step 2: Validate user permission
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(ctx.role());
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                .eq(CompetitionOrganizers::getUserId, userId)
+                .eq(CompetitionOrganizers::getUserId, ctx.userId())
                 .exists();
         if (!isAdmin && !isOrganizer) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to view assigned judges.");
@@ -553,7 +548,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     @Transactional
-    public void removeJudge(String competitionId, String userId, String userRole, String judgeId) {
+    public void removeJudge(String competitionId, RequestContext ctx, String judgeId) {
         // Step 1: Check if competition exists
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -561,10 +556,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         }
 
         // Step 2: Validate user permission (must be ADMIN or Organizer of this competition)
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(userRole);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(ctx.role());
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
-                .eq(CompetitionOrganizers::getUserId, userId)
+                .eq(CompetitionOrganizers::getUserId, ctx.userId())
                 .exists();
         if (!isAdmin && !isOrganizer) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to remove judges.");

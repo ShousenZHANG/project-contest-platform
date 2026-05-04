@@ -1,5 +1,7 @@
 package com.w16a.danish.judge.controller;
 
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
@@ -43,11 +45,10 @@ public class SubmissionWinnersController {
     )
     @PostMapping("/auto-award")
     public ResponseEntity<String> autoAward(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId) {
 
-        winnersService.autoAward(userId, userRole, competitionId);
+        winnersService.autoAward(ctx, competitionId);
         return ResponseEntity.ok("Auto awarding completed successfully.");
     }
 
@@ -90,8 +91,7 @@ public class SubmissionWinnersController {
     )
     @GetMapping("/scored-list")
     public ResponseEntity<PageResponse<ScoredSubmissionVO>> listScoredSubmissions(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, defaultValue = "totalScore") String sortBy,
@@ -100,7 +100,7 @@ public class SubmissionWinnersController {
             @RequestParam(defaultValue = "10") int size) {
 
         PageResponse<ScoredSubmissionVO> response = winnersService.listScoredSubmissions(
-                userId, userRole, competitionId, keyword, sortBy, order, page, size);
+                ctx, competitionId, keyword, sortBy, order, page, size);
 
         return ResponseEntity.ok(response);
     }

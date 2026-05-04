@@ -1,5 +1,6 @@
 package com.w16a.danish.user.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.*;
 import com.w16a.danish.user.domain.po.Users;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -40,11 +41,10 @@ public interface IUsersService extends IService<Users> {
      * Deletes a user by ID with permission verification.
      *
      * @param userId ID of the user to be deleted.
-     * @param currentUserId ID of the current logged-in user.
-     * @param currentUserRole Role of the current logged-in user.
+     * @param ctx    RequestContext of the current logged-in user.
      * @return Operation status message.
      */
-    String deleteUserById(String userId, String currentUserId, String currentUserRole);
+    String deleteUserById(String userId, RequestContext ctx);
 
     /**
      * Retrieves the full profile of a user.
@@ -122,16 +122,15 @@ public interface IUsersService extends IService<Users> {
     /**
      * Retrieves a paginated list of users for admin management.
      *
-     * @param adminId ID of the admin making the request.
-     * @param adminRole Role of the admin.
-     * @param role Role of users to filter.
+     * @param ctx     RequestContext of the admin making the request.
+     * @param role    Role of users to filter.
      * @param keyword Keyword for search filtering (e.g., name or email).
-     * @param page Page number (starting from 1).
-     * @param size Number of records per page.
-     * @param sortBy Field to sort by.
-     * @param order Sorting order ("asc" or "desc").
+     * @param page    Page number (starting from 1).
+     * @param size    Number of records per page.
+     * @param sortBy  Field to sort by.
+     * @param order   Sorting order ("asc" or "desc").
      * @return Paginated list of user information for admin view.
      */
-    PageResponse<AdminUserVO> listUsersAdmin(String adminId, String adminRole, String role, String keyword, int page, int size, String sortBy, String order);
+    PageResponse<AdminUserVO> listUsersAdmin(RequestContext ctx, String role, String keyword, int page, int size, String sortBy, String order);
 
 }

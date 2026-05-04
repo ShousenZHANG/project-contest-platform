@@ -5,6 +5,8 @@ import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,14 +67,13 @@ public class SubmissionRecordsController {
     )
     @PostMapping("/upload")
     public ResponseEntity<String> uploadSubmission(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam("title") String title,
             @RequestParam("description") String description,
             @RequestParam("file") MultipartFile file) {
 
-        submissionService.submitWork(userId, userRole, competitionId, title, description, file);
+        submissionService.submitWork(ctx, competitionId, title, description, file);
         return ResponseEntity.ok("Work submitted successfully");
     }
 
@@ -89,10 +90,9 @@ public class SubmissionRecordsController {
     @DeleteMapping("/{submissionId}")
     public ResponseEntity<String> deleteSubmission(
             @PathVariable String submissionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        submissionService.deleteSubmission(submissionId, userId, userRole);
+        submissionService.deleteSubmission(submissionId, ctx);
         return ResponseEntity.ok("Submission deleted successfully");
     }
 
@@ -113,10 +113,9 @@ public class SubmissionRecordsController {
     @GetMapping("/{competitionId}")
     public ResponseEntity<SubmissionInfoVO> getMySubmission(
             @PathVariable String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        SubmissionInfoVO submission = submissionService.getMySubmission(competitionId, userId, userRole);
+        SubmissionInfoVO submission = submissionService.getMySubmission(competitionId, ctx);
         return ResponseEntity.ok(submission);
     }
 
@@ -142,8 +141,7 @@ public class SubmissionRecordsController {
     @GetMapping("/public")
     public ResponseEntity<PageResponse<SubmissionInfoVO>> listSubmissionsForCompetition(
             @RequestParam String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword,
@@ -151,7 +149,7 @@ public class SubmissionRecordsController {
             @RequestParam(defaultValue = "desc") String order) {
 
         PageResponse<SubmissionInfoVO> response = submissionService.listSubmissionsByRole(
-                competitionId, userId, userRole, page, size, keyword, sortBy, order
+                competitionId, ctx, page, size, keyword, sortBy, order
         );
         return ResponseEntity.ok(response);
     }
@@ -204,11 +202,10 @@ public class SubmissionRecordsController {
     )
     @PostMapping("/review")
     public ResponseEntity<String> reviewSubmission(
-            @RequestHeader("User-ID") String reviewerId,
-            @RequestHeader("User-Role") String reviewerRole,
+            @CurrentUser RequestContext ctx,
             @RequestBody SubmissionReviewDTO dto) {
 
-        submissionService.reviewSubmission(dto, reviewerId, reviewerRole);
+        submissionService.reviewSubmission(dto, ctx);
         return ResponseEntity.ok("Submission reviewed successfully");
     }
 
@@ -250,15 +247,14 @@ public class SubmissionRecordsController {
     )
     @PostMapping("/teams/upload")
     public ResponseEntity<String> uploadTeamSubmission(
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam("teamId") String teamId,
             @RequestParam("title") String title,
             @RequestParam("description") String description,
             @RequestParam("file") MultipartFile file) {
 
-        submissionService.submitTeamWork(userId, userRole, competitionId, teamId, title, description, file);
+        submissionService.submitTeamWork(ctx, competitionId, teamId, title, description, file);
         return ResponseEntity.ok("Team work submitted successfully");
     }
 
@@ -302,10 +298,9 @@ public class SubmissionRecordsController {
     @DeleteMapping("/teams/{submissionId}")
     public ResponseEntity<String> deleteTeamSubmission(
             @PathVariable String submissionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole) {
+            @CurrentUser RequestContext ctx) {
 
-        submissionService.deleteTeamSubmission(submissionId, userId, userRole);
+        submissionService.deleteTeamSubmission(submissionId, ctx);
         return ResponseEntity.ok("Team submission deleted successfully");
     }
 
@@ -327,8 +322,7 @@ public class SubmissionRecordsController {
     @GetMapping("/teams/list")
     public ResponseEntity<PageResponse<SubmissionInfoVO>> listTeamSubmissions(
             @RequestParam String competitionId,
-            @RequestHeader("User-ID") String userId,
-            @RequestHeader("User-Role") String userRole,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword,
@@ -336,7 +330,7 @@ public class SubmissionRecordsController {
             @RequestParam(defaultValue = "desc") String order) {
 
         PageResponse<SubmissionInfoVO> response = submissionService.listTeamSubmissionsByRole(
-                competitionId, userId, userRole, page, size, keyword, sortBy, order);
+                competitionId, ctx, page, size, keyword, sortBy, order);
         return ResponseEntity.ok(response);
     }
 

@@ -2,6 +2,7 @@ package com.w16a.danish.registration.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.config.RegistrationNotifier;
 import com.w16a.danish.registration.domain.mq.ParticipantRemovedMessage;
 import com.w16a.danish.registration.domain.mq.RegisterSuccessMessage;
@@ -56,10 +57,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void register(String competitionId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can register for competitions");
-        }
+    public void register(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         CompetitionResponseVO competition;
         try {
@@ -119,10 +119,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void cancelRegistration(String competitionId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only participants can cancel registration");
-        }
+    public void cancelRegistration(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         CompetitionParticipants existing = lambdaQuery()
                 .eq(CompetitionParticipants::getCompetitionId, competitionId)
@@ -149,30 +148,25 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
     }
 
     @Override
-    public boolean isRegistered(String competitionId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can check registration status");
-        }
-
+    public boolean isRegistered(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
         return lambdaQuery()
                 .eq(CompetitionParticipants::getCompetitionId, competitionId)
-                .eq(CompetitionParticipants::getUserId, userId)
+                .eq(CompetitionParticipants::getUserId, ctx.userId())
                 .exists();
     }
 
     @Override
     public PageResponse<CompetitionParticipationVO> getMyCompetitionsWithSearch(
-            String userId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
             String sortBy,
             String order
     ) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can view registered competitions");
-        }
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         List<CompetitionParticipants> participants = lambdaQuery()
                 .eq(CompetitionParticipants::getUserId, userId)
@@ -238,17 +232,15 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
     @Override
     public PageResponse<ParticipantInfoVO> getParticipantsByCompetitionWithSearch(
             String competitionId,
-            String organizerId,
-            String userRole,
+            RequestContext ctx,
             int page,
             int size,
             String keyword,
             String sortBy,
             String order
     ) {
-        if (!"ORGANIZER".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers can access this resource");
-        }
+        ctx.requireAnyRole("ORGANIZER");
+        String organizerId = ctx.userId();
 
         boolean isOwner = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
@@ -320,10 +312,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void cancelByOrganizer(String competitionId, String participantUserId, String organizerId, String userRole) {
-        if (!"ORGANIZER".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only ORGANIZER role can perform this operation");
-        }
+    public void cancelByOrganizer(String competitionId, String participantUserId, RequestContext ctx) {
+        ctx.requireAnyRole("ORGANIZER");
+        String organizerId = ctx.userId();
 
         boolean isOwner = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
@@ -386,10 +377,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void registerTeam(String competitionId, String teamId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only PARTICIPANT role can register a team.");
-        }
+    public void registerTeam(String competitionId, String teamId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         ResponseEntity<UserBriefVO> creatorResponse = userServiceClient.getTeamCreator(teamId);
         UserBriefVO creator = creatorResponse.getBody();
@@ -457,10 +447,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void cancelTeamRegistration(String competitionId, String teamId, String userId, String userRole) {
-        if (!"PARTICIPANT".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only team creators (PARTICIPANT role) can cancel team registration.");
-        }
+    public void cancelTeamRegistration(String competitionId, String teamId, RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
+        String userId = ctx.userId();
 
         // Step 1: Validate team creator
         ResponseEntity<UserBriefVO> creatorResp = userServiceClient.getTeamCreator(teamId);
@@ -653,17 +642,16 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     @Transactional
-    public void cancelTeamByOrganizer(String competitionId, String teamId, String userId, String userRole) {
-        if (!"ORGANIZER".equalsIgnoreCase(userRole) && !"ADMIN".equalsIgnoreCase(userRole)) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Only ORGANIZER or ADMIN can remove a team's registration.");
-        }
+    public void cancelTeamByOrganizer(String competitionId, String teamId, RequestContext ctx) {
+        ctx.requireAnyRole("ORGANIZER", "ADMIN");
+        String userId = ctx.userId();
 
         boolean isOrganizer = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getCompetitionId, competitionId)
                 .eq(CompetitionOrganizers::getUserId, userId)
                 .exists();
 
-        if (!isOrganizer && !"ADMIN".equalsIgnoreCase(userRole)) {
+        if (!isOrganizer && !ctx.isAdmin()) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to manage this competition.");
         }
 

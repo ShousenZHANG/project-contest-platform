@@ -1,5 +1,6 @@
 package com.w16a.danish.user.service;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.po.Team;
@@ -40,11 +41,10 @@ public interface ITeamService extends IService<Team> {
     /**
      * Delete a team.
      *
-     * @param userId   The ID of the user requesting the deletion.
-     * @param userRole The role of the user (must be ADMIN or the team creator).
-     * @param teamId   The ID of the team to be deleted.
+     * @param ctx    The RequestContext of the user requesting the deletion.
+     * @param teamId The ID of the team to be deleted.
      */
-    void deleteTeam(String userId, String userRole, String teamId);
+    void deleteTeam(RequestContext ctx, String teamId);
 
     /**
      * Update team information.
