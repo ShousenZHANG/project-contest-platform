@@ -1,24 +1,31 @@
 /**
- * @file OrganizerProfile.js
+ * @file Profile.jsx
  * @description
- * This component allows an Organizer to view and update their profile information.
- * Functionalities include:
- *  - Update name, password, description, and avatar.
- *  - Upload a new avatar.
- *  - Delete their own account permanently.
- *  - Password must meet specific strength criteria (minimum 8 characters, at least one uppercase letter).
- *
- * The email and role fields are read-only.
- *
- * Role: Organizer
- * Developer: Zhaoyi Yang
+ * Organizer profile page. Migrated from MUI to shadcn/ui.
+ * Allows view/update name, password, description, and avatar.
+ * Allows account deletion. Email and role are read-only.
  */
 
-
 import React, { useState, useEffect } from 'react';
-import './Profile.css';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 
 function OrganizerProfile() {
   const [formData, setFormData] = useState({
@@ -26,7 +33,7 @@ function OrganizerProfile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || ''
+    role: localStorage.getItem('role') || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -46,11 +53,11 @@ function OrganizerProfile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || ''
+            role: localStorage.getItem('role') || '',
           });
           setAvatarUrl(data.avatarUrl);
         }
-      } catch (error) {
+      } catch {
         // Failed to fetch user data
       }
     };
@@ -58,19 +65,19 @@ function OrganizerProfile() {
     fetchUserData();
   }, []);
 
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({ ...prevData, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (formData.password) {
       const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
       if (!passwordRegex.test(formData.password)) {
-        alert('Password must be at least 8 characters and contain at least one uppercase letter.');
+        toast.error(
+          'Password must be at least 8 characters and contain at least one uppercase letter.'
+        );
         return;
       }
     }
@@ -78,23 +85,16 @@ function OrganizerProfile() {
     try {
       const { role, ...profileData } = formData;
       await apiClient.put('/users/profile', { ...profileData, avatarUrl });
-      alert('Profile updated successfully');
+      toast.success('Profile updated successfully');
     } catch (error) {
-      const msg = error.response?.data?.message || 'Error updating profile';
-      alert(msg);
+      toast.error(error.response?.data?.message || 'Error updating profile');
     }
-  };
-
-  const handleAvatarIconClick = () => {
-    setAvatarDialogOpen(true);
   };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (tempAvatarUrl) {
-        URL.revokeObjectURL(tempAvatarUrl);
-      }
+      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
       setTempAvatar(file);
       setTempAvatarUrl(URL.createObjectURL(file));
     }
@@ -115,11 +115,10 @@ function OrganizerProfile() {
         setAvatarUrl(data.avatarUrl);
         window.location.reload();
       } else {
-        alert('Error uploading avatar');
+        toast.error('Error uploading avatar');
       }
     } catch (error) {
-      const msg = error.response?.data?.message || 'Error uploading avatar';
-      alert(msg);
+      toast.error(error.response?.data?.message || 'Error uploading avatar');
     }
 
     setTempAvatar(null);
@@ -128,9 +127,7 @@ function OrganizerProfile() {
   };
 
   const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) {
-      URL.revokeObjectURL(tempAvatarUrl);
-    }
+    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
     setTempAvatar(null);
     setTempAvatarUrl('');
     setAvatarDialogOpen(false);
@@ -138,18 +135,16 @@ function OrganizerProfile() {
 
   const handleDeleteAccount = async () => {
     const userId = localStorage.getItem('userId');
-
     try {
       await apiClient.delete(`/users/${userId}`);
-      alert('Your account has been deleted.');
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("email");
-      localStorage.removeItem("role");
+      toast.success('Your account has been deleted.');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
+      localStorage.removeItem('role');
       window.location.href = '/';
     } catch (error) {
-      const msg = error.response?.data?.message || 'Error deleting account.';
-      alert(msg);
+      toast.error(error.response?.data?.message || 'Error deleting account.');
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -157,71 +152,154 @@ function OrganizerProfile() {
 
   useEffect(() => {
     return () => {
-      if (tempAvatarUrl) {
-        URL.revokeObjectURL(tempAvatarUrl);
-      }
+      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
     };
   }, [tempAvatarUrl]);
 
   return (
-    <>
-
-      <div className="profile-container">
-
-        <div className="profile-content">
-          <div className="profile-header">
-            <div className="profile-avatar" onClick={handleAvatarIconClick}>
-              <img
-                className="avatar"
-                src={avatarUrl || '/OIP.jpg'}
-                alt="User Avatar"
-                style={{ width: '80px', height: '80px', borderRadius: '50%' }}
-              />
-            </div>
+    <div className="mx-auto max-w-2xl px-6 py-8">
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setAvatarDialogOpen(true)}
+            className="rounded-full ring-offset-background transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Change avatar"
+          >
+            <Avatar className="h-20 w-20">
+              <AvatarImage src={avatarUrl || '/OIP.jpg'} alt="User Avatar" />
+              <AvatarFallback>
+                {(formData.name || formData.email || 'U').slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+          <div className="flex flex-col">
+            <CardTitle className="text-2xl">My Profile</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Update your account details and preferences
+            </p>
           </div>
+        </CardHeader>
 
-          <form className="profile-form" onSubmit={handleSubmit}>
-            <label>Name</label>
-            <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter your name" />
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Enter your name"
+                />
+              </div>
 
-            <label>Email</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter your email" />
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Enter your email"
+                />
+              </div>
 
-            <label>Password</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter your new password" />
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter a new password"
+                />
+              </div>
 
-            <label>Description</label>
-            <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Tell us about yourself" />
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description || ''}
+                  onChange={handleChange}
+                  placeholder="Tell us about yourself"
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
 
-            <label>User Role</label>
-            <input type="text" name="role" value={formData.role} disabled style={{ backgroundColor: '#f3f3f3', cursor: 'not-allowed' }} />
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="role">User Role</Label>
+                <Input
+                  id="role"
+                  type="text"
+                  name="role"
+                  value={formData.role}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+            </div>
 
-            <button type="submit">Save</button>
-            <button type="button" onClick={() => setDeleteDialogOpen(true)} style={{ marginTop: '10px', backgroundColor: '#f44336', color: 'white' }}>Delete Account</button>
+            <div className="sticky bottom-0 -mx-6 mt-6 flex items-center justify-end gap-2 border-t border-border bg-card px-6 py-3">
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete Account
+              </Button>
+              <Button type="submit">Save</Button>
+            </div>
           </form>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <Dialog open={avatarDialogOpen} onClose={handleAvatarDialogClose}>
-        <DialogTitle>Upload Avatar</DialogTitle>
-        <DialogContent>
-          <input accept="image/*" type="file" onChange={handleAvatarChange} style={{ marginTop: '16px' }} />
+      <Dialog open={avatarDialogOpen} onOpenChange={(o) => !o && handleAvatarDialogClose()}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Upload Avatar</DialogTitle>
+          </DialogHeader>
+          <input
+            accept="image/*"
+            type="file"
+            onChange={handleAvatarChange}
+            className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={handleAvatarDialogClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleAvatarSave}>Save</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleAvatarDialogClose}>Cancel</Button>
-          <Button onClick={handleAvatarSave} variant="contained">Save</Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete Account</DialogTitle>
-        <DialogContent>Are you sure you want to delete your account? This action is irreversible.</DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteAccount} color="error">Delete</Button>
-        </DialogActions>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Account</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete your account? This action is
+            irreversible.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAccount}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 

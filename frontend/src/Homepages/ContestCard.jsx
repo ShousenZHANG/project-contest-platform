@@ -1,47 +1,36 @@
 /**
- * @file ContestCard.js
- * @description 
- * This component renders a contest card on the homepage, displaying basic contest information.
- * It allows users to:
- *  - Click the card to view contest details.
- *  - Vote for a contest (requires login and backend API interaction).
- *  - Join a contest (requires login and backend API interaction).
- * 
- * The card displays the contest's title, organizer, date, category, description, image, and current vote count.
- * It handles user interactions such as voting and joining, including frontend feedback and backend communication.
- * Material-UI components are used for layout, styling, and interactive elements.
- * 
- * Developer: Beiqi Dai
+ * ContestCard.jsx
+ *
+ * Featured contest card. Migrated from MUI to shadcn/ui Card + Tailwind.
+ * Behavior preserved: clicking the card fires onCardClick(contest), the Vote
+ * button hits POST /interactions/votes/count, and Join hits POST
+ * /registrations/{contest.id}. Auth required for both — toast on success/error.
+ *
+ * Developer: Beiqi Dai (migrated)
  */
 
+import React, { useState } from 'react';
+import { toast } from 'sonner';
+import { ThumbsUp, Flag, Tag, Calendar, User } from 'lucide-react';
 
-import React from "react";
-import "./ContestCard.css";
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Button,
-  Typography,
-  IconButton,
-} from "@mui/material";
-import { Favorite, HowToVote, Flag, Category } from "@mui/icons-material";
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardFooter } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 
 function ContestCard({ contest, onCardClick }) {
-  // Click event for the entire card
+  const [voteCount, setVoteCount] = useState(contest.votes ?? 0);
+
   const handleCardClick = () => {
-    onCardClick && onCardClick(contest);
+    if (typeof onCardClick === 'function') onCardClick(contest);
   };
 
-  // Click event for Vote button: call backend API
   const handleVoteClick = async (e) => {
     e.stopPropagation();
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (!token) {
-      alert("Please log in first!");
+      toast.error('Please log in first');
       return;
     }
 
@@ -49,107 +38,107 @@ function ContestCard({ contest, onCardClick }) {
       await apiClient.post(`/interactions/votes/count`, null, {
         params: { submissionId: contest.id },
       });
-      alert("Vote successful!");
+      setVoteCount((v) => v + 1);
+      toast.success('Vote submitted');
     } catch (error) {
-      const errMsg = error.response?.data?.error || error.response?.data?.message;
-      if (errMsg === "Already voted") {
-        alert("You have already voted!");
+      const errMsg =
+        error.response?.data?.error || error.response?.data?.message;
+      if (errMsg === 'Already voted') {
+        toast.error('You have already voted');
       } else {
-        alert("Voting failed due to network or server error");
+        toast.error('Voting failed. Please try again.');
       }
     }
   };
 
-  // Click event for Join button: call backend API
   const handleJoinClick = async (e) => {
     e.stopPropagation();
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (!token) {
-      alert("Please log in first!");
+      toast.error('Please log in first');
       return;
     }
 
     try {
       await apiClient.post(`/registrations/${contest.id}`);
-      alert("Joined successfully!");
+      toast.success('Joined successfully');
     } catch (error) {
-      const errMsg = error.response?.data?.error || error.response?.data?.message;
-      if (errMsg === "Already JOIN!") {
-        alert("You have already joined!");
+      const errMsg =
+        error.response?.data?.error || error.response?.data?.message;
+      if (errMsg === 'Already JOIN!') {
+        toast.error('You have already joined');
       } else {
-        alert("Joining failed due to network or server error");
+        toast.error('Joining failed. Please try again.');
       }
     }
   };
 
   return (
     <Card
-      className="homepage-contest-card"
       onClick={handleCardClick}
-      sx={{ maxWidth: 345, boxShadow: 3, cursor: "pointer" }}
+      className="group flex flex-col overflow-hidden cursor-pointer border-border/60 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
     >
-      <CardMedia
-        component="img"
-        height="200"
-        image={contest.image}
-        alt={contest.title}
-      />
-  
-      <CardContent className="homepage-card-body">
-        <Typography variant="h6" component="div" className="homepage-title">
+      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        <img
+          src={contest.image}
+          alt={contest.title}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {contest.category && (
+          <Badge className="absolute top-3 left-3 bg-background/90 text-foreground hover:bg-background backdrop-blur">
+            <Tag className="mr-1 h-3 w-3" />
+            {contest.category}
+          </Badge>
+        )}
+      </div>
+
+      <CardContent className="flex-1 p-5 space-y-3">
+        <h3 className="text-lg font-semibold tracking-tight line-clamp-2 group-hover:text-primary transition-colors">
           {contest.title}
-        </Typography>
-        <Typography variant="subtitle2" color="text.secondary" className="homepage-organizer">
-          <strong>Organizer:</strong> {contest.organizer}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" className="homepage-date">
-          <strong>Date:</strong> {contest.date}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{ display: "flex", alignItems: "center", mt: 1 }}
-        >
-          <Category sx={{ fontSize: 18, marginRight: 1, color: "gray" }} />
-          {contest.category}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }} className="homepage-description">
+        </h3>
+
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{contest.organizer}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{contest.date}</span>
+          </div>
+        </div>
+
+        <p className="text-sm text-muted-foreground line-clamp-2">
           {contest.description}
-        </Typography>
+        </p>
       </CardContent>
-  
-      <CardActions className="homepage-card-footer">
-        {/* Voting icon + vote count */}
-        <div className="homepage-vote-info">
-          <IconButton color="primary" onClick={handleVoteClick}>
-            <HowToVote />
-            <Typography variant="body2" sx={{ ml: 0.5 }} className="homepage-vote-count">
-              {contest.votes}
-            </Typography>
-          </IconButton>
-        </div>
-  
-        {/* Button group: Vote + Join */}
-        <div className="homepage-button-group">
-          <Button
-            className="homepage-vote-button"
-            variant="outlined"
-            startIcon={<Favorite />}
-            onClick={handleVoteClick}
-          >
-            Vote
-          </Button>
-  
-          <Button
-            className="homepage-join-button"
-            variant="contained"
-            startIcon={<Flag />}
-            onClick={handleJoinClick}
-          >
-            Join
-          </Button>
-        </div>
-      </CardActions>
+
+      <CardFooter className="p-5 pt-0 flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleVoteClick}
+          className="flex-1"
+        >
+          <ThumbsUp className="h-4 w-4" />
+          <span>Vote</span>
+          <span className="ml-auto text-xs font-medium text-muted-foreground">
+            {voteCount}
+          </span>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleJoinClick}
+          className="flex-1"
+        >
+          <Flag className="h-4 w-4" />
+          Join
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

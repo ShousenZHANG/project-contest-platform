@@ -1,36 +1,24 @@
 /**
- * @file TopBar.js
+ * @file TopBar.jsx
  * @description
- * Top navigation bar for Organizer role.
- * Displays:
- *  - Welcome message and email
- *  - User avatar
- *  - Logout button with confirmation dialog
- * 
- * Features:
- *  - Fetch organizer's avatar from backend
- *  - Navigate to Organizer Profile page on avatar click
- *  - Support logout with token clearance
- * 
- * Role: Organizer
- * Developer: Zhaoyi Yang
+ * Top navigation bar for Organizer role. Migrated from MUI to shadcn/ui.
+ * Displays welcome line, avatar, and logout dialog.
  */
-
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './TopBar.css';
-import { FiLogOut } from 'react-icons/fi';
+import { LogOut } from 'lucide-react';
+import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
 import {
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogContentText,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  Button,
-  Typography
-} from '@mui/material';
-import apiClient from '../api/apiClient';
+} from '../components/ui/dialog';
+import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 
 function TopBar() {
   const [open, setOpen] = useState(false);
@@ -39,7 +27,7 @@ function TopBar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setEmail(localStorage.getItem("email"));
+    setEmail(localStorage.getItem('email'));
 
     const fetchUserAvatar = async () => {
       try {
@@ -47,7 +35,7 @@ function TopBar() {
         if (res.data?.avatarUrl) {
           setAvatarUrl(res.data.avatarUrl);
         }
-      } catch (error) {
+      } catch {
         // Avatar fetch failed silently
       }
     };
@@ -55,62 +43,73 @@ function TopBar() {
     fetchUserAvatar();
   }, []);
 
-  const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
-
   const handleConfirmLogout = async () => {
     try {
-      await apiClient.post("/users/logout");
-    } catch (err) {
+      await apiClient.post('/users/logout');
+    } catch {
       // Logout API call failed silently
     }
 
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("email");
-    localStorage.removeItem("role");
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('email');
+    localStorage.removeItem('role');
     setOpen(false);
-    window.location.href = "/";
+    window.location.href = '/';
   };
 
   const handleAvatarClick = () => {
-    if (email) {
-      navigate(`/OrganizerProfile/${email}`);
-    }
+    if (email) navigate(`/OrganizerProfile/${email}`);
   };
 
   return (
-    <header className="topbar">
-      <div className="topbar-content">
-        <div className="welcome-text">
-          <Typography variant="h6" className="welcome-line">
-            🎉 Welcome back, Organizer!
-          </Typography>
-          <Typography variant="body2" className="email-line">
-            Logged in as: <strong>{email}</strong>
-          </Typography>
-        </div>
-
-        <div className="topbar-actions">
-          <img
-            className="avatar"
-            src={avatarUrl || "/OIP.jpg"}
-            alt="User Avatar"
-            onClick={handleAvatarClick}
-          />
-          <FiLogOut className="logout-icon" onClick={handleOpen} />
-        </div>
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-6">
+      <div className="flex flex-col">
+        <p className="text-sm font-semibold text-foreground">Welcome back, Organizer</p>
+        <p className="text-xs text-muted-foreground">
+          Logged in as <span className="font-medium text-foreground">{email}</span>
+        </p>
       </div>
 
-      <Dialog open={open} onClose={handleClose}>
-        <DialogTitle>Log out reminder</DialogTitle>
-        <DialogContent>
-          <DialogContentText>Are you sure you want to log out?</DialogContentText>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleAvatarClick}
+          className="rounded-full ring-offset-background transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Open profile"
+        >
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={avatarUrl || '/OIP.jpg'} alt="User Avatar" />
+            <AvatarFallback>{(email || 'U').slice(0, 1).toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpen(true)}
+          aria-label="Log out"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Log out reminder</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to log out?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmLogout}>
+              Log out
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleConfirmLogout} color="error">Log out</Button>
-        </DialogActions>
       </Dialog>
     </header>
   );

@@ -1,133 +1,75 @@
 /**
- * ContestCard.js
- * 
- * This component displays a card representing a contest with details such as title, date, category, and description.
- * It allows users to:
- * - View contest details and navigate to the contest page on click.
- * - Vote or join the contest with a snackbar reminder if not logged in.
- * 
+ * UserContestCard.jsx
+ *
+ * Vibrant contest card for public browse view. Migrated from MUI to shadcn/ui.
+ *
  * Role: Public User
  * Developer: Beiqi Dai
  */
 
-
-import React, { useState } from "react";
-import "./UserContestCard.css";
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Button,
-  Typography,
-  Snackbar,
-  Alert,
-} from "@mui/material";
-import { Favorite, Flag, Category } from "@mui/icons-material";
+import React from "react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Heart, Flag, Tag } from "lucide-react";
+import { toast } from "sonner";
 
 function ContestCard({ contest, onCardClick }) {
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "warning" });
-
   const handleCardClick = () => {
     onCardClick && onCardClick(contest);
   };
 
-  const handleOpenSnackbar = (e) => {
-    e.stopPropagation(); // Prevent bubbles from triggering card jumps
-    setSnackbar({
-      open: true,
-      message: "Please log in before voting or joining the contest!",
-      severity: "warning"
-    });
-  };
-
-  const handleSnackbarClose = (event, reason) => {
-    if (event) {
-      event.stopPropagation();
-    }
-    setSnackbar((prev) => ({ ...prev, open: false }));
+  const handleLoginReminder = (e) => {
+    e.stopPropagation();
+    toast.warning("Please log in before voting or joining the contest!");
   };
 
   return (
-    <>
-      <Card
-        className="publicuser-contest-card"
-        onClick={handleCardClick}
-        sx={{ maxWidth: 345, boxShadow: 3, cursor: "pointer" }}
-      >
-        <CardMedia
-          component="img"
-          height="200"
-          image={contest.image}
+    <Card
+      onClick={handleCardClick}
+      className="group max-w-sm overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-xl border-border/60"
+    >
+      <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent">
+        <img
+          src={contest.image}
           alt={contest.title}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-
-        <CardContent>
-          <Typography variant="h6" component="div">
-            {contest.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            <strong>Date:</strong> {contest.date}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ display: "flex", alignItems: "center", mt: 1 }}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        {contest.category && (
+          <Badge
+            variant="secondary"
+            className="absolute top-3 left-3 bg-white/90 text-foreground shadow-sm"
           >
-            <Category sx={{ fontSize: 18, marginRight: 1, color: "gray" }} />
+            <Tag className="mr-1 h-3 w-3" />
             {contest.category}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              mt: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              width: "100%",
-            }}
-          >
-            <span style={{ fontWeight: 'bold', color: '#888' }}>Description:</span> {contest.description}
-          </Typography>
-        </CardContent>
+          </Badge>
+        )}
+      </div>
 
-        <CardActions sx={{ justifyContent: "flex-end" }}>
-          <Button
-            className="publicuser-vote-button"
-            variant="outlined"
-            startIcon={<Favorite />}
-            onClick={handleOpenSnackbar}
-          >
-            Vote
-          </Button>
+      <CardContent className="p-5">
+        <h3 className="line-clamp-1 text-lg font-semibold text-foreground">
+          {contest.title}
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          <span className="font-medium">Date:</span> {contest.date}
+        </p>
+        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+          {contest.description}
+        </p>
+      </CardContent>
 
-          <Button
-            className="publicuser-join-button"
-            variant="contained"
-            startIcon={<Flag />}
-            sx={{ ml: 1 }}
-            onClick={handleOpenSnackbar}
-          >
-            Join
-          </Button>
-        </CardActions>
-      </Card>
-
-      {/* ✨ Snackbar for feedback */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert
-          onClose={handleSnackbarClose}
-          severity={snackbar.severity}
-          sx={{ width: "100%" }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+      <CardFooter className="flex justify-end gap-2 px-5 pb-5 pt-0">
+        <Button variant="outline" size="sm" onClick={handleLoginReminder}>
+          <Heart className="mr-1.5 h-4 w-4" />
+          Vote
+        </Button>
+        <Button size="sm" onClick={handleLoginReminder}>
+          <Flag className="mr-1.5 h-4 w-4" />
+          Join
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 

@@ -1,68 +1,83 @@
 /**
- * @file AdminAccountManage.js
- * @description 
- * This component provides an administrative interface for managing user accounts.
- * It allows admin users to view, search, filter, and delete participant and organizer accounts.
- * Admins can:
- *  - View a paginated list of users (excluding other admins).
- *  - Search users by keyword (name or email).
- *  - Filter users by role (Participant or Organizer).
- *  - Delete a selected user after confirmation.
- * The component integrates with a backend API, handles authentication headers, 
- * and updates the displayed data dynamically based on user interaction.
- * It uses Material-UI components for styling and layout.
- * 
+ * @file AdminAccountManage.jsx
+ * @description
+ * Administrative interface for managing user accounts. Migrated from MUI to
+ * shadcn/ui + Tailwind. Admins can list participants/organizers, search by
+ * keyword, filter by role, and delete users via a shadcn confirmation Dialog.
+ *
  * Role: Admin
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from "react";
-import {
-  Pagination,
-  Table,
-  TableHead,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
-  Paper,
-  TextField,
-  FormControl,
-  Select,
-  MenuItem,
-  InputLabel,
-  Button,
-} from "@mui/material";
-import "./AdminAccountManage.css";
+import React, { useEffect, useState } from 'react';
+import { Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
+import { Skeleton } from '../components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { cn } from '../lib/utils';
+
+const ROLE_FILTERS = [
+  { value: '', label: 'All roles' },
+  { value: 'ORGANIZER', label: 'Organizer' },
+  { value: 'PARTICIPANT', label: 'Participant' },
+];
+
+function roleBadgeVariant(role) {
+  const r = (role || '').toUpperCase();
+  if (r === 'ADMIN') return 'destructive';
+  if (r === 'ORGANIZER') return 'default';
+  if (r === 'PARTICIPANT') return 'secondary';
+  return 'outline';
+}
 
 function AdminAccountManage() {
   const [users, setUsers] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
-  const [roleFilter, setRoleFilter] = useState("");
-  const [keyword, setKeyword] = useState("");
+  const [roleFilter, setRoleFilter] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const fetchUsers = async (currentPage = 1, role = "", keyword = "") => {
+  const fetchUsers = async (currentPage, role, kw) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: currentPage,
         size: 10,
         ...(role && { role }),
-        ...(keyword && { keyword }),
-        sortBy: "createdAt",
-        order: "desc",
+        ...(kw && { keyword: kw }),
+        sortBy: 'createdAt',
+        order: 'desc',
       });
-
-      const response = await apiClient.get(`/users/admin/list?${params.toString()}`);
-      const data = response.data;
-      setUsers(data.data);
-      setTotalPages(data.pages);
+      const response = await apiClient.get(
+        `/users/admin/list?${params.toString()}`
+      );
+      setUsers(response.data?.data || []);
+      setTotalPages(response.data?.pages || 1);
     } catch (error) {
-      const msg = error.response?.data?.message || "Failed to fetch users";
-      alert(msg);
+      toast.error(
+        error.response?.data?.message || 'Failed to fetch users'
+      );
     } finally {
       setLoading(false);
     }
@@ -72,115 +87,220 @@ function AdminAccountManage() {
     fetchUsers(page, roleFilter, keyword);
   }, [page, roleFilter, keyword]);
 
-  const handlePageChange = (_, value) => {
-    setPage(value);
-  };
-
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) return;
-
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
     try {
-      await apiClient.delete(`/users/${userId}`);
-      alert("User deleted successfully.");
+      await apiClient.delete(`/users/${pendingDelete.id}`);
+      toast.success('User deleted successfully');
+      setPendingDelete(null);
       fetchUsers(page, roleFilter, keyword);
     } catch (error) {
-      const msg = error.response?.data?.message || "Failed to delete user.";
-      alert(msg);
+      toast.error(error.response?.data?.message || 'Failed to delete user');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  return (
-    <>
-      
-      <div className="dashboard-container">
-        
-        <div className="dashboard-content">
-          <h2 className="admin-label">All Users</h2>
+  const visibleUsers = users.filter((u) => u.role !== 'ADMIN' && u.role !== 'Admin');
+  const activeRoleLabel =
+    ROLE_FILTERS.find((r) => r.value === roleFilter)?.label || 'All roles';
 
-          <div className="admin-header">
-            <TextField
-              className="search-bar"
-              label="Search"
-              variant="outlined"
-              size="small"
+  return (
+    <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-xl font-semibold tracking-tight">All Users</h2>
+        <p className="text-sm text-muted-foreground">
+          Manage participant and organizer accounts.
+        </p>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[220px] space-y-1.5">
+          <Label htmlFor="user-search" className="text-xs text-muted-foreground">
+            Search
+          </Label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="user-search"
+              type="search"
+              placeholder="Search by name or email…"
               value={keyword}
               onChange={(e) => {
                 setPage(1);
                 setKeyword(e.target.value);
               }}
-            />
-
-            <FormControl size="small" style={{ minWidth: 150, marginLeft: "10px" }}>
-              <InputLabel>Role</InputLabel>
-              <Select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                label="Role"
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="ORGANIZER">ORGANIZER</MenuItem>
-                <MenuItem value="PARTICIPANT">PARTICIPANT</MenuItem>
-              </Select>
-            </FormControl>
-          </div>
-
-          {loading ? (
-            <p>Loading users...</p>
-          ) : users.filter((user) => user.role !== "ADMIN").length === 0 ? (
-            <p>No users found.</p>
-          ) : (
-            <div className="admin-table">
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Delete</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {users
-                      .filter((user) => user.role !== "Admin")
-                      .map((user, index) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{index + 1 + (page - 1) * 10}</TableCell>
-                          <TableCell>{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.description || "-"}</TableCell>
-                          <TableCell>{user.role}</TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="error"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              Delete
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </div>
-          )}
-
-          <div style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
+              className="pl-9"
             />
           </div>
         </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Role</Label>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="min-w-[160px] justify-between">
+                {activeRoleLabel}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[160px]">
+              {ROLE_FILTERS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value || 'all'}
+                  onSelect={() => {
+                    setPage(1);
+                    setRoleFilter(opt.value);
+                  }}
+                  className={cn(
+                    roleFilter === opt.value && 'bg-accent text-accent-foreground'
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </>
+
+      {/* Table */}
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium w-10">#</th>
+                <th className="px-3 py-2 text-left font-medium">Name</th>
+                <th className="px-3 py-2 text-left font-medium">Email</th>
+                <th className="px-3 py-2 text-left font-medium">Description</th>
+                <th className="px-3 py-2 text-left font-medium">Role</th>
+                <th className="px-3 py-2 text-right font-medium w-20">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {loading ? (
+                Array.from({ length: 6 }).map((_, idx) => (
+                  <tr key={`s-${idx}`}>
+                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-6" /></td>
+                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-40" /></td>
+                    <td className="px-3 py-1.5"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-3 py-1.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-3 py-1.5"><Skeleton className="h-7 w-12 ml-auto" /></td>
+                  </tr>
+                ))
+              ) : visibleUsers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-3 py-12 text-center text-sm text-muted-foreground"
+                  >
+                    No users found.
+                  </td>
+                </tr>
+              ) : (
+                visibleUsers.map((user, index) => (
+                  <tr
+                    key={user.id}
+                    className="hover:bg-muted/40 transition-colors"
+                  >
+                    <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
+                      {index + 1 + (page - 1) * 10}
+                    </td>
+                    <td className="px-3 py-1.5 font-medium">{user.name}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{user.email}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground max-w-xs truncate">
+                      {user.description || '—'}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <Badge variant={roleBadgeVariant(user.role)} className="text-[10px]">
+                        {user.role}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setPendingDelete(user)}
+                        aria-label={`Delete ${user.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Page <span className="font-medium text-foreground">{page}</span> of{' '}
+          <span className="font-medium text-foreground">{totalPages}</span>
+        </span>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Prev
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Delete confirmation */}
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete user?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove{' '}
+              <span className="font-medium text-foreground">
+                {pendingDelete?.name}
+              </span>{' '}
+              ({pendingDelete?.email}). This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDelete(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting…' : 'Delete user'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

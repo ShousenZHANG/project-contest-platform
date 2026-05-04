@@ -1,123 +1,75 @@
 /**
  * @file Sidebar.jsx
- * @description 
- * This component renders the sidebar navigation for the admin dashboard.
- * It allows admin users to:
- *  - Navigate to the Dashboard, Profile, Account Management, and Competitions Management pages.
- *  - Highlight the currently active page with a visual indicator.
- *  - Ensure that navigation is only allowed when the user is authenticated (token exists).
- * 
- * The component uses React Router for navigation and localStorage to retrieve user session information.
- * It provides visual feedback on the active navigation link and includes simple role-based access control checks.
- * 
+ * @description
+ * Admin sidebar navigation. Migrated from MUI/CSS to shadcn/ui + Tailwind.
+ * Highlights the active route, gates clicks behind an auth token check, and
+ * routes admins to Dashboard, Profile, Account Management, and Competitions.
+ *
  * Role: Admin
  * Developer: Zhaoyi Yang
  */
 
-
-import React, { useState } from 'react';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import './Sidebar.css';
+import { LayoutDashboard, User, Users, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '../lib/utils';
+
+const NAV_ITEMS = [
+  { to: '/AdminDashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/AdminProfile', label: 'Profile', icon: User },
+  { to: '/AdminAccountManage', label: 'Accounts', icon: Users },
+  { to: '/AllCompetitions', label: 'Competitions', icon: Trophy },
+];
 
 function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [activePath, setActivePath] = useState(location.pathname);
-  const email = localStorage.getItem("email");
 
-  const handleDashboard = (event) => {
+  const handleNavigate = (event, to) => {
     event.preventDefault();
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (!token) {
-      alert("You are not authorized. Please log in first.");
+      toast.error('You are not authorized. Please log in first.');
       return;
     }
-    if (email) {
-      navigate(`/AdminDashboard`);
-      setActivePath(`/AdminDashboard`);
-    }
-  };
-
-  const handleProfileClick = (event) => {
-    event.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("You are not authorized. Please log in first.");
-      return;
-    }
-    if (email) {
-      navigate(`/AdminProfile`);
-      setActivePath(`/AdminProfile`);
-    }
-  };
-
-  const handleOrganizerManageClick = (event) => {
-    event.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("You are not authorized. Please log in first.");
-      return;
-    }
-    navigate(`/AdminAccountManage`);
-    setActivePath(`/AdminAccountManage`);
-  };
-
-  const handleAllCompetitionsClick = (event) => {
-    event.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("You are not authorized. Please log in first.");
-      return;
-    }
-    navigate(`/AllCompetitions`);
-    setActivePath(`/AllCompetitions`);
+    navigate(to);
   };
 
   return (
-    <aside className="sidebar">
-      <nav>
-        <ul>
-          <li>
+    <aside
+      className="sticky top-0 hidden h-screen w-56 flex-col border-r border-border bg-card md:flex"
+      aria-label="Admin navigation"
+    >
+      <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <Trophy className="h-4 w-4" />
+        </div>
+        <span className="text-sm font-semibold tracking-tight">Admin Console</span>
+      </div>
+
+      <nav className="flex-1 space-y-0.5 p-2">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname.startsWith(item.to);
+          return (
             <a
-              href={`/AdminDashboard`}
-              onClick={handleDashboard}
-              className={activePath.startsWith("/AdminDashboard") ? "active-link" : ""}
+              key={item.to}
+              href={item.to}
+              onClick={(e) => handleNavigate(e, item.to)}
+              className={cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'hover:bg-accent hover:text-accent-foreground',
+                isActive
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground'
+              )}
             >
-              {activePath.startsWith("AdminDashboard") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Profile">📊</span> Dashboard
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{item.label}</span>
             </a>
-          </li>
-          <li>
-            <a
-              href={`/AdminProfile`}
-              onClick={handleProfileClick}
-              className={activePath.startsWith("/AdminProfile") ? "active-link" : ""}
-            >
-              {activePath.startsWith("/AdminProfile") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Profile">👤</span> Profile
-            </a>
-          </li>
-          <li>
-            <a
-              href={`/AdminAccountManage`}
-              onClick={handleOrganizerManageClick}
-              className={activePath.startsWith("/AdminAccountManage") ? "active-link" : ""}
-            >
-              {activePath.startsWith("/AdminAccountManage") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Manage">🛠️</span> Accounts Manage
-            </a>
-          </li>
-          <li>
-            <a
-              href={`/AllCompetitions`}
-              onClick={handleAllCompetitionsClick}
-              className={activePath.startsWith("/AllCompetitions") ? "active-link" : ""}
-            >
-              {activePath.startsWith("/AllCompetitions") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Competitions">📋</span> Competitions Manage
-            </a>
-          </li>
-        </ul>
+          );
+        })}
       </nav>
     </aside>
   );

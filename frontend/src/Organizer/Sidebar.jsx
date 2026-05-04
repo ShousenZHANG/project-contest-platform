@@ -1,37 +1,27 @@
 /**
- * @file Sidebar.js
+ * @file Sidebar.jsx
  * @description
- * Sidebar component for Organizer role.
- * Provides navigation links to:
- *  - Organizer Dashboard
- *  - Organizer Profile
- *  - Organizer Contest Management
- * 
- * Features:
- *  - Highlights the active route.
- *  - Verifies token existence before navigating.
- *  - Protects Profile navigation separately (using navigate).
- * 
- * Role: Organizer
- * Developer: Zhaoyi Yang
+ * Sidebar navigation for Organizer role. Migrated from raw CSS to Tailwind.
+ * Uses shadcn primitives for consistency.
  */
-
 
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import './Sidebar.css';
+import { LayoutDashboard, User, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '../lib/utils';
 
 function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [activePath, setActivePath] = useState(location.pathname);
-  const email = localStorage.getItem("email");
+  const email = localStorage.getItem('email');
 
   const handleLinkClick = (event, path) => {
     const token = localStorage.getItem('token');
     if (!token) {
       event.preventDefault();
-      alert('You are not authorized. Please log in first.');
+      toast.error('You are not authorized. Please log in first.');
       return;
     }
     setActivePath(path);
@@ -39,9 +29,9 @@ function Sidebar() {
 
   const handleProfileClick = (event) => {
     event.preventDefault();
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (!token) {
-      alert("You are not authorized. Please log in first.");
+      toast.error('You are not authorized. Please log in first.');
       return;
     }
     if (email) {
@@ -50,41 +40,47 @@ function Sidebar() {
     }
   };
 
+  const linkClass = (active) =>
+    cn(
+      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+      active
+        ? 'bg-primary text-primary-foreground'
+        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+    );
+
   return (
-    <aside className="sidebar">
-      <nav>
-        <ul>
-          <li>
-            <NavLink
-              to={`/OrganizerDashboard/${email}`}
-              className={({ isActive }) => isActive ? "active-link" : ""}
-              onClick={(e) => handleLinkClick(e, `/OrganizerDashboard/${email}`)}
-            >
-              {activePath.startsWith("/OrganizerDashboard") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Dashboard">📊</span> Dashboard
-            </NavLink>
-          </li>
-          <li>
-            <a
-              href={`/OrganizerProfile/${email}`}
-              onClick={handleProfileClick}
-              className={activePath.startsWith("/OrganizerProfile") ? "active-link" : ""}
-            >
-              {activePath.startsWith("/OrganizerProfile") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Profile">👤</span> Profile
-            </a>
-          </li>
-          <li>
-            <NavLink
-              to={`/OrganizerContestList/${email}`}
-              className={({ isActive }) => isActive ? "active-link" : ""}
-              onClick={(e) => handleLinkClick(e, `/OrganizerContestList/${email}`)}
-            >
-              {activePath.startsWith("/OrganizerContestList") && <span className="arrow-icon">▶</span>}
-              <span role="img" aria-label="Contest">🏆</span> Contest
-            </NavLink>
-          </li>
-        </ul>
+    <aside className="flex h-full w-56 flex-col border-r border-border bg-card p-3">
+      <nav className="flex flex-col gap-1">
+        <NavLink
+          to={`/OrganizerDashboard/${email}`}
+          onClick={(e) => handleLinkClick(e, `/OrganizerDashboard/${email}`)}
+          className={({ isActive }) =>
+            linkClass(isActive || activePath.startsWith('/OrganizerDashboard'))
+          }
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Dashboard
+        </NavLink>
+
+        <a
+          href={`/OrganizerProfile/${email}`}
+          onClick={handleProfileClick}
+          className={linkClass(activePath.startsWith('/OrganizerProfile'))}
+        >
+          <User className="h-4 w-4" />
+          Profile
+        </a>
+
+        <NavLink
+          to={`/OrganizerContestList/${email}`}
+          onClick={(e) => handleLinkClick(e, `/OrganizerContestList/${email}`)}
+          className={({ isActive }) =>
+            linkClass(isActive || activePath.startsWith('/OrganizerContestList'))
+          }
+        >
+          <Trophy className="h-4 w-4" />
+          Contests
+        </NavLink>
       </nav>
     </aside>
   );

@@ -1,32 +1,33 @@
 /**
- * Contest.js
- * 
- * This component displays a list of contests with search, filter, and pagination functionality.
- * It allows users to:
- * - Search contests by keyword.
- * - Filter contests by status, participation type, and category.
- * - Toggle between card and list views.
- * - Navigate to detailed contest views.
- * 
+ * UserContestList.jsx
+ *
+ * Public contest browse list with search, filter, pagination. Migrated from MUI to shadcn/ui.
+ *
  * Role: Public User
  * Developer: Beiqi Dai
  */
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
 import ContestCard from "./UserContestCard";
-import { IconButton, Typography, Pagination } from "@mui/material";
-import { Close, FilterAlt, ViewList } from "@mui/icons-material";
-import SearchIcon from "@mui/icons-material/Search";
-import { useNavigate } from "react-router-dom";
-import "./UserContestList.css";
-import defaultImage from "./1.jpg";
 import ChangeContestTable from "./PublicChangeContestTable";
-import apiClient from '../api/apiClient';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react";
+import defaultImage from "./1.jpg";
+import apiClient from "../api/apiClient";
 
 function Contest() {
-  const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedParticipationType, setSelectedParticipationType] = useState("");
@@ -37,10 +38,6 @@ function Contest() {
   const [page, setPage] = useState(1);
   const size = 6;
   const navigate = useNavigate();
-
-  const toggleFilter = () => {
-    setIsFilterVisible(!isFilterVisible);
-  };
 
   const handleCategoryChange = (category) => {
     setSelectedCategories((prev) =>
@@ -53,14 +50,13 @@ function Contest() {
       try {
         const params = new URLSearchParams();
         if (searchTerm) params.append("keyword", searchTerm);
-        if (selectedCategories.length > 0)
-          params.append("category", selectedCategories.join(","));
+        if (selectedCategories.length > 0) params.append("category", selectedCategories.join(","));
         if (selectedStatus) params.append("status", selectedStatus);
 
         const response = await apiClient.get(`/competitions/list`, { params });
         setContests(response.data.data || []);
       } catch (error) {
-        // fetch failed silently — contests remain empty
+        // fetch failed silently
       }
     };
 
@@ -96,194 +92,202 @@ function Contest() {
 
   const pages = Math.ceil(contests.length / size);
   const paginatedContests = contests.slice((page - 1) * size, page * size);
-
   const filteredContests = paginatedContests.filter((item) => {
-    if (selectedParticipationType && item.participationType !== selectedParticipationType) {
-      return false;
-    }
+    if (selectedParticipationType && item.participationType !== selectedParticipationType) return false;
     return true;
   });
+  const allCategories = Array.from(new Set(contests.map((item) => item.category))).sort();
 
   return (
     <>
       <Navbar />
-      <div className="publicuser-main-wrapper">
-        <div className="publicuser-content-wrapper">
-          <div className="publicuser-contest-container">
-            <Typography
-              variant="h4"
-              align="center"
-              fontWeight="bold"
-              sx={{ marginTop: 0, marginBottom: 3 }}
-            >
-              Contest List
-            </Typography>
+      <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 py-10 px-4">
+        <div className="mx-auto max-w-7xl">
+          <header className="mb-8 text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">Contest List</h1>
+            <p className="mt-2 text-muted-foreground">Discover and join exciting competitions</p>
+          </header>
 
-            {/* Search bar */}
-            <div className="publicuser-contest-header">
-              <input
-                className="publicuser-search-bar"
-                type="text"
-                placeholder="Search..."
+          {/* Toolbar */}
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search contests..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-              />
-              <IconButton
-                className="publicuser-search-button"
-                title="Search"
-                onClick={handleSearchClick}
-              >
-                <SearchIcon />
-              </IconButton>
-              <IconButton
-                className="publicuser-filter-button"
-                title="Filter"
-                onClick={toggleFilter}
-              >
-                <FilterAlt />
-              </IconButton>
-              <IconButton
-                className="publicuser-filter-button"
-                title="Toggle List / Card View"
-                onClick={() => setIsListView((prev) => !prev)}
-              >
-                <ViewList />
-              </IconButton>
-            </div>
-
-            {/* Filter bar */}
-            <div className={`publicuser-filter-sidebar ${isFilterVisible ? "visible" : ""}`}>
-              <IconButton className="publicuser-close-filter" onClick={toggleFilter}>
-                <Close />
-              </IconButton>
-
-              <Typography variant="h6" className="publicuser-filter-status" sx={{ mt: 2, backgroundColor: "white", color: "white", padding: "5px", marginBottom: "10px" }}>
-                Filter by Status
-              </Typography>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="publicuser-filter-select"
-              >
-                <option value="">All</option>
-                <option value="UPCOMING">UPCOMING</option>
-                <option value="ONGOING">ONGOING</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="AWARDED">AWARDED</option>
-              </select>
-
-              <Typography variant="h6" className="publicuser-filter-status" sx={{ mt: 2, backgroundColor: "white", color: "white", padding: "5px", marginBottom: "10px" }}>
-                Filter by Participation Type
-              </Typography>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
-                <select
-                  value={selectedParticipationType}
-                  onChange={(e) => {
-                    setSelectedParticipationType(e.target.value);
-                    setPage(1);
-                  }}
-                  className="publicuser-filter-select"
-                >
-                  <option value="">All</option>
-                  <option value="INDIVIDUAL">INDIVIDUAL</option>
-                  <option value="TEAM">TEAM</option>
-                </select>
-
-                <Typography variant="h6" className="publicuser-filter-category" >
-                  Filter by Category
-                </Typography>
-                {contests.length > 0 &&
-                  Array.from(new Set(contests.map((item) => item.category)))
-                    .sort()
-                    .map((category) => (
-                      <label key={category} className="publicuser-filter-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedCategories.includes(category)}
-                          onChange={() => handleCategoryChange(category)}
-                        />
-                        {category}
-                      </label>
-                    ))}
-
-
-              </div>
-
-            </div>
-
-            {/* Show the cards or forms */}
-            <div className="publicuser-contest-cards">
-              {isListView ? (
-                <ChangeContestTable
-                  contests={filteredContests.map((item) => ({
-                    id: item.id,
-                    title: item.name,
-                    description: item.description,
-                    category: item.category,
-                    date: formatDateRange(item.startDate, item.endDate),
-                    isPublic: item.isPublic,
-                    status: item.status,
-                    statusText: getStatusText(item.status),
-                    allowedSubmissionTypes: item.allowedSubmissionTypes,
-                    scoringCriteria: item.scoringCriteria,
-                    introVideoUrl: item.introVideoUrl,
-                    image: item.imageUrls?.[0] || defaultImage,
-                    createdAt: item.createdAt,
-                    participationType: item.participationType || "INDIVIDUAL",
-                  }))}
-                  onRowClick={handleCardClick}
-                />
-              ) : (
-                filteredContests.map((item) => {
-                  const mappedContest = {
-                    id: item.id,
-                    title: item.name,
-                    description: item.description,
-                    category: item.category,
-                    date: formatDateRange(item.startDate, item.endDate),
-                    isPublic: item.isPublic,
-                    status: item.status,
-                    allowedSubmissionTypes: item.allowedSubmissionTypes,
-                    scoringCriteria: item.scoringCriteria,
-                    introVideoUrl: item.introVideoUrl,
-                    image: item.imageUrls?.[0] || defaultImage,
-                    createdAt: item.createdAt,
-                    participationType: item.participationType || "INDIVIDUAL",
-                  };
-                  return (
-                    <ContestCard
-                      key={mappedContest.id}
-                      contest={mappedContest}
-                      onCardClick={handleCardClick}
-                    />
-                  );
-                })
-              )}
-            </div>
-
-            {/* 分页器 */}
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
-              <Pagination
-                count={pages}
-                page={page}
-                onChange={(event, value) => setPage(value)}
-                sx={{
-                  '& .MuiPaginationItem-root': {
-                    color: '#FF9800',
-                    borderColor: '#FF9800',
-                  },
-                  '& .Mui-selected': {
-                    backgroundColor: '#FF9800',
-                    color: '#fff',
-                    borderColor: '#FF9800',
-                    '&:hover': {
-                      backgroundColor: '#FB8C00',
-                    },
-                  },
-                }}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchClick()}
+                className="pl-9"
               />
             </div>
+            <Button onClick={handleSearchClick} variant="default">
+              <Search className="mr-2 h-4 w-4" />
+              Search
+            </Button>
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" title="Filter">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 space-y-6">
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold">Status</h4>
+                    <select
+                      value={selectedStatus}
+                      onChange={(e) => setSelectedStatus(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">All</option>
+                      <option value="UPCOMING">UPCOMING</option>
+                      <option value="ONGOING">ONGOING</option>
+                      <option value="COMPLETED">COMPLETED</option>
+                      <option value="AWARDED">AWARDED</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold">Participation Type</h4>
+                    <select
+                      value={selectedParticipationType}
+                      onChange={(e) => {
+                        setSelectedParticipationType(e.target.value);
+                        setPage(1);
+                      }}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">All</option>
+                      <option value="INDIVIDUAL">INDIVIDUAL</option>
+                      <option value="TEAM">TEAM</option>
+                    </select>
+                  </div>
+
+                  {allCategories.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 text-sm font-semibold">Category</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {allCategories.map((category) => {
+                          const isSelected = selectedCategories.includes(category);
+                          return (
+                            <Badge
+                              key={category}
+                              variant={isSelected ? "default" : "outline"}
+                              className="cursor-pointer transition-all"
+                              onClick={() => handleCategoryChange(category)}
+                            >
+                              {category}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <Button
+              variant="outline"
+              size="icon"
+              title="Toggle list / card view"
+              onClick={() => setIsListView((prev) => !prev)}
+            >
+              {isListView ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+            </Button>
           </div>
+
+          {/* Contest grid/table */}
+          <div>
+            {isListView ? (
+              <ChangeContestTable
+                contests={filteredContests.map((item) => ({
+                  id: item.id,
+                  title: item.name,
+                  description: item.description,
+                  category: item.category,
+                  date: formatDateRange(item.startDate, item.endDate),
+                  isPublic: item.isPublic,
+                  status: item.status,
+                  statusText: getStatusText(item.status),
+                  allowedSubmissionTypes: item.allowedSubmissionTypes,
+                  scoringCriteria: item.scoringCriteria,
+                  introVideoUrl: item.introVideoUrl,
+                  image: item.imageUrls?.[0] || defaultImage,
+                  createdAt: item.createdAt,
+                  participationType: item.participationType || "INDIVIDUAL",
+                }))}
+                onRowClick={handleCardClick}
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredContests.map((item) => (
+                  <ContestCard
+                    key={item.id}
+                    contest={{
+                      id: item.id,
+                      title: item.name,
+                      description: item.description,
+                      category: item.category,
+                      date: formatDateRange(item.startDate, item.endDate),
+                      isPublic: item.isPublic,
+                      status: item.status,
+                      allowedSubmissionTypes: item.allowedSubmissionTypes,
+                      scoringCriteria: item.scoringCriteria,
+                      introVideoUrl: item.introVideoUrl,
+                      image: item.imageUrls?.[0] || defaultImage,
+                      createdAt: item.createdAt,
+                      participationType: item.participationType || "INDIVIDUAL",
+                    }}
+                    onCardClick={handleCardClick}
+                  />
+                ))}
+              </div>
+            )}
+
+            {filteredContests.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border bg-card/50 py-16 text-center">
+                <p className="text-muted-foreground">No contests match your filters.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {pages > 1 && (
+            <div className="mt-8 flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+                <Button
+                  key={p}
+                  variant={p === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-9"
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={page === pages}
+                onClick={() => setPage((p) => Math.min(pages, p + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       <Footer />

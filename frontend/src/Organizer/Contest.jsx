@@ -1,97 +1,92 @@
 /**
- * @file OrganizerContest.js
- * @description 
- * This component provides a form for organizers to create a new contest.
- * It allows organizers to:
- *  - Enter contest details such as name, description, category, dates, and participation type.
- *  - Add custom scoring criteria.
- *  - Select allowed submission formats (e.g., PDF, ZIP, CODE, Image, Text).
- *  - Choose between public or private visibility.
- *  - Automatically determine the contest status (Upcoming, Ongoing, Completed) based on dates.
- * 
- * Upon form submission, the contest information is sent to the backend API to create a new competition entry.
- * Material-UI components are used for form inputs, layout, and interactions.
- * 
- * Role: Organizer
- * Developer: Zhaoyi Yang
+ * @file Contest.jsx
+ * @description
+ * Form for organizers to create a new contest. Migrated from MUI to shadcn/ui.
  */
 
-
-import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  Button,
-  IconButton,
-  Checkbox,
-  FormGroup,
-} from "@mui/material";
-import { Delete } from "@mui/icons-material";
-import "./Contest.css";
+import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent } from '../components/ui/card';
+
+const CATEGORIES = [
+  'Design & Creativity',
+  'Programming & Technology',
+  'Business & Entrepreneurship',
+  'Mathematics & Science',
+  'Humanities & Social Sciences',
+  'Music & Performing Arts',
+  'Others',
+];
+
+const SUBMISSION_FORMATS = ['PDF', 'ZIP', 'CODE', 'Image', 'Text'];
+
+const TEXTAREA_CLASS =
+  'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+
+const SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
 function OrganizerContest() {
   const [contestData, setContestData] = useState({
-    contestName: "",
-    contestDescription: "",
-    category: "",
-    startDate: "",
-    endDate: "",
-    isPublic: "Public",
+    contestName: '',
+    contestDescription: '',
+    category: '',
+    startDate: '',
+    endDate: '',
+    isPublic: 'Public',
     scoringCriteria: [],
     submissionFormats: [],
-    participationType: "INDIVIDUAL",
+    participationType: 'INDIVIDUAL',
   });
 
-  const [newCriteria, setNewCriteria] = useState("");
+  const [newCriteria, setNewCriteria] = useState('');
   const navigate = useNavigate();
-  const availableFormats = ["PDF", "ZIP", "CODE", "Image", "Text"];
   const { email } = useParams();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setContestData((prevData) => ({ ...prevData, [name]: value }));
+    setContestData((prev) => ({ ...prev, [name]: value }));
   };
 
   const addCriteria = () => {
-    if (newCriteria.trim() !== "") {
-      setContestData((prevData) => ({
-        ...prevData,
-        scoringCriteria: [...prevData.scoringCriteria, newCriteria],
+    if (newCriteria.trim() !== '') {
+      setContestData((prev) => ({
+        ...prev,
+        scoringCriteria: [...prev.scoringCriteria, newCriteria],
       }));
-      setNewCriteria("");
+      setNewCriteria('');
     }
   };
 
   const removeCriteria = (index) => {
-    setContestData((prevData) => ({
-      ...prevData,
-      scoringCriteria: prevData.scoringCriteria.filter((_, i) => i !== index),
+    setContestData((prev) => ({
+      ...prev,
+      scoringCriteria: prev.scoringCriteria.filter((_, i) => i !== index),
     }));
   };
 
   const handleFormatChange = (format) => {
-    setContestData((prevData) => ({
-      ...prevData,
-      submissionFormats: prevData.submissionFormats.includes(format)
-        ? prevData.submissionFormats.filter((f) => f !== format)
-        : [...prevData.submissionFormats, format],
+    setContestData((prev) => ({
+      ...prev,
+      submissionFormats: prev.submissionFormats.includes(format)
+        ? prev.submissionFormats.filter((f) => f !== format)
+        : [...prev.submissionFormats, format],
     }));
   };
 
   const getAutoStatus = () => {
     const now = new Date();
-    const start = new Date(contestData.startDate + "T00:00:00");
-    const end = new Date(contestData.endDate + "T23:59:59");
-    if (now < start) return "UPCOMING";
-    if (now >= start && now <= end) return "ONGOING";
-    return "COMPLETED";
+    const start = new Date(contestData.startDate + 'T00:00:00');
+    const end = new Date(contestData.endDate + 'T23:59:59');
+    if (now < start) return 'UPCOMING';
+    if (now >= start && now <= end) return 'ONGOING';
+    return 'COMPLETED';
   };
 
   const handleSave = async () => {
@@ -100,188 +95,217 @@ function OrganizerContest() {
         name: contestData.contestName,
         description: contestData.contestDescription,
         category: contestData.category,
-        startDate: new Date(contestData.startDate + "T10:00:00Z").toISOString().replace(".000", ""),
-        endDate: new Date(contestData.endDate + "T18:00:00Z").toISOString().replace(".000", ""),
-        isPublic: contestData.isPublic === "Public",
+        startDate: new Date(contestData.startDate + 'T10:00:00Z')
+          .toISOString()
+          .replace('.000', ''),
+        endDate: new Date(contestData.endDate + 'T18:00:00Z')
+          .toISOString()
+          .replace('.000', ''),
+        isPublic: contestData.isPublic === 'Public',
         status: getAutoStatus(),
         allowedSubmissionTypes: contestData.submissionFormats,
         scoringCriteria: contestData.scoringCriteria,
         participationType: contestData.participationType,
         imageUrls: [],
-        introVideoUrl: "",
+        introVideoUrl: '',
       };
-      await apiClient.post("/competitions", payload);
-      alert("🎉 Contest created successfully!");
+      await apiClient.post('/competitions', payload);
+      toast.success('Contest created successfully');
       navigate(`/OrganizerContestList/${email}`);
     } catch (error) {
-      alert("❌ Failed to create contest: " + (error.response?.data?.message || "Server error. Please try again."));
+      toast.error(
+        'Failed to create contest: ' +
+          (error.response?.data?.message || 'Server error. Please try again.')
+      );
     }
   };
 
   return (
-    <>
-      
-      <div className="dashboard-container">
-        
-        <div className="dashboard-content">
-          <h2 className="contest-label">Contest Name</h2>
-          <TextField
-            fullWidth
-            name="contestName"
-            value={contestData.contestName}
-            onChange={handleChange}
-            placeholder="Enter contest name"
-          />
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Create Contest</h1>
+        <p className="text-sm text-muted-foreground">
+          Set up a new competition with scoring criteria and submission rules.
+        </p>
+      </div>
 
-          <h2 className="contest-label">Contest Description</h2>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            name="contestDescription"
-            value={contestData.contestDescription}
-            onChange={handleChange}
-            placeholder="Describe your contest..."
-          />
+      <Card>
+        <CardContent className="space-y-6 pt-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="contestName">Contest Name</Label>
+              <Input
+                id="contestName"
+                name="contestName"
+                value={contestData.contestName}
+                onChange={handleChange}
+                placeholder="Enter contest name"
+              />
+            </div>
 
-          <h2 className="contest-label">Category</h2>
-          <FormControl fullWidth>
-            <Select
-              name="category"
-              value={contestData.category}
-              onChange={handleChange}
-              displayEmpty
-            >
-              <MenuItem value="" disabled>Select a category</MenuItem>
-              <MenuItem value="Design & Creativity">Design & Creativity</MenuItem>
-              <MenuItem value="Programming & Technology">Programming & Technology</MenuItem>
-              <MenuItem value="Business & Entrepreneurship">Business & Entrepreneurship</MenuItem>
-              <MenuItem value="Mathematics & Science">Mathematics & Science</MenuItem>
-              <MenuItem value="Humanities & Social Sciences">Humanities & Social Sciences</MenuItem>
-              <MenuItem value="Music & Performing Arts">Music & Performing Arts</MenuItem>
-              <MenuItem value="Others">Others</MenuItem>
-            </Select>
-          </FormControl>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="contestDescription">Description</Label>
+              <textarea
+                id="contestDescription"
+                name="contestDescription"
+                value={contestData.contestDescription}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Describe your contest..."
+                className={TEXTAREA_CLASS}
+              />
+            </div>
 
-          <h2 className="contest-label">Start Date & Deadline</h2>
-          <div className="date-picker">
-            <TextField
-              type="date"
-              name="startDate"
-              value={contestData.startDate}
-              onChange={handleChange}
-              inputProps={{ "data-testid": "start-date" }}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <select
+                id="category"
+                name="category"
+                value={contestData.category}
+                onChange={handleChange}
+                className={SELECT_CLASS}
+              >
+                <option value="" disabled>
+                  Select a category
+                </option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <TextField
-              type="date"
-              name="endDate"
-              value={contestData.endDate}
-              onChange={handleChange}
-              inputProps={{ "data-testid": "end-date" }}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="participationType">Participation Type</Label>
+              <select
+                id="participationType"
+                name="participationType"
+                value={contestData.participationType}
+                onChange={handleChange}
+                className={SELECT_CLASS}
+              >
+                <option value="INDIVIDUAL">INDIVIDUAL</option>
+                <option value="TEAM">TEAM</option>
+              </select>
+            </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                name="startDate"
+                value={contestData.startDate}
+                onChange={handleChange}
+                data-testid="start-date"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="endDate">End Date</Label>
+              <Input
+                id="endDate"
+                type="date"
+                name="endDate"
+                value={contestData.endDate}
+                onChange={handleChange}
+                data-testid="end-date"
+              />
+            </div>
           </div>
 
-          <h2 className="contest-label">Scoring Criteria</h2>
-          <div className="scoring-input">
-            <TextField
-              fullWidth
-              value={newCriteria}
-              onChange={(e) => setNewCriteria(e.target.value)}
-              placeholder="Enter scoring criteria"
-            />
-            <Button variant="contained" color="primary" onClick={addCriteria}>Add</Button>
+          <div className="space-y-2">
+            <Label>Scoring Criteria</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newCriteria}
+                onChange={(e) => setNewCriteria(e.target.value)}
+                placeholder="Enter scoring criteria"
+              />
+              <Button type="button" onClick={addCriteria}>
+                Add
+              </Button>
+            </div>
+            {contestData.scoringCriteria.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {contestData.scoringCriteria.map((c, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+                  >
+                    <span>{c}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeCriteria(i)}
+                      aria-label="Remove criterion"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <ul className="scoring-list">
-            {contestData.scoringCriteria.map((criteria, index) => (
-              <li key={index} className="scoring-item">
-                {criteria}
-                <IconButton aria-label="delete" onClick={() => removeCriteria(index)} size="small">
-                  <Delete />
-                </IconButton>
-              </li>
-            ))}
-          </ul>
 
-          <h2 className="contest-label">Submission Formats</h2>
-          <FormGroup>
-            {availableFormats.map((format) => (
-              <FormControlLabel
-                key={format}
-                control={
-                  <Checkbox
+          <div className="space-y-2">
+            <Label>Submission Formats</Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {SUBMISSION_FORMATS.map((format) => (
+                <label
+                  key={format}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
+                >
+                  <input
+                    type="checkbox"
                     checked={contestData.submissionFormats.includes(format)}
                     onChange={() => handleFormatChange(format)}
+                    className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                   />
-                }
-                label={format}
-              />
-            ))}
-          </FormGroup>
+                  {format}
+                </label>
+              ))}
+            </div>
+          </div>
 
-          <h2 className="contest-label">Participation Type</h2>
-          <FormControl fullWidth>
-            <Select
-              name="participationType"
-              value={contestData.participationType}
-              onChange={handleChange}
-              displayEmpty
-            >
-              <MenuItem value="" disabled>Select type</MenuItem>
-              <MenuItem value="INDIVIDUAL">INDIVIDUAL</MenuItem>
-              <MenuItem value="TEAM">TEAM</MenuItem>
-            </Select>
-          </FormControl>
+          <div className="space-y-2">
+            <Label>Visibility</Label>
+            <div className="flex gap-4">
+              {['Public', 'Private'].map((opt) => (
+                <label key={opt} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="isPublic"
+                    value={opt}
+                    checked={contestData.isPublic === opt}
+                    onChange={handleChange}
+                    className="h-4 w-4 border-input text-primary focus:ring-ring"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+          </div>
 
-          <h2 className="contest-label">Public / Private</h2>
-          <RadioGroup
-            row
-            name="isPublic"
-            value={contestData.isPublic}
-            onChange={handleChange}
-          >
-            <FormControlLabel value="Public" control={<Radio />} label="Public" />
-            <FormControlLabel value="Private" control={<Radio />} label="Private" />
-          </RadioGroup>
+          <div className="space-y-2">
+            <Label htmlFor="status">Computed Status</Label>
+            <Input id="status" value={getAutoStatus()} disabled className="bg-muted" />
+          </div>
+        </CardContent>
+      </Card>
 
-          <h2 className="contest-label">Competition Status</h2>
-          <TextField
-            label="Competition Status"
-            value={getAutoStatus()}
-            fullWidth
-            disabled
-            variant="outlined"
-            slotProps={{
-              input: {
-                style: {
-                  backgroundColor: "#f5f5f5",
-                },
-              },
-            }}
-            style={{ marginBottom: "20px" }}
-          />
-
-          <Button
-            variant="contained"
-            color="primary"
-            className="save-button"
-            onClick={handleSave}
-          >
-            Create Contest
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="secondary"
-            style={{ marginTop: "10px", marginLeft: "10px" }}
-            onClick={() => navigate(`/OrganizerContestList/${email}`)}
-          >
-            Cancel
-          </Button>
-        </div>
+      <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-border bg-background py-3">
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/OrganizerContestList/${email}`)}
+        >
+          Cancel
+        </Button>
+        <Button onClick={handleSave}>Create Contest</Button>
       </div>
-    </>
+    </div>
   );
 }
 

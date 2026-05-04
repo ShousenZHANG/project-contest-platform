@@ -1,25 +1,16 @@
 /**
- * @file UploadMedia.js
+ * @file UploadMedia.jsx
  * @description
- * Organizer uploads media (images/videos) for a specific competition.
- * Features:
- *  - Display existing intro video and images
- *  - Upload new images and videos
- *  - Delete existing images and videos
- *  - Preview selected media before upload
- *  - Auto redirect back to Contest List after successful upload
- *
- * Role: Organizer
- * Developer: Zhaoyi Yang
+ * Upload media (images/videos) for a competition. Migrated from MUI to shadcn/ui.
  */
 
-
-import React, { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Button, Typography, IconButton } from "@mui/material";
-import { Delete as DeleteIcon } from "@mui/icons-material";
-import "./Contest.css";
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Trash2, Upload as UploadIcon, ImageOff } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
 
 function UploadMedia() {
   const { id } = useParams();
@@ -28,14 +19,14 @@ function UploadMedia() {
   const [previews, setPreviews] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [existingMedia, setExistingMedia] = useState({ video: null, images: [] });
-  const [contestName, setContestName] = useState("");
-  const email = localStorage.getItem("email");
+  const [contestName, setContestName] = useState('');
+  const email = localStorage.getItem('email');
 
   const fetchCurrentMedia = useCallback(async () => {
     try {
       const res = await apiClient.get(`/competitions/${id}`);
       const data = res.data;
-      setContestName(data.name || "");
+      setContestName(data.name || '');
       setExistingMedia({
         video: data.introVideoUrl || null,
         images: data.imageUrls || [],
@@ -52,146 +43,178 @@ function UploadMedia() {
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
     setFiles(selectedFiles);
-    setPreviews(selectedFiles.map(file => URL.createObjectURL(file)));
+    setPreviews(selectedFiles.map((file) => URL.createObjectURL(file)));
   };
 
   const handleDeleteImage = async (imageUrl) => {
-    const confirmed = window.confirm("Are you sure you want to delete this image?");
-    if (!confirmed) return;
-
+    if (!window.confirm('Delete this image?')) return;
     try {
-      await apiClient.delete(`/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`);
-      alert("✅ Image deleted successfully");
+      await apiClient.delete(
+        `/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`
+      );
+      toast.success('Image deleted');
       fetchCurrentMedia();
     } catch (error) {
-      alert("❌ Failed to delete image: " + (error.response?.data?.message || "Unknown error"));
+      toast.error(
+        'Failed to delete image: ' + (error.response?.data?.message || 'Unknown error')
+      );
     }
   };
 
   const handleDeleteVideo = async () => {
-    const confirmed = window.confirm("Are you sure you want to delete the intro video?");
-    if (!confirmed) return;
-
+    if (!window.confirm('Delete the intro video?')) return;
     try {
       await apiClient.delete(`/competitions/${id}/media/video`);
-      alert("✅ Video deleted successfully");
+      toast.success('Video deleted');
       fetchCurrentMedia();
     } catch (error) {
-      alert("❌ Failed to delete video: " + (error.response?.data?.message || "Unknown error"));
+      toast.error(
+        'Failed to delete video: ' + (error.response?.data?.message || 'Unknown error')
+      );
     }
   };
 
   const handleUpload = async () => {
-    if (files.length === 0) return alert("Please select file(s) first.");
+    if (files.length === 0) {
+      toast.warning('Please select file(s) first.');
+      return;
+    }
     setUploading(true);
-
     try {
       for (const file of files) {
         const formData = new FormData();
-        formData.append("file", file);
-        formData.append("mediaType", file.type.startsWith("video/") ? "VIDEO" : "IMAGE");
+        formData.append('file', file);
+        formData.append('mediaType', file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
 
         const res = await apiClient.post(`/competitions/${id}/media`, formData);
-        if (!res.data) throw new Error("Upload failed");
+        if (!res.data) throw new Error('Upload failed');
       }
-
-      alert("✅ All media uploaded successfully!");
+      toast.success('All media uploaded successfully');
       setFiles([]);
       setPreviews([]);
       fetchCurrentMedia();
       navigate(`/OrganizerContestList/${email}`);
     } catch {
-      alert("❌ Upload failed.");
+      toast.error('Upload failed');
     } finally {
       setUploading(false);
     }
   };
 
+  const noExistingMedia = !existingMedia.video && existingMedia.images.length === 0;
+
   return (
-    <>
-      
-      <div className="dashboard-container">
-        
-        <div className="dashboard-content">
-          <Typography variant="h5" gutterBottom>
-            Upload Media for Contest: {contestName || id}
-          </Typography>
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Upload Media
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Manage images and intro video for{' '}
+          <span className="font-medium text-foreground">{contestName || id}</span>
+        </p>
+      </div>
+
+      <Card className="mb-4">
+        <CardContent className="space-y-4 pt-6">
+          <h2 className="text-base font-semibold">Current Media</h2>
+
+          {noExistingMedia && (
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
+              <ImageOff className="h-10 w-10" />
+              <p className="text-sm">No media uploaded yet</p>
+            </div>
+          )}
 
           {existingMedia.video && (
-            <div style={{ marginTop: 20, position: "relative" }}>
-              <Typography variant="subtitle1">Current Intro Video</Typography>
-              <video src={existingMedia.video} controls width="100%" />
-              <IconButton
-                onClick={handleDeleteVideo}
-                style={{ position: "absolute", top: 0, right: 0, color: "red" }}
-              >
-                <DeleteIcon />
-              </IconButton>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Intro Video</p>
+              <div className="relative overflow-hidden rounded-md border border-border">
+                <video src={existingMedia.video} controls className="w-full" />
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute right-2 top-2"
+                  onClick={handleDeleteVideo}
+                  aria-label="Delete video"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
           {existingMedia.images.length > 0 && (
-            <div style={{ marginTop: 20 }}>
-              <Typography variant="subtitle1">Current Images</Typography>
-              {existingMedia.images.map((imgUrl, i) => (
-                <div key={i} style={{ position: "relative", marginBottom: 10 }}>
-                  <img src={imgUrl} alt={`img-${i}`} width="100%" />
-                  <IconButton
-                    onClick={() => handleDeleteImage(imgUrl)}
-                    style={{ position: "absolute", top: 0, right: 0, color: "red" }}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Images</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {existingMedia.images.map((imgUrl, i) => (
+                  <div
+                    key={i}
+                    className="relative overflow-hidden rounded-md border border-border"
                   >
-                    <DeleteIcon />
-                  </IconButton>
-                </div>
-              ))}
+                    <img src={imgUrl} alt={`img-${i}`} className="h-40 w-full object-cover" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute right-2 top-2"
+                      onClick={() => handleDeleteImage(imgUrl)}
+                      aria-label="Delete image"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <h2 className="text-base font-semibold">Upload New</h2>
           <input
             type="file"
             data-testid="file-input"
             accept="image/*,video/*"
             multiple
             onChange={handleFileChange}
-            style={{ marginTop: 20 }}
+            className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
           />
 
           {previews.length > 0 && (
-            <div style={{ marginTop: 20 }}>
-              <Typography variant="subtitle1">Preview New Uploads</Typography>
-              {previews.map((url, i) => (
-                <div key={i} style={{ marginBottom: 10 }}>
-                  {files[i]?.type?.startsWith("video/") ? (
-                    <video src={url} controls width="100%" />
-                  ) : (
-                    <img src={url} alt={`preview-${i}`} width="100%" />
-                  )}
-                </div>
-              ))}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Preview</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {previews.map((url, i) => (
+                  <div key={i} className="overflow-hidden rounded-md border border-border">
+                    {files[i]?.type?.startsWith('video/') ? (
+                      <video src={url} controls className="w-full" />
+                    ) : (
+                      <img src={url} alt={`preview-${i}`} className="h-40 w-full object-cover" />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <Button
-            variant="contained"
-            color="primary"
-            style={{ marginTop: 20 }}
-            onClick={handleUpload}
-            disabled={uploading}
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="secondary"
-            style={{ marginTop: 10, marginLeft: 10 }}
-            onClick={() => navigate(`/OrganizerContestList/${email}`)}
-          >
-            Cancel
-          </Button>
-        </div>
+      <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-border bg-background py-3">
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/OrganizerContestList/${email}`)}
+        >
+          Cancel
+        </Button>
+        <Button onClick={handleUpload} disabled={uploading}>
+          <UploadIcon className="h-4 w-4" />
+          {uploading ? 'Uploading…' : 'Upload'}
+        </Button>
       </div>
-    </>
+    </div>
   );
 }
 

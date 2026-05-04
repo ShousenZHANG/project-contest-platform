@@ -1,38 +1,73 @@
 /**
- * @file RoleSelectModal.js
- * @description 
- * This component renders a modal for users to select their role before logging in or registering.
- * It allows users to:
- *  - Choose between "Participant" and "Organizer" roles.
- *  - Trigger the next step in the authentication flow based on the selected role.
- * 
- * Clicking outside the modal (on the backdrop) will close the modal.
- * Layout and styling are handled via RoleSelectModal.css.
- * 
- * Developer: Zhaoyi Yang, Ziqi Yi
+ * RoleSelectModal.jsx
+ *
+ * Role-picker modal shown before login/register. Migrated from CSS modal to
+ * shadcn/ui Dialog. Behavior preserved: clicking a role calls onSelectRole(role)
+ * and closing the dialog calls onClose.
+ *
+ * Developer: Zhaoyi Yang, Ziqi Yi (migrated)
  */
 
+import React from 'react';
+import { Users, Briefcase } from 'lucide-react';
 
-import React from "react";
-import "./RoleSelectModal.css";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Button } from '../components/ui/button';
 
 function RoleSelectModal({ onSelectRole, onClose }) {
-  const handleBackdropClick = (e) => {
-    if (e.target.classList.contains("modal-overlay")) {
-      onClose();
-    }
+  const handleOpenChange = (open) => {
+    if (!open) onClose?.();
   };
 
   return (
-    <div className="modal-overlay" onClick={handleBackdropClick}>
-      <div className="role-modal">
-        <h3>Select Your Role</h3>
-        <div className="role-buttons">
-          <button onClick={() => onSelectRole("Participant")}>Participant</button>
-          <button onClick={() => onSelectRole("Organizer")}>Organizer</button>
+    <Dialog open onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold tracking-tight">
+            Select Your Role
+          </DialogTitle>
+          <DialogDescription>
+            Choose how you want to use the platform.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-auto flex-col gap-2 py-6 hover:border-primary hover:bg-primary/5"
+            onClick={() => onSelectRole('Participant')}
+          >
+            <Users className="h-6 w-6 text-primary" />
+            <span className="text-base font-semibold">Participant</span>
+            <span className="text-xs font-normal text-muted-foreground text-center">
+              Join contests and submit work
+            </span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-auto flex-col gap-2 py-6 hover:border-primary hover:bg-primary/5"
+            onClick={() => onSelectRole('Organizer')}
+          >
+            <Briefcase className="h-6 w-6 text-primary" />
+            <span className="text-base font-semibold">Organizer</span>
+            <span className="text-xs font-normal text-muted-foreground text-center">
+              Run contests and manage entries
+            </span>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

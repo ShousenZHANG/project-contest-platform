@@ -1,25 +1,24 @@
 /**
- * PublicContestDetail.js
- * 
- * This component displays the details of a public contest, including:
- * - Contest title, description, category, status, and associated images.
- * - Navigates to related works when the "View related works" button is clicked.
- * - Allows users to navigate through images of the contest and view more details such as submission types, scoring criteria, and intro video.
- * 
+ * PublicContestDetail.jsx
+ *
+ * Public contest detail page. Migrated from MUI to shadcn/ui.
+ *
  * Role: Public User
  * Developer: Beiqi Dai, Zhaoyi Yang
  */
 
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Box, Typography, CircularProgress, IconButton, Button } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import "./UserContestList.css";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import defaultImage from "./1.jpg";
-import apiClient from '../api/apiClient';
+import apiClient from "../api/apiClient";
 
 function PublicContestDetail() {
   const { id: contestId } = useParams();
@@ -50,9 +49,13 @@ function PublicContestDetail() {
     return (
       <>
         <Navbar />
-        <div className="publicuser-main-wrapper">
-          <div className="publicuser-content-wrapper">
-            <CircularProgress sx={{ marginTop: "50px" }} />
+        <div className="min-h-screen bg-muted/20 px-4 py-10">
+          <div className="mx-auto max-w-6xl space-y-4">
+            <Skeleton className="h-10 w-32" />
+            <div className="grid gap-6 md:grid-cols-3">
+              <Skeleton className="h-96 md:col-span-1" />
+              <Skeleton className="h-96 md:col-span-2" />
+            </div>
           </div>
         </div>
         <Footer />
@@ -64,147 +67,99 @@ function PublicContestDetail() {
     return (
       <>
         <Navbar />
-        <div className="publicuser-main-wrapper">
-          <div className="publicuser-content-wrapper">
-            <Typography variant="h6" color="error" align="center" sx={{ mt: 5 }}>
-              {error || "No contest details available."}
-            </Typography>
-          </div>
+        <div className="min-h-screen bg-muted/20 px-4 py-20 text-center">
+          <p className="text-lg font-medium text-destructive">
+            {error || "No contest details available."}
+          </p>
+          <Button variant="outline" onClick={() => navigate(-1)} className="mt-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
         </div>
         <Footer />
       </>
     );
   }
 
+  const images = contestDetail.imageUrls?.length ? contestDetail.imageUrls : [defaultImage];
+
   return (
     <>
       <Navbar />
-      <div className="publicuser-main-wrapper">
-        <div className="publicuser-content-wrapper">
-          <div className="publicuser-contest-container">
-            {/* return button */}
-            <Button
-              onClick={() => navigate(-1)}
-              startIcon={<ArrowBack />}
-              sx={{
-                mb: 2,
-                alignSelf: "flex-start",
-                color: "#632713",
-                border: "1px solid #632713",
-                textTransform: "none",
-                fontWeight: "bold",
-                '&:hover': {
-                  backgroundColor: "#f4e1d2",
-                  borderColor: "#632713",
-                }
-              }}
-            >
-              Back to List
-            </Button>
+      <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
+        <div className="mx-auto max-w-6xl">
+          <Button
+            variant="outline"
+            onClick={() => navigate(-1)}
+            className="mb-6"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to List
+          </Button>
 
-            {/* Layout of images and text */}
-            <Box sx={{ display: "flex", flexDirection: ["column", "row"], gap: 3 }}>
-              <Box
-                sx={{
-                  flex: 1,
-                  position: "relative",
-                  backgroundColor: "#f4a986",
-                  height: 400,
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-                    backgroundImage: `url(${contestDetail.imageUrls && contestDetail.imageUrls.length > 0
-                      ? contestDetail.imageUrls[currentImageIndex]
-                      : defaultImage
-                      })`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }}
-                />
+          <div className="grid gap-6 md:grid-cols-5">
+            {/* Image carousel */}
+            <Card className="relative overflow-hidden md:col-span-2">
+              <div
+                className="h-96 w-full bg-cover bg-center"
+                style={{ backgroundImage: `url(${images[currentImageIndex]})` }}
+              />
+              {images.length > 1 && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur hover:bg-white"
+                    onClick={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === 0 ? images.length - 1 : prev - 1
+                      )
+                    }
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur hover:bg-white"
+                    onClick={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === images.length - 1 ? 0 : prev + 1
+                      )
+                    }
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </Button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs text-white">
+                    {currentImageIndex + 1} / {images.length}
+                  </div>
+                </>
+              )}
+            </Card>
 
-                {/* Switch arrow */}
-                {contestDetail.imageUrls && contestDetail.imageUrls.length > 1 && (
-                  <>
-                    <IconButton
-                      sx={{
-                        position: "absolute",
-                        top: "50%",
-                        left: 10,
-                        transform: "translateY(-50%)",
-                        backgroundColor: "rgba(255, 255, 255, 0.6)",
-                        ":hover": { backgroundColor: "rgba(255, 152, 0, 0.8)" },
-                      }}
-                      onClick={() =>
-                        setCurrentImageIndex((prev) =>
-                          prev === 0 ? contestDetail.imageUrls.length - 1 : prev - 1
-                        )
-                      }
-                    >
-                      {"<"}
-                    </IconButton>
+            {/* Content */}
+            <div className="md:col-span-3 space-y-6">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">{contestDetail.name}</h1>
+                <p className="mt-3 leading-relaxed text-muted-foreground">
+                  {contestDetail.description}
+                </p>
+                <div className="mt-4">
+                  <Button
+                    onClick={() => navigate(`/work-list?competitionId=${contestId}`)}
+                  >
+                    View Related Works
+                  </Button>
+                </div>
+              </div>
 
-                    <IconButton
-                      sx={{
-                        position: "absolute",
-                        top: "50%",
-                        right: 10,
-                        transform: "translateY(-50%)",
-                        backgroundColor: "rgba(255, 255, 255, 0.6)",
-                        ":hover": { backgroundColor: "rgba(255, 152, 0, 0.8)" },
-                      }}
-                      onClick={() =>
-                        setCurrentImageIndex((prev) =>
-                          prev === contestDetail.imageUrls.length - 1 ? 0 : prev + 1
-                        )
-                      }
-                    >
-                      {">"}
-                    </IconButton>
-                  </>
-                )}
-              </Box>
-
-              {/* Details on the right */}
-              <Box sx={{ flex: 2, display: "flex", flexDirection: "column", gap: 3 }}>
-                {/* Title, description and button */}
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: "bold", color: "#632713" }}>
-                    {contestDetail.name}
-                  </Typography>
-                  <Typography variant="body1" sx={{ mt: 1 }}>
-                    {contestDetail.description}
-                  </Typography>
-                  <Box sx={{ mt: 2 }}>
-                    <Button
-                      className="view-work-button"
-                      onClick={() => navigate(`/work-list?competitionId=${contestId}`)}
-                    >
-                      View related works
-                    </Button>
-                  </Box>
-                </Box>
-
-                {/* Contest details */}
-                <Box
-                  sx={{
-                    p: 2,
-                    backgroundColor: "#d17f5c",
-                    borderRadius: 2,
-                    color: "#fff",
-                    boxShadow: 2,
-                  }}
-                >
-                  <Typography variant="h6" sx={{ mb: 2 }}>
-                    Competition Details
-                  </Typography>
+              <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
+                <CardContent className="space-y-3 p-6">
+                  <h2 className="text-xl font-semibold">Competition Details</h2>
+                  <Separator className="bg-primary-foreground/20" />
                   <DetailRow label="Category" value={contestDetail.category} />
                   <DetailRow label="Public" value={contestDetail.isPublic ? "Yes" : "No"} />
-                  <DetailRow label="Status" value={contestDetail.status} />
+                  <DetailRow label="Status" value={<Badge variant="secondary">{contestDetail.status}</Badge>} />
                   <DetailRow
                     label="Start Date"
                     value={new Date(contestDetail.startDate).toLocaleString()}
@@ -218,30 +173,26 @@ function PublicContestDetail() {
                     value={contestDetail.allowedSubmissionTypes?.join(", ")}
                   />
                   <DetailRow label="Participation Type" value={contestDetail.participationType} />
-
                   <DetailRow
                     label="Scoring Criteria"
                     value={contestDetail.scoringCriteria?.join(", ")}
                   />
+
                   {contestDetail.introVideoUrl && (
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="subtitle1" sx={{ color: "#fff", mb: 1 }}>
-                        Intro Video:
-                      </Typography>
+                    <div className="mt-4">
+                      <h3 className="mb-2 text-sm font-semibold">Intro Video</h3>
                       <video
                         src={contestDetail.introVideoUrl}
                         controls
-                        style={{ width: "100%", borderRadius: "10px", backgroundColor: "#000" }}
+                        className="w-full rounded-lg bg-black"
                       >
                         Your browser does not support the video tag.
                       </video>
-                    </Box>
-
+                    </div>
                   )}
-
-                </Box>
-              </Box>
-            </Box>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
@@ -250,21 +201,12 @@ function PublicContestDetail() {
   );
 }
 
-// Unify the style of each line
 function DetailRow({ label, value }) {
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        mb: 1,
-        borderBottom: "1px solid rgba(255,255,255,0.4)",
-        paddingBottom: "5px",
-      }}
-    >
-      <Typography variant="subtitle2">{label}:</Typography>
-      <Typography variant="body2">{value || "N/A"}</Typography>
-    </Box>
+    <div className="flex items-center justify-between gap-4 border-b border-primary-foreground/15 pb-2 text-sm">
+      <span className="font-medium">{label}:</span>
+      <span className="text-right text-primary-foreground/90">{value || "N/A"}</span>
+    </div>
   );
 }
 

@@ -1,26 +1,39 @@
 /**
  * @file AdminProfile.jsx
- * @description 
- * This component provides an administrative profile management page.
- * It allows admin users to:
- *  - View and update their profile information, including name, password, and description.
- *  - View their current avatar and upload a new avatar image.
- *  - Update password with validation (must be at least 8 characters and include one uppercase letter).
- * 
- * The component interacts with backend APIs for fetching user data, updating profile details,
- * and uploading avatar images. It also handles image previews locally before upload.
- * Certain fields like email and role are displayed as read-only for information purposes.
- * Material-UI components are used for dialogs and buttons.
- * 
+ * @description
+ * Admin profile management page. Migrated from MUI to shadcn/ui + Tailwind.
+ * Admins can view/update their name, password (validated), and description,
+ * preview a new avatar before uploading, and see read-only email and role.
+ *
  * Role: Admin
  * Developer: Zhaoyi Yang
  */
 
-
 import React, { useState, useEffect } from 'react';
-import './AdminProfile.css';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { Camera, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { cn } from '../lib/utils';
+
+const PASSWORD_REGEX = /^(?=.*[A-Z]).{8,}$/;
 
 function AdminProfile() {
   const [formData, setFormData] = useState({
@@ -28,13 +41,15 @@ function AdminProfile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || ''
+    role: localStorage.getItem('role') || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [tempAvatar, setTempAvatar] = useState(null);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -47,12 +62,12 @@ function AdminProfile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || ''
+            role: localStorage.getItem('role') || '',
           });
-          setAvatarUrl(data.avatarUrl);
+          setAvatarUrl(data.avatarUrl || '');
         }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+      } catch {
+        toast.error('Failed to load profile');
       }
     };
 
@@ -61,40 +76,38 @@ function AdminProfile() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({ ...prevData, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (formData.password) {
-      const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
-      if (!passwordRegex.test(formData.password)) {
-        alert('❌ Password must be at least 8 characters and contain at least one uppercase letter.');
-        return;
-      }
+    if (formData.password && !PASSWORD_REGEX.test(formData.password)) {
+      toast.error(
+        'Password must be at least 8 characters and include one uppercase letter.'
+      );
+      return;
     }
 
+    setSaving(true);
     try {
       const { role, ...profileData } = formData;
-      const response = await apiClient.put('/users/profile', { ...profileData, avatarUrl });
-      const data = response.data;
-      if (data) {
-        alert('Profile updated successfully');
-      } else {
-        alert(data.message || 'Error updating profile');
+      const response = await apiClient.put('/users/profile', {
+        ...profileData,
+        avatarUrl,
+      });
+      if (response.data) {
+        toast.success('Profile updated successfully');
       }
     } catch (error) {
-      console.error('Error updating profile:', error);
+      toast.error(error.response?.data?.message || 'Error updating profile');
+    } finally {
+      setSaving(false);
     }
-  };
-
-  const handleAvatarIconClick = () => {
-    setAvatarDialogOpen(true);
   };
 
   const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       if (tempAvatarUrl) {
         URL.revokeObjectURL(tempAvatarUrl);
@@ -107,23 +120,25 @@ function AdminProfile() {
   const handleAvatarSave = async () => {
     if (!tempAvatar) return;
 
+    setUploading(true);
     const formDataUpload = new FormData();
     formDataUpload.append('file', tempAvatar);
 
     try {
-      const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const data = response.data;
-      if (data) {
-        setAvatarUrl(data.avatarUrl);
-
+      const response = await apiClient.post(
+        '/users/profile/avatar',
+        formDataUpload,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      if (response.data) {
+        setAvatarUrl(response.data.avatarUrl);
+        toast.success('Avatar updated');
         window.location.reload();
-      } else {
-        alert(data.message || 'Error uploading avatar');
       }
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      toast.error(error.response?.data?.message || 'Error uploading avatar');
+    } finally {
+      setUploading(false);
     }
 
     setTempAvatar(null);
@@ -131,7 +146,7 @@ function AdminProfile() {
     setAvatarDialogOpen(false);
   };
 
-  const handleAvatarDialogClose = () => {
+  const closeAvatarDialog = () => {
     if (tempAvatarUrl) {
       URL.revokeObjectURL(tempAvatarUrl);
     }
@@ -148,59 +163,188 @@ function AdminProfile() {
     };
   }, [tempAvatarUrl]);
 
+  const initials = (formData.name || formData.email || 'A')
+    .split(/[@.\s]+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() || '')
+    .join('');
+
   return (
-    <>
-      <div className="profile-content">
-          <div className="profile-header">
-            <div className="profile-avatar" onClick={handleAvatarIconClick}>
-              <img
-                className="avatar"
-                src={avatarUrl || '/OIP.jpg'}
-                alt="User Avatar"
-                style={{ width: '80px', height: '80px', borderRadius: '50%' }}
-              />
+    <div className="p-6">
+      <Card className="mx-auto max-w-2xl">
+        <CardHeader>
+          <CardTitle>Profile Settings</CardTitle>
+          <CardDescription>
+            Update your account details and avatar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Avatar */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setAvatarDialogOpen(true)}
+              className="group relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Change avatar"
+            >
+              <Avatar className="h-20 w-20">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt="Avatar" />}
+                <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+                  {initials || 'A'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <Camera className="h-5 w-5 text-white" />
+              </div>
+            </button>
+            <div>
+              <p className="text-sm font-medium">{formData.name || 'Admin'}</p>
+              <p className="text-xs text-muted-foreground">{formData.email}</p>
             </div>
           </div>
 
-          <form className="profile-form" onSubmit={handleSubmit}>
-            <label>Name</label>
-            <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter your name" />
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter your name"
+              />
+            </div>
 
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter your email"
-              disabled
-              style={{ backgroundColor: '#f3f3f3', cursor: 'not-allowed' }}
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                value={formData.email}
+                disabled
+                className="cursor-not-allowed bg-muted"
+              />
+            </div>
 
-            <label>Password</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter your new password" />
+            <div className="space-y-1.5">
+              <Label htmlFor="password">New password</Label>
+              <Input
+                id="password"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Leave blank to keep current"
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">
+                Must be at least 8 characters and include one uppercase letter.
+              </p>
+            </div>
 
-            <label>Description</label>
-            <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Tell us about yourself" />
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Description</Label>
+              <textarea
+                id="description"
+                name="description"
+                value={formData.description || ''}
+                onChange={handleChange}
+                placeholder="Tell us about yourself"
+                rows={4}
+                className={cn(
+                  'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm',
+                  'placeholder:text-muted-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              />
+            </div>
 
-            <label>User Role</label>
-            <input type="text" name="role" value={formData.role} disabled style={{ backgroundColor: '#f3f3f3', cursor: 'not-allowed' }} />
+            <div className="space-y-1.5">
+              <Label htmlFor="role">User Role</Label>
+              <Input
+                id="role"
+                name="role"
+                value={formData.role}
+                disabled
+                className="cursor-not-allowed bg-muted"
+              />
+            </div>
 
-            <button type="submit">Save</button>
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save changes'
+                )}
+              </Button>
+            </div>
           </form>
-      </div>
+        </CardContent>
+      </Card>
 
-      <Dialog open={avatarDialogOpen} onClose={handleAvatarDialogClose}>
-        <DialogTitle>Upload Avatar</DialogTitle>
+      {/* Avatar dialog */}
+      <Dialog
+        open={avatarDialogOpen}
+        onOpenChange={(o) => (o ? setAvatarDialogOpen(true) : closeAvatarDialog())}
+      >
         <DialogContent>
-          <input accept="image/*" type="file" onChange={handleAvatarChange} style={{ marginTop: '16px' }} />
+          <DialogHeader>
+            <DialogTitle>Upload avatar</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center gap-4 py-2">
+            <Avatar className="h-24 w-24">
+              {(tempAvatarUrl || avatarUrl) && (
+                <AvatarImage
+                  src={tempAvatarUrl || avatarUrl}
+                  alt="Preview"
+                />
+              )}
+              <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                {initials || 'A'}
+              </AvatarFallback>
+            </Avatar>
+
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="cursor-pointer"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeAvatarDialog}
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAvatarSave}
+              disabled={!tempAvatar || uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                'Save avatar'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleAvatarDialogClose}>Cancel</Button>
-          <Button onClick={handleAvatarSave} variant="contained">Save</Button>
-        </DialogActions>
       </Dialog>
-    </>
+    </div>
   );
 }
 
