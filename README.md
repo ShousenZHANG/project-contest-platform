@@ -1,325 +1,389 @@
-<p align="center">
-  <img src="frontend/public/logo192.png" alt="Questora" width="80" />
-</p>
+# Questora - Competition Management Platform
 
-<h1 align="center">Questora — Competition Management Platform</h1>
+Enterprise competition management platform for hackathons, innovation challenges,
+academic contests, and internal judging programs. The system combines a
+Spring Boot microservices backend with a React/Vite frontend and a Docker Compose
+local environment.
 
-<p align="center">
-  <strong>Enterprise-grade microservices platform for hackathons, innovation challenges, and academic contests</strong>
-</p>
+![Java](https://img.shields.io/badge/Java-23-orange?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-<p align="center">
-  <a href="#quick-start">Quick Start</a> &nbsp;&bull;&nbsp;
-  <a href="#architecture">Architecture</a> &nbsp;&bull;&nbsp;
-  <a href="#features">Features</a> &nbsp;&bull;&nbsp;
-  <a href="#tech-stack">Tech Stack</a> &nbsp;&bull;&nbsp;
-  <a href="#api-docs">API Docs</a> &nbsp;&bull;&nbsp;
-  <a href="#license">License</a>
-</p>
+## Contents
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Java-23-orange?logo=openjdk&logoColor=white" alt="Java 23" />
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white" alt="Spring Boot" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
-  <img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white" alt="Vite" />
-  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white" alt="MySQL" />
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
-</p>
+- [Product Scope](#product-scope)
+- [Quick Start](#quick-start)
+- [Local Development](#local-development)
+- [Architecture](#architecture)
+- [Service Matrix](#service-matrix)
+- [Frontend Architecture](#frontend-architecture)
+- [Backend Contracts](#backend-contracts)
+- [Quality Gates](#quality-gates)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [Operations](#operations)
+- [Documentation](#documentation)
+- [License](#license)
 
----
+## Product Scope
 
-## Overview
+Questora supports the full competition lifecycle:
 
-Questora is a full-stack competition management platform that enables organizations to create, manage, and run competitions at scale. It supports **multi-judge scoring**, **individual and team participation**, **real-time notifications**, and **OAuth authentication** — all powered by a production-ready microservices backend.
-
-**Use cases:** hackathons, innovation challenges, academic contests, open competitions, internal company events.
-
----
+- Public competition discovery and detail pages.
+- JWT login, OAuth login, role-aware navigation, and user profiles.
+- Admin, organizer, participant, and judge workflows.
+- Competition creation, lifecycle management, media uploads, and visibility.
+- Individual and team registrations.
+- Submission upload, review assignment, scoring, winner selection, voting, and comments.
+- RabbitMQ-backed notification events and SMTP email delivery.
 
 ## Quick Start
 
 ### Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- Docker Desktop with Docker Compose
 - Git
+- Java 23 for local backend development
+- Node.js 20+ for local frontend development
 
-### 1. Clone & Configure
+### 1. Configure Environment
 
 ```bash
 git clone https://github.com/ShousenZHANG/project-contest-platform.git
 cd project-contest-platform
+cp .env.example .env
 ```
 
-Create a `.env` file in the project root:
+Fill the required secrets in `.env` before starting the full stack:
 
 ```env
-JWT_SECRET=your-jwt-secret
+MYSQL_ROOT_PASSWORD=root
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+MINIO_ROOT_USER=minio
+MINIO_ROOT_PASSWORD=minio123
 
-MAIL_USERNAME=your-email@example.com
-MAIL_PASSWORD=your-smtp-app-password
+JWT_SECRET=change_me_256bit_hex_secret
 
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-client-secret
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
 
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+MAIL_USERNAME=
+MAIL_PASSWORD=
 ```
 
-### 2. Launch
+OAuth and SMTP values are only needed when exercising those flows, but
+`JWT_SECRET` must be present for the gateway and user-service. Keep the local
+MySQL, RabbitMQ, and MinIO values above unless you also update the matching
+backend service configuration.
+
+### 2. Start the Stack
 
 ```bash
 docker-compose up --build -d
 ```
 
-> First startup takes a few minutes for image builds and database initialization.
+First startup can take several minutes because Docker builds the backend service
+images and initializes MySQL, Nacos, RabbitMQ, MinIO, and Jenkins volumes.
 
-### 3. Verify Database
+### 3. Open the Application
 
-After all containers are running, connect to MySQL with any client to confirm tables are initialized:
+| Target | URL | Notes |
+| --- | --- | --- |
+| Frontend | http://localhost:3000 | React app served by the frontend container |
+| API gateway | http://localhost:8080 | Gateway entrypoint for all API calls |
+| API docs | http://localhost:8080/doc.html | Knife4j aggregated docs |
+| RabbitMQ | http://localhost:15672 | Local default `guest` / `guest` |
+| Nacos | http://localhost:8848/nacos | Nacos console |
+| MinIO | http://localhost:9001 | Local default `minio` / `minio123` |
+| Zipkin | http://localhost:9411 | Distributed tracing UI |
+| Jenkins | http://localhost:8888 | Optional CI server |
 
-| Parameter | Value |
-|-----------|-------|
-| Host | `localhost` |
-| Port | `3306` |
-| User | `root` |
-| Password | `root` |
-| Database | `project_contest_platform` |
-
-> This verification step ensures JDBC connections are established before accessing the platform.
-
-### 4. Access
-
-| Service | URL |
-|---------|-----|
-| **Frontend** | http://localhost:3000 |
-| **API Docs** (Swagger) | http://localhost:8080/doc.html |
-| **RabbitMQ** Dashboard | http://localhost:15672 (guest / guest) |
-| **Nacos** Console | http://localhost:8848/nacos (nacos / nacos) |
-| **MinIO** Console | http://localhost:9001 (minio / minio123) |
-
-### Default Admin Credentials
-
-| Email | Password |
-|-------|----------|
-| admin@gmail.com | TestJwt1234 |
-
-> Select any role during login — the system recognizes the admin account automatically.
-
----
-
-## Architecture
-
-```
-                         ┌─────────────────┐
-                         │   React + Vite   │
-                         │   Frontend :3000  │
-                         └────────┬─────────┘
-                                  │
-                         ┌────────▼─────────┐
-                         │   API Gateway     │
-                         │   :8080 (JWT)     │
-                         └────────┬─────────┘
-                                  │
-          ┌───────────┬───────────┼───────────┬───────────┬───────────┐
-          │           │           │           │           │           │
-   ┌──────▼──┐ ┌──────▼──┐ ┌─────▼───┐ ┌─────▼───┐ ┌─────▼───┐ ┌────▼────┐
-   │  User   │ │  Comp.  │ │  Reg.   │ │  Judge  │ │  File   │ │ Inter.  │
-   │ Service │ │ Service │ │ Service │ │ Service │ │ Service │ │ Service │
-   │  :8081  │ │  :8082  │ │  :8083  │ │  :8084  │ │  :8085  │ │  :8086  │
-   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘
-        │           │           │           │           │           │
-   ┌────▼───────────▼───────────▼───────────▼───────────▼───────────▼────┐
-   │                        Infrastructure                               │
-   │  MySQL 8.0  ·  Redis 7  ·  RabbitMQ  ·  Nacos  ·  MinIO            │
-   └─────────────────────────────────────────────────────────────────────┘
-```
-
-### Services
-
-| Service | Port | Responsibility |
-|---------|------|----------------|
-| **API Gateway** | 8080 | JWT auth filter, request routing, CORS |
-| **User Service** | 8081 | Users, roles, OAuth (GitHub/Google), teams |
-| **Competition Service** | 8082 | Competition CRUD, organizer/judge assignment |
-| **Registration Service** | 8083 | Registrations, submissions, file uploads |
-| **Judge Service** | 8084 | Scoring, reviews, winner selection, dashboards |
-| **File Service** | 8085 | MinIO-based file upload/download/delete |
-| **Interaction Service** | 8086 | Voting, commenting on submissions |
-
----
-
-## Features
-
-### Authentication & Authorization
-- JWT-based registration and login
-- OAuth 2.0 login (GitHub, Google)
-- Role-based access control: **Admin**, **Organizer**, **Participant**, **Judge**
-- Profile management with avatar upload
-
-### Competition Lifecycle
-- Full CRUD for competitions with lifecycle states: `UPCOMING` → `ONGOING` → `COMPLETED` → `AWARDED`
-- Participation modes: **Individual** or **Team**
-- Media uploads (intro videos, promotional images)
-- Public / private visibility control
-
-### Submissions & Judging
-- Multi-format submission uploads (PDF, ZIP, images)
-- Multi-judge assignment and independent scoring
-- Score aggregation and automated winner selection
-- Public voting and commenting on approved submissions
-
-### Team Management
-- Create, join, leave, and disband teams
-- Leader-managed member controls
-- Team-based competition registration
-
-### Notifications
-- Asynchronous event messaging via RabbitMQ
-- Email notifications for registration, deregistration, and submission events
-
----
-
-## Tech Stack
-
-| Layer | Technologies |
-|-------|-------------|
-| **Backend** | Java 23, Spring Boot 3.4, Spring Cloud 2024, MyBatis-Plus, OpenFeign |
-| **Frontend** | React 19, Vite 8, MUI 6, Tailwind CSS 4, React Router 6, Framer Motion |
-| **Auth** | JWT (Hutool), Redis, OAuth 2.0 (GitHub, Google) |
-| **Gateway** | Spring Cloud Gateway |
-| **Database** | MySQL 8.0 |
-| **Cache** | Redis 7 |
-| **Messaging** | RabbitMQ |
-| **Storage** | MinIO (S3-compatible) |
-| **Discovery** | Nacos |
-| **API Docs** | Knife4j / SpringDoc OpenAPI 3.0 |
-| **CI/CD** | Docker Compose, Jenkins |
-| **Testing** | JUnit 5, Mockito, Jest, Playwright |
-
----
-
-## Project Structure
-
-```
-project-contest-platform/
-├── backend/
-│   ├── api-gateway/              # Request routing + JWT filter
-│   ├── common-lib/               # Shared DTOs, exceptions, utilities
-│   ├── user-service/             # Users, roles, OAuth, teams
-│   ├── competition-service/      # Competition management
-│   ├── registration-service/     # Registrations + submissions
-│   ├── judge-service/            # Scoring + winner selection
-│   ├── file-service/             # MinIO file operations
-│   ├── interaction-service/      # Votes + comments
-│   └── coverage-report/          # JaCoCo aggregated coverage
-├── frontend/
-│   ├── src/
-│   │   ├── theme/                # MUI design tokens + theme
-│   │   ├── layouts/              # DashboardLayout, PublicLayout
-│   │   ├── services/             # API service modules
-│   │   ├── shared/components/    # ErrorBoundary, Toast, EmptyState
-│   │   ├── context/              # AuthContext
-│   │   ├── Admin/                # Admin pages
-│   │   ├── Organizer/            # Organizer pages
-│   │   ├── Participant/          # Participant pages
-│   │   ├── PublicUser/           # Public pages
-│   │   └── Homepages/            # Landing + auth pages
-│   └── vite.config.js
-├── mysql-init/                   # Database schema auto-init
-├── docker-compose.yml
-└── pom.xml                       # Maven parent POM
-```
-
----
-
-## Database Schema
-
-Core tables organized by domain:
-
-| Domain | Tables |
-|--------|--------|
-| **Users** | `users`, `roles`, `user_roles` |
-| **Competitions** | `competitions`, `competition_participants`, `competition_organizers`, `competition_teams`, `competition_judges` |
-| **Teams** | `team`, `team_members` |
-| **Submissions** | `submission_records`, `submission_comments`, `submission_votes`, `submission_winners` |
-| **Judging** | `submission_judges`, `submission_judge_scores` |
-
-> Schema is auto-created from `mysql-init/create_table.sql` on first startup.
-
----
-
-## API Docs
-
-Interactive API documentation is available via Knife4j (Swagger UI):
-
-```
-http://localhost:8080/doc.html
-```
-
-All endpoints are organized by service with request/response examples.
-
----
-
-## CI/CD
-
-Jenkins is included in the Docker Compose stack for automated builds:
+### 4. Stop the Stack
 
 ```bash
-docker-compose up -d jenkins
+docker-compose down
 ```
 
-- **Dashboard:** http://localhost:8888
-- **Initial password:** `docker logs -f jenkins`
-- Supports automated build, test, and deploy on every push
+To remove local data volumes as well, delete the ignored `.mysql-data/`,
+`.redis-data/`, `.rabbitmq-data/`, `.nacos-data/`, and `.minio-data/`
+directories after stopping the stack.
 
----
-
-## Development
+## Local Development
 
 ### Backend
 
-```bash
-./mvnw clean install                              # Build all modules
-./mvnw test                                       # Run all tests
-./mvnw test -pl backend/user-service              # Test single module
-./mvnw test -pl backend/user-service -Dtest=JwtUtilTest  # Single test class
+Windows:
+
+```powershell
+.\mvnw.cmd clean install
+.\mvnw.cmd test
+.\mvnw.cmd test -pl backend/user-service
+.\mvnw.cmd test -pl backend/user-service -Dtest=JwtUtilTest
 ```
+
+macOS/Linux:
+
+```bash
+./mvnw clean install
+./mvnw test
+./mvnw test -pl backend/user-service
+./mvnw test -pl backend/user-service -Dtest=JwtUtilTest
+```
+
+When running services outside Docker, change infrastructure hostnames in each
+`application.yml` from Docker service names such as `mysql`, `redis`, `nacos`,
+and `rabbitmq` to local hosts or provide equivalent environment overrides.
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev                                       # Dev server on :3000
-npm test                                          # Jest tests
-npm run build                                     # Production build
+npm run dev
+npm test
+npm run build
 ```
 
----
+The frontend defaults to `http://localhost:8080` through `VITE_API_BASE_URL`.
+During Vite development, `/api/*` is also proxied to the gateway and stripped to
+the real backend route.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser["React 19 + Vite frontend"] --> Gateway["api-gateway :8080"]
+
+  Gateway --> User["user-service :8081"]
+  Gateway --> Competition["competition-service :8082"]
+  Gateway --> File["file-service :8083"]
+  Gateway --> Registration["registration-service :8084"]
+  Gateway --> Interaction["interaction-service :8085"]
+  Gateway --> Judge["judge-service :8086"]
+
+  User --> MySQL[(MySQL 8)]
+  Competition --> MySQL
+  Registration --> MySQL
+  Interaction --> MySQL
+  Judge --> MySQL
+  File --> MinIO[(MinIO)]
+
+  Gateway --> Redis[(Redis 7)]
+  User --> RabbitMQ[(RabbitMQ)]
+  Competition --> RabbitMQ
+  Registration --> RabbitMQ
+  Judge --> RabbitMQ
+
+  User -. discovery .-> Nacos[(Nacos)]
+  Competition -. discovery .-> Nacos
+  Registration -. discovery .-> Nacos
+  Interaction -. discovery .-> Nacos
+  Judge -. discovery .-> Nacos
+  File -. discovery .-> Nacos
+
+  Gateway -. traces .-> Zipkin[(Zipkin)]
+```
+
+Requests enter through the gateway. The gateway validates JWTs, applies public
+route exemptions, routes to service instances through Nacos, and forwards the
+current user identity with `User-ID` and `User-Role` headers.
+
+## Service Matrix
+
+| Module | Runtime port | Gateway routes | Responsibility |
+| --- | ---: | --- | --- |
+| `backend/api-gateway` | 8080 | All public API entrypoints | JWT validation, routing, CORS, docs aggregation |
+| `backend/user-service` | 8081 | `/users/**`, `/teams/**` | Users, roles, OAuth, teams, notification emails |
+| `backend/competition-service` | 8082 | `/competitions/**` | Competitions, organizers, judges, lifecycle metadata |
+| `backend/file-service` | 8083 | `/files/**` | MinIO upload, download, delete, URL handling |
+| `backend/registration-service` | 8084 | `/registrations/**`, `/submissions/**` | Registrations and submissions |
+| `backend/interaction-service` | 8085 | `/interactions/**` | Submission votes and comments |
+| `backend/judge-service` | 8086 | `/judges/**`, `/winners/**`, `/dashboard/**` | Scoring, reviews, winner selection, dashboard data |
+| `backend/coverage-report` | N/A | N/A | JaCoCo aggregated coverage report module |
+
+## Frontend Architecture
+
+The frontend is a React 19 application built with Vite, Tailwind CSS 4,
+Radix-based UI primitives, React Router 6, Axios, TanStack Query, Sonner,
+Framer Motion, and Recharts.
+
+Key conventions:
+
+- `src/layouts/` owns shared application shells. Pages should not create fixed
+  sidebars or fixed topbars locally.
+- `src/components/ui/` contains Radix-style primitives and shared design-system
+  building blocks.
+- `src/shared/components/` contains reusable domain UI such as confirmation
+  dialogs, empty states, loading states, and feedback surfaces.
+- `src/api/apiClient.js` is the only Axios gateway client.
+- `src/auth/authTokenManager.js` is the auth session boundary. Business UI
+  should not read or write auth `localStorage` keys directly.
+- `src/services/serviceUtils.js` normalizes Axios responses, standard
+  `ApiResponse<T>` envelopes, and historical raw payloads.
+
+## Backend Contracts
+
+Backend modules use DTO/VO/PO layering and the service-interface pattern:
+
+- `domain/dto/` for request input.
+- `domain/vo/` for response output.
+- `domain/po/` for persistence entities.
+- `service/I*Service.java` and `service/impl/*ServiceImpl.java` for business logic.
+- `feign/` clients for service-to-service calls.
+- `config/*RabbitMQConfig.java` for async event topology.
+
+HTTP response policy:
+
+- New JSON endpoints should return `ApiResponse<T>`.
+- Controller success messages should use `ApiResponses.message(...)`.
+- Errors are handled by each service-level `GlobalExceptionHandler`.
+- File-service URL and Feign compatibility endpoints can keep raw string bodies
+  where that contract is intentional.
+
+Authentication policy:
+
+- The gateway owns JWT validation.
+- Public route exemptions are configured in `jwt.public-urls`.
+- Authenticated controllers should receive identity through
+  `@CurrentUser RequestContext`.
+- Controller tests for authenticated routes should include both `User-ID` and
+  `User-Role` headers.
+
+## Quality Gates
+
+Run these before committing changes:
+
+```bash
+# Backend
+./mvnw test
+
+# Frontend
+cd frontend
+npm test -- --runInBand --silent --detectOpenHandles
+npm run build
+```
+
+On Windows, use `.\mvnw.cmd test` instead of `./mvnw test`.
+
+Repository hygiene checks:
+
+```bash
+git diff --check
+git status --short
+git ls-files | Select-String -Pattern '(^|/)\\.DS_Store$|^frontend/(coverage-summary|playwright-report|test-results)/'
+```
+
+Generated outputs under `frontend/coverage-summary/`,
+`frontend/playwright-report/`, and `frontend/test-results/` must stay untracked.
+
+## Project Structure
+
+```text
+project-contest-platform/
+|-- backend/
+|   |-- api-gateway/
+|   |-- common-lib/
+|   |-- user-service/
+|   |-- competition-service/
+|   |-- file-service/
+|   |-- registration-service/
+|   |-- interaction-service/
+|   |-- judge-service/
+|   `-- coverage-report/
+|-- frontend/
+|   |-- src/
+|   |   |-- api/
+|   |   |-- auth/
+|   |   |-- components/
+|   |   |-- context/
+|   |   |-- layouts/
+|   |   |-- routes/
+|   |   |-- services/
+|   |   |-- shared/
+|   |   |-- Admin/
+|   |   |-- Organizer/
+|   |   |-- Participant/
+|   |   |-- PublicUser/
+|   |   `-- Homepages/
+|   |-- Dockerfile
+|   |-- package.json
+|   `-- vite.config.js
+|-- docs/
+|   |-- CODEMAPS/
+|   |-- adr/
+|   `-- agents/
+|-- mysql-init/
+|-- docker-compose.yml
+|-- pom.xml
+|-- AGENTS.md
+`-- CLAUDE.md
+```
+
+## Configuration
+
+| Variable | Used by | Required | Purpose |
+| --- | --- | --- | --- |
+| `MYSQL_ROOT_PASSWORD` | MySQL, backend datasource defaults | Yes for Docker | Root database password; local backend config expects `root` |
+| `RABBITMQ_USER` | RabbitMQ | Yes for Docker | RabbitMQ user; local backend config expects `guest` |
+| `RABBITMQ_PASSWORD` | RabbitMQ | Yes for Docker | RabbitMQ password; local backend config expects `guest` |
+| `MINIO_ROOT_USER` | MinIO | Yes for Docker | MinIO user; local file-service config expects `minio` |
+| `MINIO_ROOT_PASSWORD` | MinIO | Yes for Docker | MinIO password; local file-service config expects `minio123` |
+| `JWT_SECRET` | Gateway, user-service | Yes | JWT signing and validation secret |
+| `GOOGLE_CLIENT_ID` | user-service | OAuth only | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | user-service | OAuth only | Google OAuth secret |
+| `GITHUB_CLIENT_ID` | user-service | OAuth only | GitHub OAuth client ID |
+| `GITHUB_CLIENT_SECRET` | user-service | OAuth only | GitHub OAuth secret |
+| `MAIL_USERNAME` | user-service | Email only | SMTP username |
+| `MAIL_PASSWORD` | user-service | Email only | SMTP app password |
+| `VITE_API_BASE_URL` | frontend | Optional | API gateway base URL, default `http://localhost:8080` |
+
+Never commit `.env`, local database volumes, generated coverage output, or
+browser test artifacts.
+
+## Operations
+
+Useful Docker commands:
+
+```bash
+docker-compose ps
+docker-compose logs -f backend-api-gateway
+docker-compose logs -f backend-user-service
+docker-compose logs -f frontend-web
+docker-compose restart backend-api-gateway
+docker-compose down
+```
+
+Useful local checks:
+
+```bash
+curl http://localhost:8080/actuator/health
+curl http://localhost:3000
+```
+
+If the frontend loads but API calls fail, verify that:
+
+1. `backend-api-gateway` is healthy.
+2. Nacos is healthy and all backend services are registered.
+3. `JWT_SECRET` is identical for the gateway and user-service.
+4. The frontend `VITE_API_BASE_URL` points at the gateway.
+
+## Documentation
+
+Read these files when changing architecture or agent workflows:
+
+- `AGENTS.md` - repository instructions for Codex agents.
+- `CLAUDE.md` - repository instructions for Claude agents.
+- `docs/CODEMAPS/architecture.md` - system architecture and inter-service flow.
+- `docs/CODEMAPS/frontend.md` - frontend routing, shell, and UI rules.
+- `docs/CODEMAPS/dependencies.md` - runtime and dependency map.
+- `docs/adr/` - architecture decision records.
 
 ## License
 
-```
-MIT License
-
-Copyright (c) 2025 Questora Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+This project is licensed under the MIT License. See `LICENSE` for details.
