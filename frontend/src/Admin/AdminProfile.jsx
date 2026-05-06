@@ -32,6 +32,8 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { cn } from '../lib/utils';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 const PASSWORD_REGEX = /^(?=.*[A-Z]).{8,}$/;
 
@@ -41,7 +43,7 @@ function AdminProfile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || '',
+    role: AuthTokenManager.getRole() || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -62,7 +64,7 @@ function AdminProfile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || '',
+            role: AuthTokenManager.getRole() || '',
           });
           setAvatarUrl(data.avatarUrl || '');
         }

@@ -11,14 +11,16 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function ViewVote({ submissionId }) {
   const [votes, setVotes] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
 
   useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    const userId = AuthTokenManager.getUserId();
+    const token = AuthTokenManager.getToken();
 
     if (!submissionId || !userId || !token) return;
 
@@ -38,8 +40,8 @@ function ViewVote({ submissionId }) {
   }, [submissionId]);
 
   const handleVote = () => {
-    const userId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    const userId = AuthTokenManager.getUserId();
+    const token = AuthTokenManager.getToken();
 
     if (!userId || !token) {
       toast.error('User not logged in.');

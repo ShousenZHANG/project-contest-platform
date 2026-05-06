@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function ProjectComment({ submissionId }) {
   const [comments, setComments] = useState([]);
@@ -50,8 +52,8 @@ function ProjectComment({ submissionId }) {
   }, [submissionId]);
 
   const handleAddComment = async () => {
-    const userId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    const userId = AuthTokenManager.getUserId();
+    const token = AuthTokenManager.getToken();
 
     if (!userId || !token) {
       toast.error('User not logged in. Cannot post comment.');

@@ -54,7 +54,8 @@ class SubmissionInteractionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Comment added successfully"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Comment added successfully"));
     }
 
     // === Test: Delete Comment ===
@@ -65,7 +66,8 @@ class SubmissionInteractionControllerTest {
                         .header("User-ID", "user123")
                         .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Comment deleted"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Comment deleted"));
     }
 
     // === Test: Update Comment ===
@@ -81,7 +83,8 @@ class SubmissionInteractionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Comment updated successfully"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Comment updated successfully"));
     }
 
     // === Test: Get Paginated Comments ===
@@ -116,7 +119,8 @@ class SubmissionInteractionControllerTest {
                         .header("User-Role", "PARTICIPANT")
                         .param("submissionId", "submission123"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Voted"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Voted"));
     }
 
     // === Test: Unvote ===
@@ -128,7 +132,8 @@ class SubmissionInteractionControllerTest {
                         .header("User-Role", "PARTICIPANT")
                         .param("submissionId", "submission123"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Unvoted"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Unvoted"));
     }
 
     // === Test: Get Vote Count ===

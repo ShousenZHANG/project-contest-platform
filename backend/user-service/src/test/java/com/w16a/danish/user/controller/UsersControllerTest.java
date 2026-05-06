@@ -144,7 +144,8 @@ class UsersControllerTest {
         mockMvc.perform(post("/users/logout")
                         .header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Logout successful"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Logout successful"));
 
         verify(userService, times(1)).logout("valid-token");
     }
@@ -192,7 +193,8 @@ class UsersControllerTest {
                         .header("User-ID", "1")
                         .header("User-Role", "ADMIN"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("User deleted successfully"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("User deleted successfully"));
     }
 
     @Test
@@ -335,12 +337,14 @@ class UsersControllerTest {
     void testLogoutInvalidHeader() throws Exception {
         mockMvc.perform(post("/users/logout"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Missing or invalid Authorization header"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Missing or invalid Authorization header"));
 
         mockMvc.perform(post("/users/logout")
                         .header("Authorization", "InvalidTokenFormat"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Missing or invalid Authorization header"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Missing or invalid Authorization header"));
     }
 
     @Test

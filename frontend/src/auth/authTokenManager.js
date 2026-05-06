@@ -1,6 +1,7 @@
 /**
- * AuthTokenManager — single source of truth for auth token lifecycle.
- * All reads/writes/clears of auth state go through here.
+ * AuthTokenManager is the single source of truth for auth session state.
+ * Components and API adapters should use this module instead of touching
+ * localStorage directly.
  */
 const KEYS = {
   TOKEN: 'token',
@@ -9,32 +10,93 @@ const KEYS = {
   ROLE: 'role',
 };
 
+const AUTH_SESSION_CHANGED = 'auth-session-changed';
+
+function getStorage() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null;
+  }
+  return window.localStorage;
+}
+
+function read(key) {
+  return getStorage()?.getItem(key) ?? null;
+}
+
+function write(key, value) {
+  const storage = getStorage();
+  if (!storage) return;
+  if (value === undefined || value === null || value === '') {
+    storage.removeItem(key);
+    return;
+  }
+  storage.setItem(key, value);
+}
+
+function notifySessionChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(AUTH_SESSION_CHANGED));
+  }
+}
+
 const AuthTokenManager = {
-  getToken: () => localStorage.getItem(KEYS.TOKEN),
-  getUserId: () => localStorage.getItem(KEYS.USER_ID),
-  getEmail: () => localStorage.getItem(KEYS.EMAIL),
-  getRole: () => localStorage.getItem(KEYS.ROLE),
+  getToken: () => read(KEYS.TOKEN),
+  getUserId: () => read(KEYS.USER_ID),
+  getEmail: () => read(KEYS.EMAIL),
+  getRole: () => read(KEYS.ROLE),
 
   setSession: ({ token, userId, email, role }) => {
-    localStorage.setItem(KEYS.TOKEN, token);
-    localStorage.setItem(KEYS.USER_ID, userId);
-    localStorage.setItem(KEYS.EMAIL, email);
-    localStorage.setItem(KEYS.ROLE, role);
+    write(KEYS.TOKEN, token);
+    write(KEYS.USER_ID, userId);
+    write(KEYS.EMAIL, email);
+    write(KEYS.ROLE, role);
+    notifySessionChanged();
   },
 
   clearSession: () => {
-    Object.values(KEYS).forEach(key => localStorage.removeItem(key));
+    const storage = getStorage();
+    if (storage) {
+      Object.values(KEYS).forEach(key => storage.removeItem(key));
+    }
+    notifySessionChanged();
   },
 
-  isAuthenticated: () => Boolean(localStorage.getItem(KEYS.TOKEN)),
+  isAuthenticated: () => Boolean(read(KEYS.TOKEN)),
 
   getSession: () => ({
-    token: localStorage.getItem(KEYS.TOKEN),
-    userId: localStorage.getItem(KEYS.USER_ID),
-    email: localStorage.getItem(KEYS.EMAIL),
-    role: localStorage.getItem(KEYS.ROLE),
+    token: read(KEYS.TOKEN),
+    userId: read(KEYS.USER_ID),
+    email: read(KEYS.EMAIL),
+    role: read(KEYS.ROLE),
   }),
+
+  getAuthHeaders: () => {
+    const token = read(KEYS.TOKEN);
+    const userId = read(KEYS.USER_ID);
+    const role = read(KEYS.ROLE);
+
+    return {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(userId ? { 'User-ID': userId } : {}),
+      ...(role ? { 'User-Role': role } : {}),
+    };
+  },
+
+  subscribe: (listener) => {
+    if (typeof window === 'undefined') {
+      return () => {};
+    }
+
+    const handler = () => listener(AuthTokenManager.getSession());
+    window.addEventListener(AUTH_SESSION_CHANGED, handler);
+    window.addEventListener('storage', handler);
+
+    return () => {
+      window.removeEventListener(AUTH_SESSION_CHANGED, handler);
+      window.removeEventListener('storage', handler);
+    };
+  },
 };
 
 export default AuthTokenManager;
-export { KEYS };
+export { AUTH_SESSION_CHANGED, KEYS };

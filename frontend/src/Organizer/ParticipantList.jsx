@@ -17,6 +17,8 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -30,7 +32,7 @@ function ParticipantList() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const email = localStorage.getItem('email');
+  const email = AuthTokenManager.getEmail();
 
   const initialType = location.state?.participationType || '';
   const [participationType, setParticipationType] = useState(initialType);

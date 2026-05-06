@@ -72,7 +72,8 @@ class SubmissionJudgesControllerTest {
                         .header("User-Role", "JUDGE")
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Submission judged successfully."));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Submission judged successfully."));
     }
 
     @Test
@@ -141,7 +142,8 @@ class SubmissionJudgesControllerTest {
                         .header("User-Role", "JUDGE")
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Judging updated successfully."));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Judging updated successfully."));
     }
 
     @Test

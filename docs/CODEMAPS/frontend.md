@@ -1,81 +1,50 @@
-<!-- Generated: 2026-04-06 | Files scanned: 50+ | Token estimate: ~700 -->
+<!-- Updated: 2026-05-06 -->
 # Frontend Architecture
 
 ## Tech Stack
-React 19 + CRA | MUI 6 + Tailwind CSS 4 | React Router 6 | Axios | Framer Motion | Recharts
 
-## Route Tree (from App.js)
+React 19 + Vite | Tailwind CSS 4 | shadcn-style Radix primitives | React Router 6 | Axios | TanStack Query | Sonner | Framer Motion | Recharts
 
-### Public (no auth)
-/                                    → HomePage (with 3s Loading splash)
-/login                               → LoginForm
-/reset-password                      → ResetPassword
-/oauth/callback                      → OAuthCallback
-/contest-list                        → UserContestList
-/publiccontest-detail/:id            → PublicContestDetail
-/work-list                           → WorkList
-/how-to-use                          → HowToUse
-/public-teams/:contestId             → TeamListPage
-/public-team-detail/:compId/:teamId  → TeamPublicDetail
-/publicusercoments/:submissionId     → PublicuserComments
+## Route Groups
 
-### Participant (auth required)
-/profile/:email                      → Profile
-/contest/:email                      → Contest
-/teams/:email                        → TeamPage
-/project/:email                      → Project
-/rating/:email                       → Rating
-/contest-detail/:id                  → ContestDetail
-/JudgeSubmissions/:competitionId     → JudgeSubmissions
-/RatingDetail/:compId/:subId         → RatingDetail
-/ReRating/:compId/:subId             → ReRating
-/view-submission/:competitionId      → ViewSubmission
-/comments/:submissionId              → CommentsPage
-/project-detail/:competitionId       → ProjectDetail
-/team-project-detail/:compId/team/:teamId → TeamProjectDetail
+### Public
 
-### Organizer (auth required)
-/OrganizerProfile/:email             → OrganizerProfile
-/OrganizerDashboard/:email           → OrganizerDashboard
-/OrganizerContestList/:email         → OrganizerContestList
-/OrganizerContest/:email             → OrganizerContest (create)
-/OrganizerEditContest/:email         → OrganizerEditContest
-/OrganizerUploadMedia/:id            → OrganizerUploadMedia
-/OrganizerParticipantList/:compId    → OrganizerParticipantList
-/OrganizerSubmissions/:compId        → CheckSubmissions
-/submissions/:compId/ratings         → SubmissionRatings
-/OrganizerAddJudge/:compId           → OrganizerAddJudge
+- `/` - homepage
+- `/login` - login
+- `/reset-password` - password reset
+- `/oauth/callback` - OAuth callback
+- `/contest-list`, `/publiccontest-detail/:id`, `/work-list`, `/how-to-use` - public browsing
+- `/public-teams/:contestId`, `/public-team-detail/:compId/:teamId` - public team views
 
-### Admin (auth required)
-/AdminProfile                        → AdminProfile
-/AdminAccountManage                  → AdminAccountManage
-/AllCompetitions                     → AdminCompetitionsManage
-/AdminDashboard                      → AdminDashboard
+### Participant
 
-## Directory Structure
+- `/profile/:email`, `/contest/:email`, `/teams/:email`, `/project/:email`, `/rating/:email`
+- `/contest-detail/:id`, `/view-submission/:competitionId`, `/comments/:submissionId`
+- `/project-detail/:competitionId`, `/team-project-detail/:compId/team/:teamId`
+- `/JudgeSubmissions/:competitionId`, `/RatingDetail/:compId/:subId`, `/ReRating/:compId/:subId`
 
-```
-frontend/src/
-├── App.js              # Router config
-├── Homepages/          # Homepage, Login, Loading splash
-├── PublicUser/          # Public browsing (contest list, work list, how-to-use)
-├── Participant/         # Participant views (profile, contest, project, rating, teams)
-├── Organizer/           # Organizer management (dashboard, contests, submissions, judges)
-├── Admin/               # Admin panels (accounts, competitions, dashboard)
-├── pages/               # Shared pages (ResetPassword, OAuthCallback)
-└── Tests/               # Jest test files
-```
+### Organizer
 
-## API Communication
-- Axios for all HTTP calls to gateway at :8080
-- JWT stored client-side, sent as Authorization header
-- Role-based routing: user role determines which module's pages are shown
+- `/OrganizerProfile/:email`, `/OrganizerDashboard/:email`, `/OrganizerContestList/:email`
+- `/OrganizerContest/:email`, `/OrganizerEditContest/:email`, `/OrganizerUploadMedia/:id`
+- `/OrganizerParticipantList/:compId`, `/OrganizerSubmissions/:compId`, `/submissions/:compId/ratings`, `/OrganizerAddJudge/:compId`
 
-## UI Libraries
-- **MUI 6** (Material UI): DataGrid, DatePickers, TreeView, Charts, Icons
-- **Tailwind CSS 4**: Utility-first styling
-- **Framer Motion**: Page/component animations
-- **Recharts**: Dashboard charts
-- **Lottie**: Loading animations
-- **react-image-crop**: Avatar cropping
-- **exceljs + file-saver**: Export to Excel
+### Admin
+
+- `/AdminProfile`, `/AdminAccountManage`, `/AllCompetitions`, `/AdminDashboard`
+
+## Key Modules
+
+- `src/layouts/` - authenticated shell, topbar, sidebar, public layout
+- `src/components/ui/` - Radix-based UI primitives
+- `src/shared/components/` - reusable domain UI such as comments, empty states, confirmation dialog, skeletons
+- `src/api/apiClient.js` - Axios adapter with auth headers and 401 handling
+- `src/auth/authTokenManager.js` - auth session Module; business UI must not read/write auth `localStorage` directly
+- `src/services/serviceUtils.js` - response Adapter that unwraps Axios responses, `ApiResponse<T>` envelopes, and historical raw payloads
+
+## UI Policy
+
+- Prefer shared shell/layout primitives over page-local fixed positioning.
+- Prefer `ConfirmDialog`, Sonner toasts, and shared empty/loading/error states over native `alert`/`confirm`.
+- Use lucide-react icons and Radix primitives. Do not reintroduce MUI or Material Icons without reopening ADR-0001.
+- Keep generated reports (`coverage-summary`, `playwright-report`, `test-results`) untracked.

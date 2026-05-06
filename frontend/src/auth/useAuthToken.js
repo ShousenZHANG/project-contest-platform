@@ -20,7 +20,9 @@ export function useAuthToken() {
     getEmail: AuthTokenManager.getEmail,
     getRole: AuthTokenManager.getRole,
     getSession: AuthTokenManager.getSession,
+    getAuthHeaders: AuthTokenManager.getAuthHeaders,
     isAuthenticated: AuthTokenManager.isAuthenticated,
+    subscribe: AuthTokenManager.subscribe,
     setSession,
     clearSession,
   };

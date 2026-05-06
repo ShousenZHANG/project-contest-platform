@@ -22,6 +22,8 @@ import {
   CardTitle,
 } from '../../components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -39,7 +41,7 @@ function Profile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || '',
+    role: AuthTokenManager.getRole() || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -61,7 +63,7 @@ function Profile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || '',
+            role: AuthTokenManager.getRole() || '',
           });
           setAvatarUrl(data.avatarUrl);
         }
@@ -162,15 +164,12 @@ function Profile() {
   };
 
   const handleDeleteAccount = async () => {
-    const userId = localStorage.getItem('userId');
+    const userId = AuthTokenManager.getUserId();
 
     try {
       await apiClient.delete(`/users/${userId}`);
       toast.success('Your account has been deleted.');
-      localStorage.removeItem('token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('email');
-      localStorage.removeItem('role');
+      AuthTokenManager.clearSession();
       setTimeout(() => {
         window.location.href = '/';
       }, 1200);

@@ -17,6 +17,8 @@ import apiClient from "../api/apiClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/shared/components/EmptyState";
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function CommentsPage() {
   const { submissionId } = useParams();
@@ -26,7 +28,7 @@ function CommentsPage() {
   const [expandedReplies, setExpandedReplies] = useState({});
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const currentUserId = localStorage.getItem("userId");
+  const currentUserId = AuthTokenManager.getUserId();
 
   const fetchComments = useCallback(
     async (pageToFetch = 1, reset = false) => {

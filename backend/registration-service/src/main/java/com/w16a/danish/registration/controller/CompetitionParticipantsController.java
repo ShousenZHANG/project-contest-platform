@@ -1,6 +1,6 @@
 package com.w16a.danish.registration.controller;
 
-
+import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
@@ -50,12 +50,12 @@ public class CompetitionParticipantsController {
             }
     )
     @PostMapping("/{competitionId}")
-    public ResponseEntity<String> registerForCompetition(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> registerForCompetition(
             @PathVariable String competitionId,
             @CurrentUser RequestContext ctx) {
 
         participantsService.register(competitionId, ctx);
-        return ResponseEntity.ok("Successfully registered for competition");
+        return ApiResponses.message("Successfully registered for competition");
     }
 
     @Operation(
@@ -71,12 +71,12 @@ public class CompetitionParticipantsController {
             }
     )
     @DeleteMapping("/{competitionId}")
-    public ResponseEntity<String> cancelRegistration(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> cancelRegistration(
             @PathVariable String competitionId,
             @CurrentUser RequestContext ctx) {
 
         participantsService.cancelRegistration(competitionId, ctx);
-        return ResponseEntity.ok("Registration cancelled successfully");
+        return ApiResponses.message("Registration cancelled successfully");
     }
 
     @Operation(
@@ -126,13 +126,13 @@ public class CompetitionParticipantsController {
             }
     )
     @DeleteMapping("/{competitionId}/participants/{participantUserId}")
-    public ResponseEntity<String> cancelParticipantByOrganizer(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> cancelParticipantByOrganizer(
             @PathVariable String competitionId,
             @PathVariable String participantUserId,
             @CurrentUser RequestContext ctx) {
 
         participantsService.cancelByOrganizer(competitionId, participantUserId, ctx);
-        return ResponseEntity.ok("Participant registration cancelled by organizer");
+        return ApiResponses.message("Participant registration cancelled by organizer");
     }
 
     @Operation(
@@ -201,13 +201,13 @@ public class CompetitionParticipantsController {
             }
     )
     @PostMapping("/teams/{competitionId}/{teamId}")
-    public ResponseEntity<String> registerTeam(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> registerTeam(
             @PathVariable String competitionId,
             @PathVariable String teamId,
             @CurrentUser RequestContext ctx) {
 
         participantsService.registerTeam(competitionId, teamId, ctx);
-        return ResponseEntity.ok("Team successfully registered for competition");
+        return ApiResponses.message("Team successfully registered for competition");
     }
 
     @Operation(
@@ -224,13 +224,13 @@ public class CompetitionParticipantsController {
             }
     )
     @DeleteMapping("/teams/{competitionId}/{teamId}")
-    public ResponseEntity<String> cancelTeamRegistration(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> cancelTeamRegistration(
             @PathVariable String competitionId,
             @PathVariable String teamId,
             @CurrentUser RequestContext ctx) {
 
         participantsService.cancelTeamRegistration(competitionId, teamId, ctx);
-        return ResponseEntity.ok("Team registration cancelled successfully");
+        return ApiResponses.message("Team registration cancelled successfully");
     }
 
     @Operation(
@@ -327,13 +327,13 @@ public class CompetitionParticipantsController {
             }
     )
     @DeleteMapping("/teams/{competitionId}/team/{teamId}/by-organizer")
-    public ResponseEntity<String> cancelTeamByOrganizer(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> cancelTeamByOrganizer(
             @PathVariable String competitionId,
             @PathVariable String teamId,
             @CurrentUser RequestContext ctx
     ) {
         participantsService.cancelTeamByOrganizer(competitionId, teamId, ctx);
-        return ResponseEntity.ok("Team registration removed by organizer");
+        return ApiResponses.message("Team registration removed by organizer");
     }
 
     @Operation(hidden = true)

@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -32,7 +34,7 @@ function TopBar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setEmail(localStorage.getItem('email') || '');
+    setEmail(AuthTokenManager.getEmail() || '');
 
     const fetchUserAvatar = async () => {
       try {
@@ -54,11 +56,7 @@ function TopBar() {
     } catch {
       // Logout API call failed silently
     }
-
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('email');
-    localStorage.removeItem('role');
+    AuthTokenManager.clearSession();
     setOpen(false);
     window.location.href = '/';
   };

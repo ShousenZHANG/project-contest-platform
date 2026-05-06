@@ -1,87 +1,65 @@
-<!-- Generated: 2026-04-06 | Files scanned: 120+ | Token estimate: ~900 -->
+<!-- Updated: 2026-05-06 -->
 # Architecture Overview
 
-## System Diagram
+## System Flow
 
+```mermaid
+flowchart LR
+  Frontend["React 19 + Vite frontend"] --> Gateway["API Gateway :8080"]
+  Gateway --> User["user-service :8081"]
+  Gateway --> Competition["competition-service :8082"]
+  Gateway --> Registration["registration-service :8083"]
+  Gateway --> Judge["judge-service :8084"]
+  Gateway --> File["file-service :8085"]
+  Gateway --> Interaction["interaction-service :8086"]
+
+  User --> MySQL[(MySQL)]
+  Competition --> MySQL
+  Registration --> MySQL
+  Judge --> MySQL
+  Interaction --> MySQL
+  File --> MinIO[(MinIO)]
+
+  Gateway --> Redis[(Redis)]
+  User --> RabbitMQ[(RabbitMQ)]
+  Competition --> RabbitMQ
+  Registration --> RabbitMQ
+  Judge --> RabbitMQ
+
+  User -. discovery .-> Nacos[(Nacos)]
+  Competition -. discovery .-> Nacos
+  Registration -. discovery .-> Nacos
+  Judge -. discovery .-> Nacos
+  File -. discovery .-> Nacos
+  Interaction -. discovery .-> Nacos
 ```
-                        ┌──────────────┐
-                        │   Frontend   │ React 19 (CRA) :3000
-                        └──────┬───────┘
-                               │ HTTP (axios)
-                        ┌──────▼───────┐
-                        │ API Gateway  │ Spring Cloud Gateway :8080
-                        │  JwtAuthFilter│ JWT validation, CORS, routing
-                        └──────┬───────┘
-                               │ Nacos service discovery + load balancing
-          ┌────────────┬───────┼───────┬────────────┬──────────────┐
-          ▼            ▼       ▼       ▼            ▼              ▼
-    ┌──────────┐ ┌─────────┐ ┌──────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐
-    │  user    │ │ competi-│ │regis-│ │  judge   │ │  file    │ │interact-│
-    │ service  │ │  tion   │ │trat- │ │ service  │ │ service  │ │  ion    │
-    │  :8081   │ │ service │ │ion   │ │  :8084   │ │  :8085   │ │ service │
-    │          │ │  :8082  │ │:8083 │ │          │ │          │ │  :8086  │
-    └────┬─────┘ └───┬─────┘ └──┬───┘ └────┬─────┘ └────┬─────┘ └────┬────┘
-         │           │          │           │            │             │
-    ┌────▼───────────▼──────────▼───────────▼────────────▼─────────────▼────┐
-    │                        MySQL 8 :3306                                  │
-    │              database: project_contest_platform                       │
-    └──────────────────────────────────────────────────────────────────────-┘
-         │           │          │           │            │
-    ┌────▼───────────▼──────────▼───────────▼────┐  ┌───▼────┐
-    │          Redis :6379 (sessions/cache)       │  │ MinIO  │
-    └────────────────────────────────────────────-┘  │:9000   │
-         │           │          │           │        └────────┘
-    ┌────▼───────────▼──────────▼───────────▼────┐
-    │        RabbitMQ :5672 (async events)        │
-    └─────────────────────────────────────────────┘
-```
-
-## Inter-Service Communication (OpenFeign)
-
-```
-competition-service → user-service      (resolve user by email/ID)
-competition-service → file-service      (upload promo media)
-registration-service → user-service     (resolve participants)
-registration-service → file-service     (upload submissions)
-registration-service → competition-service (check competition status/organizer)
-judge-service → user-service            (resolve judges)
-judge-service → registration-service    (get submissions)
-judge-service → competition-service     (get competition details/status)
-judge-service → interaction-service     (get interaction stats)
-interaction-service → user-service      (resolve commenters)
-interaction-service → registration-service (validate submission exists)
-user-service → registration-service     (check team submissions before delete)
-user-service → file-service             (avatar upload)
-user-service → github/google APIs       (OAuth flow via external Feign clients)
-```
-
-## RabbitMQ Event Flows
-
-```
-competition.topic exchange:
-  competition-service  ──judge.assigned──►  user-service (email notification)
-  competition-service  ──judge.removed───►  user-service (email notification)
-
-registration.topic exchange:
-  registration-service ──register.success──────► user-service (email)
-  registration-service ──register.removed──────► user-service (email)
-  registration-service ──submission.uploaded────► user-service (email)
-  registration-service ──submission.reviewed───► user-service (email)
-
-judge.topic exchange:
-  judge-service ──award.winner──► user-service (email notification)
-```
-
-All email notifications are consumed by user-service's event listeners and sent via SMTP (Gmail).
 
 ## Auth Flow
 
-```
-Client → Gateway (JwtAuthFilter) → validates JWT from Redis
-  ├─ public-urls: bypass auth (login, register, OAuth, public endpoints)
-  └─ protected: extracts User-ID, User-Role headers → forwards to services
-```
+1. Browser sends JWT to `api-gateway`.
+2. `JwtAuthFilter` validates the token and injects `User-ID` and `User-Role`.
+3. Downstream controllers receive identity through `@CurrentUser RequestContext`.
+4. Frontend session state goes through `authTokenManager`; business UI should not touch auth `localStorage` directly.
 
-## Roles
+## Response Contract
 
-Admin, Organizer, Participant, Judge (stored in `roles` table, mapped via `user_roles`)
+- Errors use the shared `GlobalExceptionHandler` and return `ApiResponse<T>`.
+- Controller success messages use `ApiResponses.message(...)`.
+- File-service upload endpoints intentionally keep raw string bodies for file URL and Feign compatibility.
+- Frontend service calls can use `unwrapApiPayload` to consume both standard envelopes and historical raw payloads.
+
+## Inter-Service Communication
+
+- competition-service -> user-service, file-service
+- registration-service -> user-service, file-service, competition-service
+- judge-service -> user-service, registration-service, competition-service, interaction-service
+- interaction-service -> user-service, registration-service
+- user-service -> registration-service, file-service, GitHub/Google OAuth APIs
+
+## RabbitMQ Event Flows
+
+- `competition.topic`: judge assignment/removal notifications
+- `registration.topic`: registration and submission notifications
+- `judge.topic`: winner award notifications
+
+User-service consumes notification events and sends email through SMTP.

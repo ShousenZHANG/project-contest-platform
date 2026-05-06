@@ -15,6 +15,34 @@ export function extractErrorMessage(err) {
 }
 
 /**
+ * Normalize the backend's supported success payload shapes.
+ *
+ * Supported inputs:
+ * - Axios response: { data: ... }
+ * - Standard ApiResponse: { success: true, data: ... }
+ * - Historical raw values: string/object/array
+ */
+export function unwrapApiPayload(result) {
+  const payload = result && Object.prototype.hasOwnProperty.call(result, 'data')
+    ? result.data
+    : result;
+
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    Object.prototype.hasOwnProperty.call(payload, 'success') &&
+    Object.prototype.hasOwnProperty.call(payload, 'data')
+  ) {
+    if (payload.success === false) {
+      throw new Error(payload.error || 'Request failed');
+    }
+    return payload.data;
+  }
+
+  return payload;
+}
+
+/**
  * Wrap an async service call, normalizing the response to { data, error }.
  * Callers can destructure without individual try/catch blocks.
  *
@@ -28,7 +56,7 @@ export function extractErrorMessage(err) {
 export async function safeCall(fn) {
   try {
     const result = await fn();
-    return { data: result?.data ?? result, error: null };
+    return { data: unwrapApiPayload(result), error: null };
   } catch (err) {
     return { data: null, error: extractErrorMessage(err) };
   }

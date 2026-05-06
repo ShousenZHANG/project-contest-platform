@@ -14,11 +14,13 @@ import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function DeleteComment({ commentId, onDeleted }) {
   const handleDelete = async () => {
-    const currentUserId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    const currentUserId = AuthTokenManager.getUserId();
+    const token = AuthTokenManager.getToken();
 
     if (!currentUserId || !token) {
       toast.error('Please log in.');

@@ -26,6 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -56,7 +58,7 @@ function TeamProjectDetail() {
   const [updatedFile, setUpdatedFile] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const userId = localStorage.getItem('userId');
+  const userId = AuthTokenManager.getUserId();
 
   useEffect(() => {
     const fetchSubmission = async () => {

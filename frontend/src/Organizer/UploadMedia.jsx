@@ -11,6 +11,9 @@ import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import AuthTokenManager from '@/auth/authTokenManager';
+import ConfirmDialog from '@/shared/components/ConfirmDialog';
+
 
 function UploadMedia() {
   const { id } = useParams();
@@ -20,7 +23,8 @@ function UploadMedia() {
   const [uploading, setUploading] = useState(false);
   const [existingMedia, setExistingMedia] = useState({ video: null, images: [] });
   const [contestName, setContestName] = useState('');
-  const email = localStorage.getItem('email');
+  const [confirmAction, setConfirmAction] = useState(null);
+  const email = AuthTokenManager.getEmail();
 
   const fetchCurrentMedia = useCallback(async () => {
     try {
@@ -46,8 +50,7 @@ function UploadMedia() {
     setPreviews(selectedFiles.map((file) => URL.createObjectURL(file)));
   };
 
-  const handleDeleteImage = async (imageUrl) => {
-    if (!window.confirm('Delete this image?')) return;
+  const confirmDeleteImage = async (imageUrl) => {
     try {
       await apiClient.delete(
         `/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`
@@ -58,11 +61,12 @@ function UploadMedia() {
       toast.error(
         'Failed to delete image: ' + (error.response?.data?.message || 'Unknown error')
       );
+    } finally {
+      setConfirmAction(null);
     }
   };
 
-  const handleDeleteVideo = async () => {
-    if (!window.confirm('Delete the intro video?')) return;
+  const confirmDeleteVideo = async () => {
     try {
       await apiClient.delete(`/competitions/${id}/media/video`);
       toast.success('Video deleted');
@@ -71,7 +75,27 @@ function UploadMedia() {
       toast.error(
         'Failed to delete video: ' + (error.response?.data?.message || 'Unknown error')
       );
+    } finally {
+      setConfirmAction(null);
     }
+  };
+
+  const requestDeleteImage = (imageUrl) => {
+    setConfirmAction({
+      title: 'Delete image',
+      message: 'This removes the selected competition image immediately.',
+      confirmLabel: 'Delete',
+      onConfirm: () => confirmDeleteImage(imageUrl),
+    });
+  };
+
+  const requestDeleteVideo = () => {
+    setConfirmAction({
+      title: 'Delete intro video',
+      message: 'This removes the competition intro video immediately.',
+      confirmLabel: 'Delete',
+      onConfirm: confirmDeleteVideo,
+    });
   };
 
   const handleUpload = async () => {
@@ -135,7 +159,7 @@ function UploadMedia() {
                   variant="destructive"
                   size="icon"
                   className="absolute right-2 top-2"
-                  onClick={handleDeleteVideo}
+                  onClick={requestDeleteVideo}
                   aria-label="Delete video"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -158,7 +182,7 @@ function UploadMedia() {
                       variant="destructive"
                       size="icon"
                       className="absolute right-2 top-2"
-                      onClick={() => handleDeleteImage(imgUrl)}
+                      onClick={() => requestDeleteImage(imgUrl)}
                       aria-label="Delete image"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -211,9 +235,19 @@ function UploadMedia() {
         </Button>
         <Button onClick={handleUpload} disabled={uploading}>
           <UploadIcon className="h-4 w-4" />
-          {uploading ? 'Uploading…' : 'Upload'}
+          {uploading ? 'Uploading...' : 'Upload'}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        confirmVariant="destructive"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => confirmAction?.onConfirm()}
+      />
     </div>
   );
 }

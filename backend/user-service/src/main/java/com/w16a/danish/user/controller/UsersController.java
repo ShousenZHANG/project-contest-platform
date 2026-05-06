@@ -1,5 +1,7 @@
 package com.w16a.danish.user.controller;
 
+import com.w16a.danish.common.web.ApiResponses;
+
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
@@ -124,15 +126,15 @@ public class UsersController {
             }
     )
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> logout(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
         if (StrUtil.isBlank(authHeader) || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
+            return ApiResponses.error(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
         }
 
         String token = authHeader.substring(7);
         userService.logout(token);
 
-        return ResponseEntity.ok("Logout successful");
+        return ApiResponses.message("Logout successful");
     }
 
     @Operation(
@@ -155,10 +157,11 @@ public class UsersController {
             }
     )
     @DeleteMapping("/{userId}")
-    public ResponseEntity<?> deleteUser(@PathVariable String userId,
-                                        @CurrentUser RequestContext ctx) {
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteUser(
+            @PathVariable String userId,
+            @CurrentUser RequestContext ctx) {
         String response = userService.deleteUserById(userId, ctx);
-        return ResponseEntity.ok(response);
+        return ApiResponses.message(response);
     }
 
     @Operation(
@@ -380,9 +383,9 @@ public class UsersController {
             }
     )
     @PostMapping("/forgot-password")
-    public ResponseEntity<String> requestPasswordReset(@RequestParam String email) {
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> requestPasswordReset(@RequestParam String email) {
         userService.sendResetLink(email);
-        return ResponseEntity.ok("If the email exists, a reset link has been sent.");
+        return ApiResponses.message("If the email exists, a reset link has been sent.");
     }
 
     @Operation(

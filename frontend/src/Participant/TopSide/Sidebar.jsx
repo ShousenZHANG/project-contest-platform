@@ -12,14 +12,16 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { User, Trophy, Users, FolderKanban, Star, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function Sidebar() {
   const location = useLocation();
   const [activePath, setActivePath] = useState(location.pathname);
-  const email = localStorage.getItem('email');
+  const email = AuthTokenManager.getEmail();
 
   const handleLinkClick = (event, path) => {
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       event.preventDefault();
       toast.error('You are not authorized. Please log in first.');

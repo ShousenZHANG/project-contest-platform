@@ -16,6 +16,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -28,7 +30,7 @@ import {
 function OrganizerAddJudge() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const email = localStorage.getItem('email');
+  const email = AuthTokenManager.getEmail();
 
   const [judgeEmail, setJudgeEmail] = useState('');
   const [judges, setJudges] = useState([]);

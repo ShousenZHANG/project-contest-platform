@@ -17,6 +17,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -41,7 +43,7 @@ function reviewVariant(status) {
 function OrganizerSubmissions() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const email = localStorage.getItem('email');
+  const email = AuthTokenManager.getEmail();
 
   const [submissions, setSubmissions] = useState([]);
   const [totalPages, setTotalPages] = useState(1);

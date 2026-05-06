@@ -1,4 +1,4 @@
-import AuthTokenManager, { KEYS } from '../authTokenManager';
+import AuthTokenManager, { AUTH_SESSION_CHANGED, KEYS } from '../authTokenManager';
 
 describe('AuthTokenManager', () => {
   beforeEach(() => {
@@ -67,6 +67,64 @@ describe('AuthTokenManager', () => {
 
     it('does not throw when the session was never set', () => {
       expect(() => AuthTokenManager.clearSession()).not.toThrow();
+    });
+  });
+
+  describe('getAuthHeaders', () => {
+    it('returns the gateway auth headers from the current session', () => {
+      AuthTokenManager.setSession({
+        token: 't',
+        userId: 'u',
+        email: 'e',
+        role: 'ORGANIZER',
+      });
+
+      expect(AuthTokenManager.getAuthHeaders()).toEqual({
+        Authorization: 'Bearer t',
+        'User-ID': 'u',
+        'User-Role': 'ORGANIZER',
+      });
+    });
+
+    it('omits empty auth headers', () => {
+      expect(AuthTokenManager.getAuthHeaders()).toEqual({});
+    });
+  });
+
+  describe('subscribe', () => {
+    it('notifies listeners after session changes', () => {
+      const listener = jest.fn();
+      const unsubscribe = AuthTokenManager.subscribe(listener);
+
+      AuthTokenManager.setSession({
+        token: 't',
+        userId: 'u',
+        email: 'e',
+        role: 'ADMIN',
+      });
+
+      expect(listener).toHaveBeenCalledWith({
+        token: 't',
+        userId: 'u',
+        email: 'e',
+        role: 'ADMIN',
+      });
+
+      unsubscribe();
+    });
+
+    it('uses the canonical event name for same-tab updates', () => {
+      const eventNames = [];
+      const originalDispatchEvent = window.dispatchEvent;
+      window.dispatchEvent = jest.fn((event) => {
+        eventNames.push(event.type);
+        return true;
+      });
+
+      AuthTokenManager.clearSession();
+
+      expect(eventNames).toContain(AUTH_SESSION_CHANGED);
+      window.dispatchEvent = originalDispatchEvent;
     });
   });
 

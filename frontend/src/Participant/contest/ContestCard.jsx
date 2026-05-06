@@ -15,6 +15,8 @@ import apiClient from '../../api/apiClient';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardFooter } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -43,7 +45,7 @@ function ContestCard({ contest, onLoginRequest }) {
   };
 
   const fetchCreatedTeams = async () => {
-    const userId = localStorage.getItem('userId');
+    const userId = AuthTokenManager.getUserId();
     setTeamsLoading(true);
     try {
       const res = await apiClient.get(
@@ -88,7 +90,7 @@ function ContestCard({ contest, onLoginRequest }) {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       if (onLoginRequest) onLoginRequest();
       else toast.warning('Please log in first!');

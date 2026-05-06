@@ -17,11 +17,13 @@ import { Button } from '@/components/ui/button';
 import CommentList from '@/shared/components/Comments/CommentList';
 import CommentForm from '@/shared/components/Comments/CommentForm';
 import { useCommentThread } from '@/shared/hooks/useCommentThread';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function CommentsPage() {
   const { submissionId } = useParams();
   const navigate = useNavigate();
-  const currentUserId = localStorage.getItem('userId');
+  const currentUserId = AuthTokenManager.getUserId();
 
   const {
     comments,

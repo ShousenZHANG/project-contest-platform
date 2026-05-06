@@ -1,5 +1,7 @@
 package com.w16a.danish.user.controller;
 
+import com.w16a.danish.common.web.ApiResponses;
+
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -73,13 +75,13 @@ public class TeamController {
             }
     )
     @DeleteMapping("/{teamId}/members/{memberId}")
-    public ResponseEntity<String> removeMember(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> removeMember(
             @CurrentUser RequestContext ctx,
             @PathVariable String teamId,
             @PathVariable String memberId
     ) {
         teamService.removeTeamMember(ctx.userId(), teamId, memberId);
-        return ResponseEntity.ok("Member removed");
+        return ApiResponses.message("Member removed");
     }
 
     @Operation(
@@ -96,12 +98,12 @@ public class TeamController {
             }
     )
     @DeleteMapping("/{teamId}")
-    public ResponseEntity<String> deleteTeam(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteTeam(
             @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
         teamService.deleteTeam(ctx, teamId);
-        return ResponseEntity.ok("Team deleted");
+        return ApiResponses.message("Team deleted");
     }
 
     @Operation(
@@ -122,13 +124,13 @@ public class TeamController {
             }
     )
     @PutMapping("/{teamId}")
-    public ResponseEntity<String> updateTeam(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> updateTeam(
             @CurrentUser RequestContext ctx,
             @PathVariable String teamId,
             @Valid @RequestBody TeamUpdateDTO dto
     ) {
         teamService.updateTeam(ctx.userId(), teamId, dto);
-        return ResponseEntity.ok("Team updated");
+        return ApiResponses.message("Team updated");
     }
 
     @Operation(
@@ -140,12 +142,12 @@ public class TeamController {
             }
     )
     @PostMapping("/{teamId}/join")
-    public ResponseEntity<String> joinTeam(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> joinTeam(
             @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
         teamService.joinTeam(teamId, ctx.userId());
-        return ResponseEntity.ok("Joined successfully");
+        return ApiResponses.message("Joined successfully");
     }
 
     @Operation(
@@ -158,12 +160,12 @@ public class TeamController {
             }
     )
     @PostMapping("/{teamId}/leave")
-    public ResponseEntity<String> leaveTeam(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> leaveTeam(
             @CurrentUser RequestContext ctx,
             @PathVariable String teamId
     ) {
         teamService.leaveTeam(teamId, ctx.userId());
-        return ResponseEntity.ok("Left the team");
+        return ApiResponses.message("Left the team");
     }
 
     @Operation(

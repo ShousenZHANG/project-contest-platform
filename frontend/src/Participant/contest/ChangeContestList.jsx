@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function statusDotClass(status) {
   const s = (status || '').toLowerCase();
@@ -40,7 +42,7 @@ function ChangeContestList({ contest, onClick }) {
 
   const handleJoinClick = async (e) => {
     e.stopPropagation();
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       toast.warning('Please log in first!');
       return;

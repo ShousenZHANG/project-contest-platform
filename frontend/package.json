@@ -31,13 +31,11 @@
     "dayjs": "^1.11.13",
     "framer-motion": "^12.6.3",
     "lucide-react": "^1.14.0",
-    "material-icons": "^1.13.14",
     "next-themes": "^0.4.6",
     "react": "^19.0.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.75.0",
-    "react-icons": "^5.5.0",
     "react-image-crop": "^11.0.7",
     "react-router-dom": "^6.22.3",
     "recharts": "^2.15.3",
@@ -47,6 +45,7 @@
     "zod": "^4.4.2"
   },
   "scripts": {
+    "start": "vite",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

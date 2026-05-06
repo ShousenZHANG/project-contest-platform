@@ -1,5 +1,7 @@
 package com.w16a.danish.judge.controller;
 
+import com.w16a.danish.common.web.ApiResponses;
+
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
@@ -60,12 +62,12 @@ public class SubmissionJudgesController {
             }
     )
     @PostMapping("/score")
-    public ResponseEntity<String> judgeSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> judgeSubmission(
             @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
         submissionJudgesService.judgeSubmission(ctx, judgeDTO);
-        return ResponseEntity.ok("Submission judged successfully.");
+        return ApiResponses.message("Submission judged successfully.");
     }
 
     @Operation(
@@ -149,13 +151,13 @@ public class SubmissionJudgesController {
             }
     )
     @PutMapping("/{submissionId}")
-    public ResponseEntity<String> updateJudgement(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> updateJudgement(
             @CurrentUser RequestContext ctx,
             @PathVariable("submissionId") String submissionId,
             @RequestBody SubmissionJudgeDTO judgeDTO) {
 
         submissionJudgesService.updateJudgement(ctx, submissionId, judgeDTO);
-        return ResponseEntity.ok("Judging updated successfully.");
+        return ApiResponses.message("Judging updated successfully.");
     }
 
     @Operation(

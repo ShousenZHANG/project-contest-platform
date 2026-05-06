@@ -1,6 +1,6 @@
 package com.w16a.danish.registration.controller;
 
-
+import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
@@ -66,7 +66,7 @@ public class SubmissionRecordsController {
             }
     )
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> uploadSubmission(
             @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam("title") String title,
@@ -74,7 +74,7 @@ public class SubmissionRecordsController {
             @RequestParam("file") MultipartFile file) {
 
         submissionService.submitWork(ctx, competitionId, title, description, file);
-        return ResponseEntity.ok("Work submitted successfully");
+        return ApiResponses.message("Work submitted successfully");
     }
 
     @Operation(
@@ -88,12 +88,12 @@ public class SubmissionRecordsController {
             }
     )
     @DeleteMapping("/{submissionId}")
-    public ResponseEntity<String> deleteSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteSubmission(
             @PathVariable String submissionId,
             @CurrentUser RequestContext ctx) {
 
         submissionService.deleteSubmission(submissionId, ctx);
-        return ResponseEntity.ok("Submission deleted successfully");
+        return ApiResponses.message("Submission deleted successfully");
     }
 
     @Operation(
@@ -201,12 +201,12 @@ public class SubmissionRecordsController {
             }
     )
     @PostMapping("/review")
-    public ResponseEntity<String> reviewSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> reviewSubmission(
             @CurrentUser RequestContext ctx,
             @RequestBody SubmissionReviewDTO dto) {
 
         submissionService.reviewSubmission(dto, ctx);
-        return ResponseEntity.ok("Submission reviewed successfully");
+        return ApiResponses.message("Submission reviewed successfully");
     }
 
     @Operation(
@@ -246,7 +246,7 @@ public class SubmissionRecordsController {
             }
     )
     @PostMapping("/teams/upload")
-    public ResponseEntity<String> uploadTeamSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> uploadTeamSubmission(
             @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId,
             @RequestParam("teamId") String teamId,
@@ -255,7 +255,7 @@ public class SubmissionRecordsController {
             @RequestParam("file") MultipartFile file) {
 
         submissionService.submitTeamWork(ctx, competitionId, teamId, title, description, file);
-        return ResponseEntity.ok("Team work submitted successfully");
+        return ApiResponses.message("Team work submitted successfully");
     }
 
     @Operation(
@@ -296,12 +296,12 @@ public class SubmissionRecordsController {
             }
     )
     @DeleteMapping("/teams/{submissionId}")
-    public ResponseEntity<String> deleteTeamSubmission(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteTeamSubmission(
             @PathVariable String submissionId,
             @CurrentUser RequestContext ctx) {
 
         submissionService.deleteTeamSubmission(submissionId, ctx);
-        return ResponseEntity.ok("Team submission deleted successfully");
+        return ApiResponses.message("Team submission deleted successfully");
     }
 
     @Operation(

@@ -1,60 +1,71 @@
 /**
- * AuthContext — centralised authentication state.
+ * AuthContext centralizes authentication state for the React tree.
  *
  * Provides:
- *   - user     : { userId, email, role } | null
- *   - token    : string | null
- *   - login()  : persist auth data and update state
- *   - logout() : clear auth data and navigate to /login
- *   - isAuthenticated : boolean convenience flag
+ *   - user: { userId, email, role } | null
+ *   - token: string | null
+ *   - login(): persist auth data and update state
+ *   - logout(): clear auth data and update state
+ *   - isAuthenticated: boolean convenience flag
  */
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import AuthTokenManager from "@/auth/authTokenManager";
 
 const AuthContext = createContext(null);
 
-function readStoredUser() {
-  const token = localStorage.getItem("token");
-  const userId = localStorage.getItem("userId");
-  const email = localStorage.getItem("email");
-  const role = localStorage.getItem("role");
-  if (token && userId) {
-    return { userId, email, role };
+function sessionToUser(session) {
+  if (session.token && session.userId) {
+    return {
+      userId: session.userId,
+      email: session.email,
+      role: session.role,
+    };
   }
   return null;
 }
 
+function readSessionState() {
+  const session = AuthTokenManager.getSession();
+  return {
+    token: session.token,
+    user: sessionToUser(session),
+  };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readStoredUser);
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [state, setState] = useState(readSessionState);
+
+  useEffect(() => {
+    return AuthTokenManager.subscribe(() => {
+      setState(readSessionState());
+    });
+  }, []);
 
   const login = useCallback(({ userId, email, role, accessToken }) => {
-    localStorage.setItem("token", accessToken);
-    localStorage.setItem("userId", userId);
-    localStorage.setItem("email", email);
-    localStorage.setItem("role", role);
-    setToken(accessToken);
-    setUser({ userId, email, role });
+    AuthTokenManager.setSession({
+      token: accessToken,
+      userId,
+      email,
+      role,
+    });
+    setState(readSessionState());
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("email");
-    localStorage.removeItem("role");
-    setToken(null);
-    setUser(null);
+    AuthTokenManager.clearSession();
+    setState(readSessionState());
   }, []);
 
   const value = useMemo(
     () => ({
-      user,
-      token,
-      isAuthenticated: !!token,
+      user: state.user,
+      token: state.token,
+      isAuthenticated: Boolean(state.token),
       login,
       logout,
     }),
-    [user, token, login, logout]
+    [state.user, state.token, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

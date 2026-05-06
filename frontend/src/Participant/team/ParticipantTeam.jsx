@@ -18,6 +18,8 @@ import apiClient from '@/api/apiClient';
 import TeamCreateDialog from './TeamCreateDialog';
 import MyTeamsDialog from './MyTeamsDialog';
 import TeamList from './TeamList';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   fetchJoinedTeams,
   fetchTeams,
@@ -47,7 +49,7 @@ function ParticipantTeam() {
       try {
         const res = await apiClient.get('/users/profile');
         const data = res.data;
-        data.userId = localStorage.getItem('userId');
+        data.userId = AuthTokenManager.getUserId();
         setUserData(data);
       } catch (error) {
         // eslint-disable-next-line no-console

@@ -26,6 +26,8 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function OrganizerProfile() {
   const [formData, setFormData] = useState({
@@ -33,7 +35,7 @@ function OrganizerProfile() {
     email: '',
     password: '',
     description: '',
-    role: localStorage.getItem('role') || '',
+    role: AuthTokenManager.getRole() || '',
   });
 
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
@@ -53,7 +55,7 @@ function OrganizerProfile() {
             email: data.email || '',
             password: '',
             description: data.description || '',
-            role: localStorage.getItem('role') || '',
+            role: AuthTokenManager.getRole() || '',
           });
           setAvatarUrl(data.avatarUrl);
         }
@@ -134,14 +136,11 @@ function OrganizerProfile() {
   };
 
   const handleDeleteAccount = async () => {
-    const userId = localStorage.getItem('userId');
+    const userId = AuthTokenManager.getUserId();
     try {
       await apiClient.delete(`/users/${userId}`);
       toast.success('Your account has been deleted.');
-      localStorage.removeItem('token');
-      localStorage.removeItem('userId');
-      localStorage.removeItem('email');
-      localStorage.removeItem('role');
+      AuthTokenManager.clearSession();
       window.location.href = '/';
     } catch (error) {
       toast.error(error.response?.data?.message || 'Error deleting account.');

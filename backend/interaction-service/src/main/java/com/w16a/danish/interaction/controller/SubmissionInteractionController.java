@@ -1,6 +1,6 @@
 package com.w16a.danish.interaction.controller;
 
-
+import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.vo.InteractionStatisticsVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -46,10 +46,10 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Comment added successfully")}
     )
     @PostMapping("/comments")
-    public ResponseEntity<String> postComment(@Valid @RequestBody SubmissionCommentDTO dto,
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> postComment(@Valid @RequestBody SubmissionCommentDTO dto,
                                               @CurrentUser RequestContext ctx) {
         commentsService.addComment(ctx.userId(), dto);
-        return ResponseEntity.ok("Comment added successfully");
+        return ApiResponses.message("Comment added successfully");
     }
 
     @Operation(
@@ -61,10 +61,10 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Comment deleted")}
     )
     @DeleteMapping("/comments/{id}")
-    public ResponseEntity<String> deleteComment(@PathVariable String id,
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteComment(@PathVariable String id,
                                                 @CurrentUser RequestContext ctx) {
         commentsService.deleteComment(id, ctx);
-        return ResponseEntity.ok("Comment deleted");
+        return ApiResponses.message("Comment deleted");
     }
 
     @Operation(
@@ -76,13 +76,13 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Comment updated successfully")}
     )
     @PutMapping("/comments/{id}")
-    public ResponseEntity<String> updateComment(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> updateComment(
             @PathVariable String id,
             @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionCommentDTO dto) {
 
         commentsService.updateComment(id, ctx.userId(), dto);
-        return ResponseEntity.ok("Comment updated successfully");
+        return ApiResponses.message("Comment updated successfully");
     }
 
     @Operation(
@@ -123,10 +123,10 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Voted")}
     )
     @PostMapping("/votes")
-    public ResponseEntity<String> vote(@RequestParam String submissionId,
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> vote(@RequestParam String submissionId,
                                        @CurrentUser RequestContext ctx) {
         votesService.vote(submissionId, ctx.userId());
-        return ResponseEntity.ok("Voted");
+        return ApiResponses.message("Voted");
     }
 
     @Operation(
@@ -138,10 +138,10 @@ public class SubmissionInteractionController {
             responses = {@ApiResponse(responseCode = "200", description = "Unvoted")}
     )
     @DeleteMapping("/votes")
-    public ResponseEntity<String> unvote(@RequestParam String submissionId,
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> unvote(@RequestParam String submissionId,
                                          @CurrentUser RequestContext ctx) {
         votesService.unvote(submissionId, ctx.userId());
-        return ResponseEntity.ok("Unvoted");
+        return ApiResponses.message("Unvoted");
     }
 
     @Operation(

@@ -16,6 +16,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 import {
   Dialog,
   DialogContent,
@@ -52,7 +54,7 @@ function OrganizerContestList() {
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const navigate = useNavigate();
-  const email = localStorage.getItem('email');
+  const email = AuthTokenManager.getEmail();
 
   useEffect(() => {
     const fetchCompetitions = async () => {

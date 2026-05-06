@@ -1,4 +1,4 @@
-import { extractErrorMessage, safeCall } from '../serviceUtils';
+import { extractErrorMessage, safeCall, unwrapApiPayload } from '../serviceUtils';
 
 describe('extractErrorMessage', () => {
   it('prefers response.data.message when present', () => {
@@ -38,6 +38,20 @@ describe('safeCall', () => {
     expect(result).toEqual({ data: 'plain', error: null });
   });
 
+  it('unwraps a standard ApiResponse envelope', async () => {
+    const result = await safeCall(async () => ({
+      data: { success: true, data: { id: 'c-1' }, error: null },
+    }));
+    expect(result).toEqual({ data: { id: 'c-1' }, error: null });
+  });
+
+  it('treats a failed ApiResponse envelope as a normalized error', async () => {
+    const result = await safeCall(async () => ({
+      data: { success: false, data: null, error: 'business rule failed' },
+    }));
+    expect(result).toEqual({ data: null, error: 'business rule failed' });
+  });
+
   it('returns { data: null, error: <message> } on rejection', async () => {
     const result = await safeCall(async () => {
       throw { response: { data: { message: 'nope' } } };
@@ -50,5 +64,23 @@ describe('safeCall', () => {
       throw {};
     });
     expect(result.error).toBe('An unexpected error occurred');
+  });
+});
+
+describe('unwrapApiPayload', () => {
+  it('returns the data field for Axios responses', () => {
+    expect(unwrapApiPayload({ data: { value: 1 } })).toEqual({ value: 1 });
+  });
+
+  it('returns the inner data for ApiResponse envelopes', () => {
+    expect(unwrapApiPayload({
+      success: true,
+      data: ['a'],
+      error: null,
+    })).toEqual(['a']);
+  });
+
+  it('preserves historical raw payloads', () => {
+    expect(unwrapApiPayload('deleted')).toBe('deleted');
   });
 });

@@ -17,6 +17,8 @@ import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function ContestCard({ contest, onCardClick }) {
   const [voteCount, setVoteCount] = useState(contest.votes ?? 0);
@@ -28,7 +30,7 @@ function ContestCard({ contest, onCardClick }) {
   const handleVoteClick = async (e) => {
     e.stopPropagation();
 
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       toast.error('Please log in first');
       return;
@@ -54,7 +56,7 @@ function ContestCard({ contest, onCardClick }) {
   const handleJoinClick = async (e) => {
     e.stopPropagation();
 
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       toast.error('Please log in first');
       return;

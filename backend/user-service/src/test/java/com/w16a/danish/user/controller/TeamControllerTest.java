@@ -84,7 +84,8 @@ class TeamControllerTest {
                         .header("User-ID", "leader-1")
                         .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Member removed"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Member removed"));
     }
 
     @Test
@@ -99,7 +100,8 @@ class TeamControllerTest {
                         .header("User-ID", "admin-1")
                         .header("User-Role", "ADMIN"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Team deleted"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Team deleted"));
     }
 
     @Test
@@ -116,7 +118,8 @@ class TeamControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Team updated"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Team updated"));
     }
 
     @Test
@@ -128,7 +131,8 @@ class TeamControllerTest {
                         .header("User-ID", "user-1")
                         .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Joined successfully"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Joined successfully"));
     }
 
     @Test
@@ -140,7 +144,8 @@ class TeamControllerTest {
                         .header("User-ID", "user-1")
                         .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Left the team"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Left the team"));
     }
 
     @Test

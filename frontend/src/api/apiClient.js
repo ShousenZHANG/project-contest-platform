@@ -1,8 +1,8 @@
 /**
  * Centralized Axios instance for all API calls.
  *
- * - Base URL: http://localhost:8080 (API gateway)
- * - Request interceptor: auto-attaches JWT Bearer token from localStorage
+ * - Base URL: VITE_API_BASE_URL, defaulting to the API gateway on :8080
+ * - Request interceptor: attaches auth headers through AuthTokenManager
  * - Response interceptor: clears auth state and redirects to /login on 401
  */
 
@@ -19,24 +19,25 @@ const apiClient = axios.create({
   },
 });
 
-// ── Request interceptor: attach JWT ─────────────────────────────────────────
+// Attach auth context for direct service calls and gateway-routed requests.
 apiClient.interceptors.request.use(
   (config) => {
-    const token = AuthTokenManager.getToken();
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
+    Object.assign(config.headers, AuthTokenManager.getAuthHeaders());
+
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
     }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// ── Response interceptor: handle 401 ────────────────────────────────────────
+// Handle expired or invalid sessions at the shared HTTP seam.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid — clear storage and redirect to login
       AuthTokenManager.clearSession();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";

@@ -59,7 +59,8 @@ class SubmissionWinnersControllerTest {
                         .header("User-Role", "ORGANIZER")
                         .param("competitionId", "comp-123"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Auto awarding completed successfully."));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Auto awarding completed successfully."));
     }
 
     @Test

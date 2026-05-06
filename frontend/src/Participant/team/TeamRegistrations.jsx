@@ -22,6 +22,8 @@ import apiClient from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SubmitDialog } from '../project/Submitbottom';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function reviewBadgeVariant(status) {
   const s = (status || '').toUpperCase();
@@ -138,7 +140,7 @@ function TeamRegistrations({ userData }) {
   }, [registrations, loading, error]);
 
   const openSubmissionDialog = async (competitionId, teamId) => {
-    const userId = userData?.userId || localStorage.getItem('userId');
+    const userId = userData?.userId || AuthTokenManager.getUserId();
     if (!userId) {
       const msg = 'You are not logged in or user ID is missing.';
       setError(msg);

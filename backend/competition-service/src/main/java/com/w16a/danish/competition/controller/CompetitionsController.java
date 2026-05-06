@@ -1,6 +1,6 @@
 package com.w16a.danish.competition.controller;
 
-
+import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
@@ -126,13 +126,13 @@ public class CompetitionsController {
             }
     )
     @DeleteMapping("/delete/{id}")
-    public ResponseEntity<String> deleteCompetition(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> deleteCompetition(
             @Parameter(description = "Competition ID", example = "86594026-4d1d-4d6d-bf8c-8950e4d1cf3f", required = true)
             @PathVariable String id,
             @CurrentUser RequestContext ctx) {
 
         competitionService.deleteCompetition(id, ctx);
-        return ResponseEntity.ok("Competition deleted successfully");
+        return ApiResponses.message("Competition deleted successfully");
     }
 
     @Operation(
@@ -311,13 +311,13 @@ public class CompetitionsController {
             }
     )
     @PostMapping("/{id}/assign-judges")
-    public ResponseEntity<String> assignJudges(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> assignJudges(
             @CurrentUser RequestContext ctx,
             @PathVariable String id,
             @RequestBody AssignJudgesDTO dto) {
 
         competitionService.assignJudges(id, ctx, dto);
-        return ResponseEntity.ok("Judges assigned successfully");
+        return ApiResponses.message("Judges assigned successfully");
     }
 
     @Operation(
@@ -355,13 +355,13 @@ public class CompetitionsController {
             }
     )
     @DeleteMapping("/{id}/judges/{judgeId}")
-    public ResponseEntity<String> removeJudge(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> removeJudge(
             @CurrentUser RequestContext ctx,
             @PathVariable String id,
             @PathVariable String judgeId) {
 
         competitionService.removeJudge(id, ctx, judgeId);
-        return ResponseEntity.ok("Judge removed successfully.");
+        return ApiResponses.message("Judge removed successfully.");
     }
 
     @Operation(

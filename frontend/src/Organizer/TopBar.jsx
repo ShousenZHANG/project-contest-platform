@@ -19,6 +19,8 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 function TopBar() {
   const [open, setOpen] = useState(false);
@@ -27,7 +29,7 @@ function TopBar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setEmail(localStorage.getItem('email'));
+    setEmail(AuthTokenManager.getEmail());
 
     const fetchUserAvatar = async () => {
       try {
@@ -49,11 +51,7 @@ function TopBar() {
     } catch {
       // Logout API call failed silently
     }
-
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('email');
-    localStorage.removeItem('role');
+    AuthTokenManager.clearSession();
     setOpen(false);
     window.location.href = '/';
   };

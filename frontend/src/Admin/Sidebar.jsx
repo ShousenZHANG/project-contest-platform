@@ -14,6 +14,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, User, Users, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
+import AuthTokenManager from '@/auth/authTokenManager';
+
 
 const NAV_ITEMS = [
   { to: '/AdminDashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,7 +30,7 @@ function Sidebar() {
 
   const handleNavigate = (event, to) => {
     event.preventDefault();
-    const token = localStorage.getItem('token');
+    const token = AuthTokenManager.getToken();
     if (!token) {
       toast.error('You are not authorized. Please log in first.');
       return;

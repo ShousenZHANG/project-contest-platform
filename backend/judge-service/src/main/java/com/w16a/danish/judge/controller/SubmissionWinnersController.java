@@ -1,5 +1,7 @@
 package com.w16a.danish.judge.controller;
 
+import com.w16a.danish.common.web.ApiResponses;
+
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -44,12 +46,12 @@ public class SubmissionWinnersController {
             }
     )
     @PostMapping("/auto-award")
-    public ResponseEntity<String> autoAward(
+    public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> autoAward(
             @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId) {
 
         winnersService.autoAward(ctx, competitionId);
-        return ResponseEntity.ok("Auto awarding completed successfully.");
+        return ApiResponses.message("Auto awarding completed successfully.");
     }
 
     @Operation(
