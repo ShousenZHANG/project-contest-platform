@@ -1,6 +1,6 @@
 package com.w16a.danish.judge.feign;
 
-import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;

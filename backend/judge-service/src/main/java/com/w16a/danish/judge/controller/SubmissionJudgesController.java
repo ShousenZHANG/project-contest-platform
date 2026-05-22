@@ -5,7 +5,7 @@ import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
-import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionBriefVO;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;

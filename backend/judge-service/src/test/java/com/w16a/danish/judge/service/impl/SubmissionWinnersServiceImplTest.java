@@ -9,7 +9,7 @@ import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.w16a.danish.judge.domain.vo.SubmissionInfoVO;
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
-import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;

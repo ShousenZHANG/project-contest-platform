@@ -3,6 +3,7 @@ package com.w16a.danish.judge.service.impl;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.*;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.InteractionServiceClient;

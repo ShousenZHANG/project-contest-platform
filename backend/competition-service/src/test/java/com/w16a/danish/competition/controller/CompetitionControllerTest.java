@@ -5,7 +5,7 @@ import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
-import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.competition.service.ICompetitionsService;
 import org.junit.jupiter.api.BeforeEach;

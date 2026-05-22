@@ -1,7 +1,7 @@
 package com.w16a.danish.registration.feign.fallback;
 
 import com.w16a.danish.common.exception.ServiceUnavailableException;
-import com.w16a.danish.registration.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

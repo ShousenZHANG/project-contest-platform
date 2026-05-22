@@ -19,7 +19,7 @@ import com.w16a.danish.competition.domain.mq.JudgeRemovedMessage;
 import com.w16a.danish.competition.domain.po.CompetitionJudges;
 import com.w16a.danish.competition.domain.po.CompetitionOrganizers;
 import com.w16a.danish.competition.domain.po.Competitions;
-import com.w16a.danish.competition.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.exception.BusinessException;

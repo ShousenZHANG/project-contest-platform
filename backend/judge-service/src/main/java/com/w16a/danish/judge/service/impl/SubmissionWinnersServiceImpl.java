@@ -11,6 +11,7 @@ import com.w16a.danish.judge.domain.po.SubmissionWinners;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;

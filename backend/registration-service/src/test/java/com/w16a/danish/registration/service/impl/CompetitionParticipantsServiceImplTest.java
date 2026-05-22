@@ -9,7 +9,7 @@ import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.CompetitionTeams;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
-import com.w16a.danish.registration.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.registration.domain.vo.TeamInfoVO;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;

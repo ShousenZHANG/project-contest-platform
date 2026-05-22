@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.feign.fallback;
 
 import com.w16a.danish.common.domain.vo.PageResponse;
-import com.w16a.danish.judge.domain.vo.CompetitionResponseVO;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

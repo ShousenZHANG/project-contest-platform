@@ -13,6 +13,7 @@ import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.w16a.danish.judge.domain.vo.*;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.judge.feign.CompetitionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
