@@ -1,12 +1,13 @@
 /**
  * ContestCard.jsx
  *
- * Featured contest card. Migrated from MUI to shadcn/ui Card + Tailwind.
- * Behavior preserved: clicking the card fires onCardClick(contest), the Vote
- * button hits POST /interactions/votes/count, and Join hits POST
- * /registrations/{contest.id}. Auth required for both — toast on success/error.
+ * Featured contest card. shadcn/ui Card + Tailwind. When a contest has no
+ * uploaded image, a deterministic brand-family gradient cover is rendered
+ * instead of relying on fragile external image URLs.
  *
- * Developer: Beiqi Dai (migrated)
+ * Behavior preserved: clicking the card fires onCardClick(contest), Vote hits
+ * POST /interactions/votes/count, Join hits POST /registrations/{id}. Auth
+ * required for both — toast on success/error.
  */
 
 import React, { useState } from 'react';
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 import { ThumbsUp, Flag, Tag, Calendar, User } from 'lucide-react';
 
 import apiClient from '../api/apiClient';
+import { coverGradient, initials } from '../lib/coverGradient';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -82,12 +84,28 @@ function ContestCard({ contest, onCardClick }) {
       className="group flex flex-col overflow-hidden cursor-pointer border-border/60 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        <img
-          src={contest.image}
-          alt={contest.title}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+        {contest.image ? (
+          <img
+            src={contest.image}
+            alt={contest.title}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="relative h-full w-full transition-transform duration-500 group-hover:scale-105"
+            style={{ background: coverGradient(contest.title) }}
+          >
+            <div className="absolute inset-0 bg-grid opacity-20 mix-blend-overlay" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-5xl font-bold tracking-tight text-white/90 drop-shadow-sm">
+                {initials(contest.title)}
+              </span>
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+          </div>
+        )}
         {contest.category && (
           <Badge className="absolute top-3 left-3 bg-background/90 text-foreground hover:bg-background backdrop-blur">
             <Tag className="mr-1 h-3 w-3" />

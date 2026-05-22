@@ -81,7 +81,6 @@ function TopValues() {
               id: index,
               title: item.title,
               description: item.description,
-              image: item.image,
               organizer: item.organizer,
               date: item.date,
               votes: item.votes,
