@@ -31,6 +31,9 @@ COPY --from=builder /app/backend/judge-service/target/*.jar judge-service.jar
 COPY ../../wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 EXPOSE 8086
 
 CMD /wait-for-it.sh mysql:3306 -- \

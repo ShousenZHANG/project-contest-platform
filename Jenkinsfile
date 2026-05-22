@@ -19,6 +19,29 @@ pipeline {
             }
         }
 
+        stage('Backend Build & Test') {
+            steps {
+                echo 'Building and testing all backend modules...'
+                sh './mvnw -B verify'
+            }
+        }
+
+        stage('Frontend Build & Test') {
+            steps {
+                echo 'Installing dependencies, running tests, and building frontend...'
+                sh 'cd frontend && (npm ci || npm install) && npm test -- --watchAll=false --runInBand && npm run build'
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                echo 'Running security scan (non-blocking)...'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh 'which trivy && trivy fs --exit-code 0 --severity HIGH,CRITICAL . || true'
+                }
+            }
+        }
+
         stage('Generate .env') {
             steps {
                 echo 'Generating .env file with Jenkins credentials...'
@@ -34,12 +57,19 @@ GOOGLE_CLIENT_ID=${env.GOOGLE_CLIENT_ID}
             }
         }
 
-        stage('Build & Deploy') {
+        stage('Docker Build') {
             steps {
-                echo 'Building and deploying all Docker services...'
-                sh 'docker compose down || true'    // Stop previous services (ignore error)
-                sh 'docker compose pull'            // Pull latest base images
-                sh 'docker compose up -d --build'   // Build & start all services in background
+                echo 'Building Docker images...'
+                sh 'docker compose pull'
+                sh 'docker compose build'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Deploying all services...'
+                sh 'docker compose down || true'
+                sh 'docker compose up -d'
             }
         }
 
@@ -53,10 +83,10 @@ GOOGLE_CLIENT_ID=${env.GOOGLE_CLIENT_ID}
 
     post {
         success {
-            echo '🚀 Deploy succeeded!'
+            echo 'Deploy succeeded!'
         }
         failure {
-            echo '❌ Deploy failed! Please check build logs.'
+            echo 'Deploy failed! Please check build logs.'
         }
     }
 }

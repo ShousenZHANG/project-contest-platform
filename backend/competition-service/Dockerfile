@@ -31,6 +31,9 @@ COPY --from=builder /app/backend/competition-service/target/*.jar competition-se
 COPY ../../wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 # Expose the port used by the Competition Service
 EXPOSE 8082
 

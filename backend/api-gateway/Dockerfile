@@ -32,6 +32,9 @@ COPY --from=builder /app/backend/api-gateway/target/*.jar api-gateway.jar
 COPY ../../wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 # Expose the port used by the API Gateway service
 EXPOSE 8080
 

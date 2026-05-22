@@ -24,6 +24,9 @@ RUN npm install -g serve
 
 COPY --from=builder /app/build ./build
 
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 EXPOSE 3000
 
 CMD ["serve", "-s", "build", "-l", "3000"]
