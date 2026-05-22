@@ -29,6 +29,7 @@ import {
   X,
   Trophy,
   Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 
 import apiClient from '../api/apiClient';
@@ -297,30 +298,59 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
   return (
     <div className="min-h-screen w-full grid lg:grid-cols-2 bg-background text-foreground">
       {/* Left — branding hero */}
-      <div className="relative hidden lg:flex flex-col justify-between p-12 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)] pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 h-72 w-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 text-white bg-gradient-to-b from-[hsl(243_72%_22%)] to-[hsl(243_72%_11%)]">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(42rem 42rem at 18% -12%, rgba(255,255,255,0.16), transparent 60%)',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.5) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000 55%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, #000 55%, transparent 100%)',
+          }}
+        />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-noise opacity-[0.06]" />
 
         <div className="relative flex items-center gap-2 text-lg font-semibold">
-          <Trophy className="h-6 w-6" />
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
+            <Trophy className="h-5 w-5" />
+          </span>
           Competition Platform
         </div>
 
-        <div className="relative space-y-6 max-w-md">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
+        <div className="relative max-w-md space-y-7">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15 backdrop-blur">
             <Sparkles className="h-3.5 w-3.5" />
-            Built for organizers, judges, and participants
+            Built for organizers, judges &amp; participants
           </div>
-          <h2 className="text-4xl font-bold leading-tight tracking-tight">
-            Run hackathons and innovation challenges from one place.
+          <h2 className="text-balance text-4xl font-bold leading-tight tracking-tight">
+            Run contests from idea to awards.
           </h2>
-          <p className="text-white/80 text-base leading-relaxed">
-            Manage registrations, scoring, awards, and the participant
-            experience — without juggling spreadsheets.
-          </p>
+          <ul className="space-y-3 text-white/85">
+            {[
+              'Registration, teams & submissions',
+              'Judging, scoring & winners',
+              'Live dashboards & analytics',
+              'GitHub / Google sign-in',
+            ].map((line) => (
+              <li key={line} className="flex items-center gap-3 text-[15px]">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-white/80" />
+                {line}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <p className="relative text-sm text-white/60">
+        <p className="relative text-sm text-white/55">
           © {new Date().getFullYear()} Competition Platform
         </p>
       </div>
