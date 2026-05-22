@@ -265,13 +265,18 @@ public class UsersController {
             }
     )
     @GetMapping("/oauth/github")
-    public void redirectToGithubOauth(@RequestParam("role") String role, HttpServletResponse response) throws IOException {
+    public void redirectToGithubOauth(@RequestParam("role") String role, HttpServletResponse response, HttpSession session) throws IOException {
+        // CSRF protection: bind a one-time state nonce to the session and echo it
+        // through the provider; the callback rejects any mismatch.
+        String state = StrUtil.uuid();
+        session.setAttribute("oauth_state", state);
+
         String redirectUrl = UriComponentsBuilder
                 .fromUri(URI.create(githubOAuthProperties.getAuthorizeUrl()))
                 .queryParam("client_id", githubOAuthProperties.getClientId())
                 .queryParam("redirect_uri", githubOAuthProperties.getRedirectUri())
                 .queryParam("scope", "user:email")
-                .queryParam("state", role)
+                .queryParam("state", state + ":" + role)
                 .build()
                 .toUriString();
 
@@ -281,9 +286,21 @@ public class UsersController {
     @GetMapping("/oauth/callback/github")
     public void handleGithubCallback(
             @RequestParam("code") String code,
-            @RequestParam("state") String role,
+            @RequestParam("state") String state,
+            HttpSession session,
             HttpServletResponse response
     ) throws IOException {
+        String savedState = (String) session.getAttribute("oauth_state");
+        String[] stateParts = state.split(":");
+        String receivedState = stateParts[0];
+        String role = stateParts.length > 1 ? stateParts[1] : "PARTICIPANT";
+
+        if (savedState == null || !Objects.equals(receivedState, savedState)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid OAuth state");
+            return;
+        }
+        session.removeAttribute("oauth_state");
+
         OAuthLoginRequestDTO dto = new OAuthLoginRequestDTO();
         dto.setProvider("github");
         dto.setCode(code);

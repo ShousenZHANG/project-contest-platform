@@ -288,10 +288,21 @@ class UsersControllerTest {
                 .thenReturn(new UserResponseVO("userId", "Test User", "test@example.com", "PARTICIPANT", "jwt-token", 3600L));
 
         mockMvc.perform(get("/users/oauth/callback/github")
+                        .sessionAttr("oauth_state", "mockState")
                         .param("code", "mock-code")
-                        .param("state", "PARTICIPANT"))
+                        .param("state", "mockState:PARTICIPANT"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(header().exists("Location"));
+    }
+
+    @Test
+    @DisplayName("❌ Should reject GitHub OAuth callback if state mismatch")
+    void testHandleGithubCallback_StateMismatch() throws Exception {
+        mockMvc.perform(get("/users/oauth/callback/github")
+                        .sessionAttr("oauth_state", "correctState")
+                        .param("code", "mockCode")
+                        .param("state", "wrongState:PARTICIPANT"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
