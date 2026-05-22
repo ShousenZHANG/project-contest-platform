@@ -436,14 +436,15 @@ class SubmissionRecordsServiceImplTest {
     @Test
     @DisplayName("✅ Should list public approved submissions successfully")
     void testListPublicApprovedSubmissions_Success() {
-        // Arrange: Mock the LambdaQueryChainWrapper for submission records
+        // Arrange: Mock the LambdaQueryChainWrapper for the DB-paginated query
         LambdaQueryChainWrapper<SubmissionRecords> queryMock = mock(LambdaQueryChainWrapper.class);
         when(submissionService.lambdaQuery()).thenReturn(queryMock);
 
-        // Mock chainable methods: eq(), orderByDesc(), and list()
-        when(queryMock.eq(any(), any())).thenReturn(queryMock); // Support multiple eq() calls
-        when(queryMock.orderByDesc(any(SFunction.class))).thenReturn(queryMock); // Support orderByDesc()
-        when(queryMock.list()).thenReturn(Collections.emptyList()); // Simulate no results
+        // Mock the chain used by the paginated query: eq() -> and() -> orderBy() -> page()
+        when(queryMock.eq(any(), any())).thenReturn(queryMock);
+        when(queryMock.and(org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(queryMock);
+        when(queryMock.orderBy(org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any(SFunction.class))).thenReturn(queryMock);
 
         // Act & Assert: Expect no exception thrown
         assertThatCode(() -> submissionService.listPublicApprovedSubmissions(

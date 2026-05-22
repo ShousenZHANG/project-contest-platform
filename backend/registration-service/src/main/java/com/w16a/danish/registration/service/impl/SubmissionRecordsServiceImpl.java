@@ -23,6 +23,7 @@ import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -253,92 +254,67 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can view all submissions");
         }
 
-        List<SubmissionRecords> allSubmissions = lambdaQuery()
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        var query = lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .list();
-
-        if (allSubmissions.isEmpty()) {
-            return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
+                .and(StrUtil.isNotBlank(keyword), w -> w
+                        .like(SubmissionRecords::getTitle, keyword)
+                        .or()
+                        .like(SubmissionRecords::getDescription, keyword));
+        switch (sortBy == null ? "" : sortBy) {
+            case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
+            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
-        List<SubmissionInfoVO> vos = allSubmissions.stream()
+        // DB-level pagination (PaginationInnerInterceptor) — avoids loading every
+        // submission into the JVM just to slice one page.
+        Page<SubmissionRecords> pageResult = new Page<>(page, size);
+        query.page(pageResult);
+
+        List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
                     return vo;
-                }).toList();
+                })
+                .toList();
 
-        if (StrUtil.isNotBlank(keyword)) {
-            vos = vos.stream()
-                    .filter(vo -> StrUtil.containsIgnoreCase(vo.getTitle(), keyword)
-                            || StrUtil.containsIgnoreCase(vo.getDescription(), keyword))
-                    .toList();
-        }
-
-        Comparator<SubmissionInfoVO> comparator = switch (sortBy) {
-            case "title" -> Comparator.comparing(SubmissionInfoVO::getTitle, String.CASE_INSENSITIVE_ORDER);
-            case "totalScore" -> Comparator.comparing(vo -> Optional.ofNullable(vo.getTotalScore()).orElse(BigDecimal.ZERO));
-            case "createdAt" -> Comparator.comparing(SubmissionInfoVO::getCreatedAt);
-            default -> Comparator.comparing(SubmissionInfoVO::getCreatedAt);
-        };
-        if ("desc".equalsIgnoreCase(order)) {
-            comparator = comparator.reversed();
-        }
-        vos = vos.stream().sorted(comparator).toList();
-
-        int total = vos.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
-        List<SubmissionInfoVO> paged = vos.subList(fromIndex, toIndex);
-
-        return new PageResponse<>(paged, total, page, size, (int) Math.ceil((double) total / size));
+        return new PageResponse<>(vos, (int) pageResult.getTotal(), page, size, (int) pageResult.getPages());
     }
 
     @Override
     public PageResponse<SubmissionInfoVO> listPublicApprovedSubmissions(
             String competitionId, int page, int size, String keyword, String sortBy, String order) {
 
-        List<SubmissionRecords> approved = lambdaQuery()
+        boolean asc = !"desc".equalsIgnoreCase(order);
+        var query = lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .eq(SubmissionRecords::getReviewStatus, "APPROVED")
-                .list();
-
-        if (approved.isEmpty()) {
-            return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
+                .and(StrUtil.isNotBlank(keyword), w -> w
+                        .like(SubmissionRecords::getTitle, keyword)
+                        .or()
+                        .like(SubmissionRecords::getDescription, keyword));
+        switch (sortBy == null ? "" : sortBy) {
+            case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
+            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
-        List<SubmissionInfoVO> vos = approved.stream()
+        // DB-level pagination (PaginationInnerInterceptor) — avoids loading every
+        // approved submission into the JVM just to slice one page.
+        Page<SubmissionRecords> pageResult = new Page<>(page, size);
+        query.page(pageResult);
+
+        List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
                     return vo;
-                }).toList();
+                })
+                .toList();
 
-        if (StrUtil.isNotBlank(keyword)) {
-            vos = vos.stream()
-                    .filter(vo -> StrUtil.containsIgnoreCase(vo.getTitle(), keyword)
-                            || StrUtil.containsIgnoreCase(vo.getDescription(), keyword))
-                    .toList();
-        }
-
-        Comparator<SubmissionInfoVO> comparator = switch (sortBy) {
-            case "title" -> Comparator.comparing(SubmissionInfoVO::getTitle, String.CASE_INSENSITIVE_ORDER);
-            case "totalScore" -> Comparator.comparing(vo -> Optional.ofNullable(vo.getTotalScore()).orElse(BigDecimal.ZERO));
-            case "createdAt" -> Comparator.comparing(SubmissionInfoVO::getCreatedAt);
-            default -> Comparator.comparing(SubmissionInfoVO::getCreatedAt);
-        };
-        if ("desc".equalsIgnoreCase(order)) {
-            comparator = comparator.reversed();
-        }
-
-        vos = vos.stream().sorted(comparator).toList();
-
-        int total = vos.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
-        List<SubmissionInfoVO> paged = vos.subList(fromIndex, toIndex);
-
-        return new PageResponse<>(paged, total, page, size, (int) Math.ceil((double) total / size));
+        return new PageResponse<>(vos, (int) pageResult.getTotal(), page, size, (int) pageResult.getPages());
     }
 
     @Override
