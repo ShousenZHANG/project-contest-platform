@@ -173,6 +173,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-root}
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - OAUTH_REDIRECT_BASE_URL=${OAUTH_REDIRECT_BASE_URL:-http://localhost:8080}
     mem_limit: 768m
     cpus: 1.0
     healthcheck:

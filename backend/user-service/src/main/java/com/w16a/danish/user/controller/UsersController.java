@@ -359,10 +359,11 @@ public class UsersController {
         String receivedState = stateParts[0];
         String role = stateParts.length > 1 ? stateParts[1] : "PARTICIPANT";
 
-        if (!Objects.equals(receivedState, savedState)) {
+        if (savedState == null || !Objects.equals(receivedState, savedState)) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid OAuth state");
             return;
         }
+        session.removeAttribute("oauth_state");
 
         OAuthLoginRequestDTO dto = new OAuthLoginRequestDTO();
         dto.setProvider("google");

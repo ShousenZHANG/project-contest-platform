@@ -79,12 +79,12 @@ github:
   client-id: ${GITHUB_CLIENT_ID}
   client-secret: ${GITHUB_CLIENT_SECRET}
   authorize-url: https://github.com/login/oauth/authorize
-  redirect-uri: http://localhost:8080/users/oauth/callback/github
+  redirect-uri: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8080}/users/oauth/callback/github
 
 google:
   client-id: ${GOOGLE_CLIENT_ID}
   client-secret: ${GOOGLE_CLIENT_SECRET}
-  redirect-uri: http://localhost:8080/users/oauth/callback/google
+  redirect-uri: ${OAUTH_REDIRECT_BASE_URL:http://localhost:8080}/users/oauth/callback/google
   authorize-url: https://accounts.google.com/o/oauth2/v2/auth
   token-url: https://oauth2.googleapis.com/token
   user-info-url: https://www.googleapis.com/oauth2/v2/userinfo

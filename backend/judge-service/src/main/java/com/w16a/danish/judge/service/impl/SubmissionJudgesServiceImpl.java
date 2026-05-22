@@ -25,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -421,8 +423,31 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(allScores.size()), 2, RoundingMode.HALF_UP);
 
-        submissionServiceClient.updateTotalScore(submissionId, averageScore);
-        log.info("[Judge] Updated total score for submission={} score={}", submissionId, averageScore);
+        // Defer the cross-service total-score write until the local judge-score
+        // transaction commits, so a rollback never pushes a score the DB did not keep.
+        final BigDecimal finalScore = averageScore;
+        runAfterCommit(() -> {
+            submissionServiceClient.updateTotalScore(submissionId, finalScore);
+            log.info("[Judge] Updated total score for submission={} score={}", submissionId, finalScore);
+        });
+    }
+
+    /**
+     * Run cross-service side effects after the surrounding transaction commits, so a
+     * rollback never propagates a score the local DB did not persist. Falls back to
+     * inline execution when no transaction is active (e.g. unit tests).
+     */
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
 }
