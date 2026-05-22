@@ -149,8 +149,12 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             if (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "The competition has already ended");
             }
+        } catch (BusinessException e) {
+            // Preserve domain status codes (404/400) instead of masking them as 503.
+            throw e;
         } catch (Exception e) {
-            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to verify competition: " + e.getMessage());
+            log.error("Failed to verify competition {}", competitionId, e);
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to verify competition");
         }
 
         String uploadedUrl = Optional.ofNullable(fileServiceClient.uploadSubmission(file).getBody())
