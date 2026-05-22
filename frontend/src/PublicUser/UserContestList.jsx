@@ -25,7 +25,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react";
-import defaultImage from "./1.jpg";
 import apiClient from "../api/apiClient";
 import { toast } from "sonner";
 import { extractErrorMessage } from '../services/serviceUtils';
@@ -243,7 +242,7 @@ function Contest() {
                       allowedSubmissionTypes: item.allowedSubmissionTypes,
                       scoringCriteria: item.scoringCriteria,
                       introVideoUrl: item.introVideoUrl,
-                      image: item.imageUrls?.[0] || defaultImage,
+                      image: item.imageUrls?.[0],
                       createdAt: item.createdAt,
                       participationType: item.participationType || "INDIVIDUAL",
                     }}

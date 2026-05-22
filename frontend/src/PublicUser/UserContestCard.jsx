@@ -1,7 +1,9 @@
 /**
  * UserContestCard.jsx
  *
- * Vibrant contest card for public browse view. Migrated from MUI to shadcn/ui.
+ * Contest card for the public browse view. shadcn/ui Card + Tailwind. When a
+ * contest has no uploaded image, a deterministic brand-family gradient cover is
+ * rendered instead of a repeated stock placeholder.
  *
  * Role: Public User
  * Developer: Beiqi Dai
@@ -13,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Flag, Tag } from "lucide-react";
 import { toast } from "sonner";
+import { coverGradient, initials } from "../lib/coverGradient";
 
 function ContestCard({ contest, onCardClick }) {
   const handleCardClick = () => {
@@ -29,12 +32,28 @@ function ContestCard({ contest, onCardClick }) {
       onClick={handleCardClick}
       className="group max-w-sm overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-xl border-border/60"
     >
-      <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent">
-        <img
-          src={contest.image}
-          alt={contest.title}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      <div className="relative h-48 w-full overflow-hidden bg-muted">
+        {contest.image ? (
+          <img
+            src={contest.image}
+            alt={contest.title}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="relative h-full w-full transition-transform duration-500 group-hover:scale-105"
+            style={{ background: coverGradient(contest.title) }}
+          >
+            <div className="absolute inset-0 bg-grid opacity-20 mix-blend-overlay" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-5xl font-bold tracking-tight text-white/90 drop-shadow-sm">
+                {initials(contest.title)}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
         {contest.category && (
           <Badge
