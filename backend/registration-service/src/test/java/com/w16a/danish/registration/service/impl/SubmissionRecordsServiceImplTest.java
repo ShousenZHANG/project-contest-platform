@@ -421,11 +421,13 @@ class SubmissionRecordsServiceImplTest {
         // Arrange: Mock a LambdaQueryChainWrapper for submission query
         LambdaQueryChainWrapper<SubmissionRecords> queryMock = mock(LambdaQueryChainWrapper.class);
 
-        // Mock the chain calls properly: eq -> eq -> eq -> isNotNull -> list
+        // Mock the DB-paginated chain: eq() -> isNotNull() -> and() -> orderBy() -> page()
         when(submissionService.lambdaQuery()).thenReturn(queryMock);
-        when(queryMock.eq(any(), any())).thenReturn(queryMock);           // allow chaining eq()
-        when(queryMock.isNotNull(any())).thenReturn(queryMock);           // allow chaining isNotNull()
-        when(queryMock.list()).thenReturn(Collections.emptyList());       // simulate empty list returned
+        when(queryMock.eq(any(), any())).thenReturn(queryMock);
+        when(queryMock.isNotNull(any())).thenReturn(queryMock);
+        when(queryMock.and(org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(queryMock);
+        when(queryMock.orderBy(org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any(SFunction.class))).thenReturn(queryMock);
 
         // Act & Assert: Expect no exception thrown
         assertThatCode(() -> submissionService.listPublicApprovedTeamSubmissions(
