@@ -51,9 +51,20 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         String path = request.getURI().getPath();
 
+        // Defense-in-depth: a client must never be able to forge identity. Strip any
+        // inbound User-ID/User-Role on EVERY request (including public paths) so only
+        // this filter can set them, and only after the JWT is verified below.
+        ServerHttpRequest sanitizedRequest = request.mutate()
+                .headers(headers -> {
+                    headers.remove("User-ID");
+                    headers.remove("User-Role");
+                })
+                .build();
+        ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
+
         // whitelist public URLs (supports METHOD:path and plain path patterns)
         if (isPublicPath(request)) {
-            return chain.filter(exchange);
+            return chain.filter(sanitizedExchange);
         }
 
         // get JWT token from Authorization header
@@ -82,13 +93,13 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return unauthorizedResponse(response, "Invalid user information in JWT");
         }
 
-        // add user information to request headers
-        ServerHttpRequest modifiedRequest = request.mutate()
+        // inject the verified identity onto the sanitized request
+        ServerHttpRequest modifiedRequest = sanitizedRequest.mutate()
                 .header("User-ID", userId)
                 .header("User-Role", userRole)
                 .build();
 
-        return chain.filter(exchange.mutate().request(modifiedRequest).build());
+        return chain.filter(sanitizedExchange.mutate().request(modifiedRequest).build());
     }
 
     @Override

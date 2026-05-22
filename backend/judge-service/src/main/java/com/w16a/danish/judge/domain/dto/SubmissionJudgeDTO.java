@@ -1,6 +1,10 @@
 package com.w16a.danish.judge.domain.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
@@ -16,15 +20,20 @@ import java.util.List;
 @Schema(description = "Data transfer object for a judge to submit their evaluation on a submission.")
 public class SubmissionJudgeDTO {
 
+    @NotBlank(message = "competitionId is required")
     @Schema(description = "Competition ID", example = "comp-123e4567-e89b-12d3-a456-426614174000", required = true)
     private String competitionId;
 
+    @NotBlank(message = "submissionId is required")
     @Schema(description = "Submission ID being judged", example = "sub-123e4567-e89b-12d3-a456-426614174000", required = true)
     private String submissionId;
 
+    @Size(max = 2000, message = "judgeComments must be at most 2000 characters")
     @Schema(description = "General comments provided by the judge", example = "Excellent innovation, but documentation could be improved.", required = false)
     private String judgeComments;
 
+    @NotEmpty(message = "At least one criterion score is required")
+    @Valid
     @Schema(description = "List of scores for each evaluation criterion", required = true)
     private List<CriterionScoreDTO> scores;
 }

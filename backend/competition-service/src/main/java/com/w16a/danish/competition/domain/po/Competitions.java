@@ -9,8 +9,8 @@ import java.util.List;
 
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.w16a.danish.competition.domain.enums.CompetitionStatus;
-import com.w16a.danish.competition.domain.enums.ParticipationType;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.ParticipationType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

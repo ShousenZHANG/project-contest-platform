@@ -1,9 +1,11 @@
 package com.w16a.danish.judge.feign.fallback;
 
 import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
@@ -72,8 +74,11 @@ public class SubmissionServiceClientFallback implements SubmissionServiceClient 
 
     @Override
     public ResponseEntity<Void> updateTotalScore(String submissionId, java.math.BigDecimal totalScore) {
+        // This is a WRITE. Returning ok() here would make the caller believe the score
+        // was persisted while it was silently dropped. Fail loud so the score can be retried.
         log.error("[Fallback] registration-service unavailable — updateTotalScore submissionId={}", submissionId);
-        return ResponseEntity.ok().build();
+        throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE,
+                "Submission service unavailable, total score was not persisted");
     }
 
     @Override

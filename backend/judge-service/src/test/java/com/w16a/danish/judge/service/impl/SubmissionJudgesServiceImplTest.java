@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWra
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
-import com.w16a.danish.judge.domain.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;

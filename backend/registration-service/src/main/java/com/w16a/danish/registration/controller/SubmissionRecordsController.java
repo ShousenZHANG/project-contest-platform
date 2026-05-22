@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import org.springframework.web.multipart.MultipartFile;
@@ -203,7 +204,7 @@ public class SubmissionRecordsController {
     @PostMapping("/review")
     public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> reviewSubmission(
             @CurrentUser RequestContext ctx,
-            @RequestBody SubmissionReviewDTO dto) {
+            @Valid @RequestBody SubmissionReviewDTO dto) {
 
         submissionService.reviewSubmission(dto, ctx);
         return ApiResponses.message("Submission reviewed successfully");

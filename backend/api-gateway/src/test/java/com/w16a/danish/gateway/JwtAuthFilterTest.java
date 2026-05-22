@@ -121,4 +121,24 @@ class JwtAuthFilterTest {
                 .expectStatus().isUnauthorized(); // Expect HTTP 401 Unauthorized
     }
 
+    /**
+     * 🛡️ Defense-in-depth: a client must NOT be able to forge identity headers.
+     * Even on a public path, any inbound User-ID/User-Role must be stripped by the
+     * filter so a downstream service can never receive an attacker-supplied identity.
+     */
+    @Test
+    @DisplayName("🛡️ Forged User-ID/User-Role headers are stripped before reaching downstream")
+    void testForgedIdentityHeadersAreStripped() {
+        webTestClient.get()
+                .uri("/users/login")
+                .header("User-ID", "attacker-forged-id")
+                .header("User-Role", "ADMIN")
+                .exchange()
+                .expectStatus().isOk();
+
+        wireMockServer.verify(getRequestedFor(urlEqualTo("/users/login"))
+                .withoutHeader("User-ID")
+                .withoutHeader("User-Role"));
+    }
+
 }

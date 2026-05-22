@@ -16,8 +16,8 @@ spring:
 minio:
   internal-endpoint: http://minio:9000
   public-endpoint: http://localhost:9000
-  access-key: minio
-  secret-key: minio123
+  access-key: ${MINIO_ROOT_USER:minio}
+  secret-key: ${MINIO_ROOT_PASSWORD:minio123}
 
 management:
   endpoints:
@@ -26,7 +26,7 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
       probes:
         enabled: true
   tracing:

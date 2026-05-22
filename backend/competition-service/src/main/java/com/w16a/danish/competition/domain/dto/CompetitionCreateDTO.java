@@ -1,7 +1,7 @@
 package com.w16a.danish.competition.domain.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.w16a.danish.competition.domain.enums.ParticipationType;
+import com.w16a.danish.common.domain.enums.ParticipationType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

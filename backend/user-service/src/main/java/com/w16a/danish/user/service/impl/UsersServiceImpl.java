@@ -361,7 +361,10 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         // find user by email
         Users user = this.lambdaQuery().eq(Users::getEmail, email).one();
         if (user == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "User not found");
+            // Do not reveal whether an account exists for this email (anti-enumeration).
+            // Respond identically to the success path; simply skip sending the reset email.
+            log.info("Password reset requested for a non-existent email; ignoring silently");
+            return;
         }
 
         // create reset token and save to Redis

@@ -50,5 +50,18 @@
         </dependency>
     </dependencies>
 
-    <!-- No spring-boot-maven-plugin repackage — this is a library jar, not a runnable app -->
+    <!-- This is a library jar, not a runnable app. The spring-boot-maven-plugin is
+         inherited from the parent POM; without skipping it, `mvn install`/`verify`
+         fails here with "Unable to find main class". Skip the repackage goal. -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

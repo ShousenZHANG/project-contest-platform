@@ -14,7 +14,7 @@ import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;
-import com.w16a.danish.registration.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import com.w16a.danish.registration.feign.FileServiceClient;

@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
-import com.w16a.danish.judge.domain.enums.ParticipationType;
+import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
 import com.w16a.danish.common.exception.BusinessException;

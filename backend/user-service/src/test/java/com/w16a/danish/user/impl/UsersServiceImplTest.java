@@ -37,6 +37,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
@@ -565,6 +566,29 @@ class UsersServiceImplTest {
         assertThatThrownBy(() -> usersService.deleteUserById("uid", ctx("adminUid", "ADMIN")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Failed to delete user");
+    }
+
+    // === Security: Anti-Enumeration ===
+
+    @Test
+    @DisplayName("Security: sendResetLink must NOT throw and must NOT send email when email is unknown")
+    void testSendResetLink_AntiEnumeration_UnknownEmail() {
+        // Arrange: lambdaQuery returns null — email not registered
+        LambdaQueryChainWrapper<Users> query = mock(LambdaQueryChainWrapper.class);
+        doReturn(query).when(usersService).lambdaQuery();
+        when(query.eq(any(), any())).thenReturn(query);
+        when(query.one()).thenReturn(null);  // no user found
+
+        // Act + Assert: must complete silently, no exception
+        assertThatCode(() -> usersService.sendResetLink("ghost@example.com"))
+                .doesNotThrowAnyException();
+
+        // Verify: mail sender is never invoked
+        verify(mailSender, never()).createMimeMessage();
+        verify(mailSender, never()).send(any(MimeMessage.class));
+
+        // Verify: no token stored in Redis
+        verify(valueOperations, never()).set(anyString(), anyString(), anyLong(), any());
     }
 
     // === Additional Coverage ===

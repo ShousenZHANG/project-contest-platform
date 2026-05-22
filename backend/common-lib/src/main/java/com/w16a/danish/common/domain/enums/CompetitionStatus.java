@@ -1,4 +1,4 @@
-package com.w16a.danish.judge.domain.enums;
+package com.w16a.danish.common.domain.enums;
 
 import com.w16a.danish.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -43,5 +43,16 @@ public enum CompetitionStatus {
         }
         throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid competition status: " + statusString);
     }
-}
 
+    public static boolean isRegistrable(CompetitionStatus status) {
+        return status == UPCOMING || status == ONGOING;
+    }
+
+    /**
+     * Check if a competition is open for submission.
+     * Only ONGOING competitions allow submission of work.
+     */
+    public static boolean isSubmittable(CompetitionStatus status) {
+        return status == ONGOING;
+    }
+}

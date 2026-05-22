@@ -13,7 +13,7 @@ import com.w16a.danish.competition.config.CompetitionNotifier;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
-import com.w16a.danish.competition.domain.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.competition.domain.mq.JudgeAssignedMessage;
 import com.w16a.danish.competition.domain.mq.JudgeRemovedMessage;
 import com.w16a.danish.competition.domain.po.CompetitionJudges;

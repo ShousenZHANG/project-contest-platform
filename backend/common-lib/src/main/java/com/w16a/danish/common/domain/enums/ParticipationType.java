@@ -1,4 +1,4 @@
-package com.w16a.danish.judge.domain.enums;
+package com.w16a.danish.common.domain.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
 import io.swagger.v3.oas.annotations.media.Schema;

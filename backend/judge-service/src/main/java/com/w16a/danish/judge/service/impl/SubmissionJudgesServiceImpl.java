@@ -5,7 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
-import com.w16a.danish.judge.domain.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;

@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.domain.vo;
 
-import com.w16a.danish.judge.domain.enums.CompetitionStatus;
-import com.w16a.danish.judge.domain.enums.ParticipationType;
+import com.w16a.danish.common.domain.enums.CompetitionStatus;
+import com.w16a.danish.common.domain.enums.ParticipationType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -65,7 +65,7 @@ public class FileStorageServiceImpl implements FileStorageService {
     private String upload(BucketType bucketType, MultipartFile file) {
         try {
             ensureBucketExists(bucketType);
-            String objectName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+            String objectName = UUID.randomUUID() + safeExtension(file.getOriginalFilename());
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketType.getBucketName())
@@ -82,8 +82,26 @@ public class FileStorageServiceImpl implements FileStorageService {
 
             return publicEndpoint + "/" + bucketType.getBucketName() + "/" + objectName;
         } catch (Exception e) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed: " + e.getMessage());
+            log.error("File upload failed for bucket={}", bucketType, e);
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed");
         }
+    }
+
+    /**
+     * Derives a safe object-name suffix from the client-supplied filename. Only a short
+     * alphanumeric extension is preserved, so path separators or traversal sequences
+     * ("../") in the original name can never reach the object store key.
+     */
+    private String safeExtension(String originalFilename) {
+        if (originalFilename == null) {
+            return "";
+        }
+        int dot = originalFilename.lastIndexOf('.');
+        if (dot < 0 || dot == originalFilename.length() - 1) {
+            return "";
+        }
+        String ext = originalFilename.substring(dot + 1);
+        return ext.matches("[A-Za-z0-9]{1,10}") ? "." + ext.toLowerCase() : "";
     }
 
     /**
@@ -141,7 +159,8 @@ public class FileStorageServiceImpl implements FileStorageService {
                     .build());
 
         } catch (Exception e) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File deletion failed: " + e.getMessage());
+            log.error("File deletion failed for bucket={} object={}", bucketName, objectName, e);
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File deletion failed");
         }
     }
 

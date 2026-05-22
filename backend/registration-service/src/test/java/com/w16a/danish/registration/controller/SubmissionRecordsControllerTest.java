@@ -122,6 +122,8 @@ class SubmissionRecordsControllerTest {
     @DisplayName("✅ Review a submission successfully")
     void testReviewSubmission() throws Exception {
         SubmissionReviewDTO dto = new SubmissionReviewDTO();
+        dto.setSubmissionId("sub-1");
+        dto.setReviewStatus("APPROVED");
 
         doNothing().when(submissionService).reviewSubmission(any(), any(RequestContext.class));
 

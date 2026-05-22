@@ -154,7 +154,7 @@ public class SubmissionJudgesController {
     public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> updateJudgement(
             @CurrentUser RequestContext ctx,
             @PathVariable("submissionId") String submissionId,
-            @RequestBody SubmissionJudgeDTO judgeDTO) {
+            @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
         submissionJudgesService.updateJudgement(ctx, submissionId, judgeDTO);
         return ApiResponses.message("Judging updated successfully.");

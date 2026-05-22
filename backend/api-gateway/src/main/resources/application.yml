@@ -95,6 +95,9 @@ jwt:
     - /winners/public-list
     - /dashboard/public/**
 
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
 knife4j:
   gateway:
     enabled: true
@@ -127,7 +130,7 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
       probes:
         enabled: true
   tracing:
