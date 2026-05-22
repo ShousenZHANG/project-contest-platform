@@ -25,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -256,15 +258,37 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
                 .remove();
         this.saveBatch(winners);
 
-        competitionServiceClient.updateCompetitionStatus(competitionId, CompetitionStatus.AWARDED.name());
-
-        submissions.forEach(submission -> {
-            boolean hasAnyAward = winners.stream()
-                    .anyMatch(w -> w.getSubmissionId().equals(submission.getId()));
-            if (hasAnyAward) {
-                sendAwardNotification(submission, competitionId, winners);
-            }
+        // Cross-service write (status) + notifications must only run once the local
+        // winner records are committed — otherwise a rollback would leave the competition
+        // marked AWARDED and emails sent for winners that were never persisted.
+        runAfterCommit(() -> {
+            competitionServiceClient.updateCompetitionStatus(competitionId, CompetitionStatus.AWARDED.name());
+            submissions.forEach(submission -> {
+                boolean hasAnyAward = winners.stream()
+                        .anyMatch(w -> w.getSubmissionId().equals(submission.getId()));
+                if (hasAnyAward) {
+                    sendAwardNotification(submission, competitionId, winners);
+                }
+            });
         });
+    }
+
+    /**
+     * Run cross-service side effects after the surrounding transaction commits, so a
+     * rollback never publishes notifications for winners that were not persisted. Falls
+     * back to inline execution when no transaction is active (e.g. unit tests).
+     */
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     @Override
