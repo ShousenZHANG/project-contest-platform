@@ -9,12 +9,14 @@
  */
 
 import React from 'react';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import Navbar from './Navbar';
 import Hero from './Hero';
 import TopValues from './TopValues';
 import Footer from './Footer';
 
 function HomePage() {
+  useDocumentTitle(null);
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />

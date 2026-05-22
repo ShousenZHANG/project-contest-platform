@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { extractErrorMessage } from '../services/serviceUtils';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -70,8 +71,8 @@ function OrganizerSubmissions() {
       setSubmissions(data.data || []);
       setTotalPages(data.pages || 1);
       setTotalCount(data.total || 0);
-    } catch {
-      // fetch error handled silently
+    } catch (err) {
+      toast.error(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -82,8 +83,8 @@ function OrganizerSubmissions() {
       try {
         const res = await apiClient.get(`/competitions/${competitionId}`);
         setCompetitionName(res.data.name || 'Unnamed Competition');
-      } catch {
-        // fetch error handled silently
+      } catch (err) {
+        toast.error(extractErrorMessage(err));
       }
     };
     fetchCompetitionName();

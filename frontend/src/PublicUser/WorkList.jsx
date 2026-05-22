@@ -20,6 +20,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractErrorMessage } from '../services/serviceUtils';
 import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
@@ -78,7 +79,7 @@ function WorkList() {
         setWorks(mappedWorks);
         setFilteredWorks(mappedWorks);
       } catch (err) {
-        // fetch failed — works remain empty
+        toast.error(extractErrorMessage(err));
       } finally {
         setLoading(false);
       }

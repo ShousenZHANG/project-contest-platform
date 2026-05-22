@@ -13,6 +13,23 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
+import { z } from 'zod';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+
+const contestSchema = z
+  .object({
+    contestName: z.string().trim().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
+    contestDescription: z.string().trim().min(10, 'Description must be at least 10 characters'),
+    category: z.string().min(1, 'Please select a category'),
+    startDate: z.string().min(1, 'Start date is required'),
+    endDate: z.string().min(1, 'End date is required'),
+    submissionFormats: z.array(z.string()).min(1, 'Select at least one submission format'),
+    scoringCriteria: z.array(z.string()).min(1, 'Add at least one scoring criterion'),
+  })
+  .refine((d) => !d.startDate || !d.endDate || new Date(d.endDate) >= new Date(d.startDate), {
+    message: 'End date must be on or after the start date',
+    path: ['endDate'],
+  });
 
 const CATEGORIES = [
   'Design & Creativity',
@@ -45,7 +62,9 @@ function OrganizerContest() {
     participationType: 'INDIVIDUAL',
   });
 
+  useDocumentTitle('Create Contest');
   const [newCriteria, setNewCriteria] = useState('');
+  const [errors, setErrors] = useState({});
   const navigate = useNavigate();
   const { email } = useParams();
 
@@ -90,6 +109,15 @@ function OrganizerContest() {
   };
 
   const handleSave = async () => {
+    const result = contestSchema.safeParse(contestData);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      setErrors(fieldErrors);
+      const first = Object.values(fieldErrors).flat()[0];
+      toast.error(first || 'Please fix the highlighted fields');
+      return;
+    }
+    setErrors({});
     try {
       const payload = {
         name: contestData.contestName,
@@ -140,7 +168,11 @@ function OrganizerContest() {
                 value={contestData.contestName}
                 onChange={handleChange}
                 placeholder="Enter contest name"
+                aria-invalid={Boolean(errors.contestName)}
               />
+              {errors.contestName && (
+                <p className="text-xs text-destructive">{errors.contestName[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2 md:col-span-2">
@@ -153,7 +185,11 @@ function OrganizerContest() {
                 rows={3}
                 placeholder="Describe your contest..."
                 className={TEXTAREA_CLASS}
+                aria-invalid={Boolean(errors.contestDescription)}
               />
+              {errors.contestDescription && (
+                <p className="text-xs text-destructive">{errors.contestDescription[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -174,6 +210,9 @@ function OrganizerContest() {
                   </option>
                 ))}
               </select>
+              {errors.category && (
+                <p className="text-xs text-destructive">{errors.category[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -200,6 +239,9 @@ function OrganizerContest() {
                 onChange={handleChange}
                 data-testid="start-date"
               />
+              {errors.startDate && (
+                <p className="text-xs text-destructive">{errors.startDate[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -212,6 +254,9 @@ function OrganizerContest() {
                 onChange={handleChange}
                 data-testid="end-date"
               />
+              {errors.endDate && (
+                <p className="text-xs text-destructive">{errors.endDate[0]}</p>
+              )}
             </div>
           </div>
 

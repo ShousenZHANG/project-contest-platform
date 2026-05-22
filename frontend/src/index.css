@@ -49,6 +49,8 @@
     --chart-4: 38 92% 50%;
     --chart-5: 199 89% 48%;
     --chart-6: 0 84% 60%;
+    --chart-7: 316 73% 58%;
+    --chart-8: 142 71% 45%;
 
     /* Geometry */
     --radius: 0.5rem;
@@ -85,6 +87,8 @@
     --chart-4: 38 92% 60%;
     --chart-5: 199 89% 58%;
     --chart-6: 0 84% 70%;
+    --chart-7: 316 73% 68%;
+    --chart-8: 142 71% 55%;
   }
 
   * {
@@ -183,6 +187,8 @@
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
   --color-chart-6: hsl(var(--chart-6));
+  --color-chart-7: hsl(var(--chart-7));
+  --color-chart-8: hsl(var(--chart-8));
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

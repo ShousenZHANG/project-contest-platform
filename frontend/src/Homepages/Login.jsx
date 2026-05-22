@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../api/apiClient';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useAuth } from '../context/AuthContext';
 import { loginSchema } from '../shared/schemas/userSchema';
 import { Button } from '../components/ui/button';
@@ -55,6 +56,7 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
 
   const isModal = typeof onClose === 'function';
   const role = (roleProp || DEFAULT_ROLE).toString();
+  useDocumentTitle(isModal ? null : 'Sign In');
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

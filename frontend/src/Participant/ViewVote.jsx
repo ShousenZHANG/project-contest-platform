@@ -29,14 +29,18 @@ function ViewVote({ submissionId }) {
       .then((res) => {
         setVotes(res.data || 0);
       })
-      .catch(() => {});
+      .catch((err) => {
+        toast.error('Failed to load vote count: ' + (err.response?.data?.message || 'Unknown error'));
+      });
 
     apiClient
       .get('/interactions/votes/status', { params: { submissionId } })
       .then((res) => {
         setHasVoted(res.data === true);
       })
-      .catch(() => {});
+      .catch((err) => {
+        toast.error('Failed to load vote status: ' + (err.response?.data?.message || 'Unknown error'));
+      });
   }, [submissionId]);
 
   const handleVote = () => {

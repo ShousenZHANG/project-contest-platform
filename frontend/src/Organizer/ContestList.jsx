@@ -12,6 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { Filter, X, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { extractErrorMessage } from '../services/serviceUtils';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -44,8 +46,10 @@ function statusVariant(status) {
 }
 
 function OrganizerContestList() {
+  useDocumentTitle('My Contests');
   const [competitions, setCompetitions] = useState([]);
   const [filteredCompetitions, setFilteredCompetitions] = useState([]);
+  const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -65,8 +69,10 @@ function OrganizerContestList() {
           setCompetitions(data.data);
           setFilteredCompetitions(data.data);
         }
-      } catch {
-        // fetch error handled silently
+      } catch (err) {
+        const msg = extractErrorMessage(err);
+        setError(msg);
+        toast.error(msg);
       }
     };
     fetchCompetitions();
@@ -211,7 +217,14 @@ function OrganizerContestList() {
         </SheetContent>
       </Sheet>
 
-      {filteredCompetitions.length === 0 ? (
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      ) : filteredCompetitions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No competitions found.</p>
       ) : (
         <Card className="overflow-x-auto">

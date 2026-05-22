@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -68,6 +69,7 @@ function statusBadgeVariant(status) {
 }
 
 function AdminCompetitionsManage() {
+  useDocumentTitle('Manage Competitions');
   const [competitions, setCompetitions] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);

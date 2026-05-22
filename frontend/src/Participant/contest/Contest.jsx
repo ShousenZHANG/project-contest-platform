@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../api/apiClient';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import ContestCard from './ContestCard';
@@ -18,6 +19,7 @@ import ChangeContestTable from './ChangeContestTable';
 import defaultImage from './1.jpg';
 
 function Contest() {
+  useDocumentTitle('Browse Contests');
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('');

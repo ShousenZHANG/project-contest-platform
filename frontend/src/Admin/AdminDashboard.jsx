@@ -11,6 +11,8 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { getChartColors } from '../lib/chartColors';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import {
   Trophy,
   Users,
@@ -42,7 +44,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 
-const COLORS = ['#6366f1', '#f97316', '#10b981', '#a855f7'];
 
 const KPI_STYLES = {
   competitions: {
@@ -147,6 +148,8 @@ function MetricCard({ id, title, value, tooltip = [] }) {
 }
 
 function AdminDashboard() {
+  useDocumentTitle('Platform Dashboard');
+  const colors = useMemo(() => getChartColors(), []);
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -328,10 +331,10 @@ function AdminDashboard() {
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <ReTooltip content={<ChartTooltip />} />
-                <Bar dataKey="Ind Participants" stackId="a" fill={COLORS[0]} />
-                <Bar dataKey="Team Participants" stackId="a" fill={COLORS[1]} />
-                <Bar dataKey="Ind Submissions" stackId="b" fill={COLORS[2]} />
-                <Bar dataKey="Team Submissions" stackId="b" fill={COLORS[3]} />
+                <Bar dataKey="Ind Participants" stackId="a" fill={colors[0]} />
+                <Bar dataKey="Team Participants" stackId="a" fill={colors[1]} />
+                <Bar dataKey="Ind Submissions" stackId="b" fill={colors[2]} />
+                <Bar dataKey="Team Submissions" stackId="b" fill={colors[3]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -371,7 +374,7 @@ function AdminDashboard() {
                     <Line
                       type="monotone"
                       dataKey="value"
-                      stroke={COLORS[0]}
+                      stroke={colors[0]}
                       strokeWidth={2}
                       dot={{ r: 2 }}
                       name="Submissions"
@@ -403,7 +406,7 @@ function AdminDashboard() {
                       <Line
                         type="monotone"
                         dataKey="individual"
-                        stroke={COLORS[0]}
+                        stroke={colors[0]}
                         strokeWidth={2}
                         dot={{ r: 2 }}
                         name="Individual"
@@ -411,7 +414,7 @@ function AdminDashboard() {
                       <Line
                         type="monotone"
                         dataKey="team"
-                        stroke={COLORS[1]}
+                        stroke={colors[1]}
                         strokeWidth={2}
                         dot={{ r: 2 }}
                         name="Team"

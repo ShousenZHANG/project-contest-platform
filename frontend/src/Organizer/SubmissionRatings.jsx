@@ -12,6 +12,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { extractErrorMessage } from '../services/serviceUtils';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
@@ -41,8 +42,8 @@ function SubmissionRatings() {
       if (Array.isArray(data.data)) {
         setSubmissions(data.data);
       }
-    } catch {
-      // fetch error handled silently
+    } catch (err) {
+      toast.error(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }

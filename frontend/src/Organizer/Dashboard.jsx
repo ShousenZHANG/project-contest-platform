@@ -8,6 +8,8 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { getChartColors } from '../lib/chartColors';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Loader2 } from 'lucide-react';
 import {
   PieChart,
@@ -22,7 +24,9 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { extractErrorMessage } from '../services/serviceUtils';
 import { Card, CardContent } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import {
@@ -32,16 +36,6 @@ import {
   TooltipTrigger,
 } from '../components/ui/tooltip';
 
-const COLORS = [
-  '#0088FE',
-  '#00C49F',
-  '#FFBB28',
-  '#FF8042',
-  '#8884d8',
-  '#82ca9d',
-  '#a4de6c',
-  '#d0ed57',
-];
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
@@ -80,8 +74,11 @@ function MetricCard({ label, value, unit = '', tooltipRows = [] }) {
 }
 
 function OrganizerDashboard() {
+  useDocumentTitle('Competition Dashboard');
+  const colors = useMemo(() => getChartColors(), []);
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedComp, setSelectedComp] = useState('');
 
   useEffect(() => {
@@ -124,8 +121,10 @@ function OrganizerDashboard() {
         );
 
         setStats(list);
-      } catch {
-        // fetch error handled silently
+      } catch (e) {
+        const msg = extractErrorMessage(e);
+        setError(msg);
+        toast.error(msg);
       } finally {
         setLoading(false);
       }
@@ -180,9 +179,9 @@ function OrganizerDashboard() {
     return Object.entries(count).map(([name, value], i) => ({
       name,
       value,
-      fill: COLORS[i % COLORS.length],
+      fill: colors[i % colors.length],
     }));
-  }, [stats]);
+  }, [stats, colors]);
 
   const hasTrendData = useMemo(
     () => stats.some((s) => Object.keys(s.trend || {}).length > 0),
@@ -212,6 +211,13 @@ function OrganizerDashboard() {
           aria-busy="true"
         >
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+        </div>
+      ) : error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {error}
         </div>
       ) : stats.length === 0 ? (
         <p className="text-sm text-muted-foreground">(No competitions yet)</p>
@@ -295,7 +301,7 @@ function OrganizerDashboard() {
                         <Line
                           type="monotone"
                           dataKey="count"
-                          stroke="#8884d8"
+                          stroke={colors[0]}
                           dot={{ r: 2 }}
                         />
                       </LineChart>

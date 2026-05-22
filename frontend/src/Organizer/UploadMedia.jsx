@@ -35,8 +35,8 @@ function UploadMedia() {
         video: data.introVideoUrl || null,
         images: data.imageUrls || [],
       });
-    } catch {
-      // fetch error handled silently
+    } catch (err) {
+      toast.error('Failed to load media: ' + (err.response?.data?.message || 'Unknown error'));
     }
   }, [id]);
 

@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
@@ -26,8 +27,11 @@ import {
 import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react";
 import defaultImage from "./1.jpg";
 import apiClient from "../api/apiClient";
+import { toast } from "sonner";
+import { extractErrorMessage } from '../services/serviceUtils';
 
 function Contest() {
+  useDocumentTitle('Contests');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedParticipationType, setSelectedParticipationType] = useState("");
@@ -55,8 +59,8 @@ function Contest() {
 
         const response = await apiClient.get(`/competitions/list`, { params });
         setContests(response.data.data || []);
-      } catch (error) {
-        // fetch failed silently
+      } catch (err) {
+        toast.error(extractErrorMessage(err));
       }
     };
 

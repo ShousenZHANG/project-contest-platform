@@ -76,6 +76,19 @@ describe("OrganizerContest", () => {
       target: { value: "2025-05-10" },
     });
 
+    // Satisfy the zod validation now enforced on the create form: a category,
+    // at least one scoring criterion, and at least one submission format.
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: "Programming & Technology" },
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Enter scoring criteria"), {
+      target: { value: "Innovation" },
+    });
+    fireEvent.click(screen.getByText("Add"));
+
+    fireEvent.click(screen.getByLabelText("PDF"));
+
     fireEvent.click(screen.getByRole("button", { name: "Create Contest" }));
 
     await waitFor(() => {

@@ -3,9 +3,6 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import UploadMedia from "../../Organizer/UploadMedia";
 
-jest.mock("../../Organizer/TopBar", () => () => <div>TopBar</div>);
-jest.mock("../../Organizer/Sidebar", () => () => <div>Sidebar</div>);
-
 beforeAll(() => {
   global.fetch = jest.fn((url, options) => {
     if (options?.method === "GET" && url.includes("/competitions/") && url.includes("/media")) {

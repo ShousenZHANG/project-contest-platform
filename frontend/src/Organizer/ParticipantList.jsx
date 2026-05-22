@@ -12,6 +12,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Trash2, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { extractErrorMessage } from '../services/serviceUtils';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -68,8 +69,8 @@ function ParticipantList() {
       setParticipationType(
         (prev) => prev || data.selectedParticipationType || 'INDIVIDUAL'
       );
-    } catch {
-      // fetch error handled silently
+    } catch (err) {
+      toast.error(extractErrorMessage(err));
     }
   }, [competitionId]);
 
@@ -84,8 +85,8 @@ function ParticipantList() {
         setParticipants(data.data || []);
         setTotalPages(data.pages || 1);
         setTotalCount(data.total || 0);
-      } catch {
-        // fetch error handled silently
+      } catch (err) {
+        toast.error(extractErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -104,8 +105,8 @@ function ParticipantList() {
         setTeams(data.data || []);
         setTotalPages(data.pages || 1);
         setTotalCount(data.total || 0);
-      } catch {
-        // fetch error handled silently
+      } catch (err) {
+        toast.error(extractErrorMessage(err));
       } finally {
         setLoading(false);
       }

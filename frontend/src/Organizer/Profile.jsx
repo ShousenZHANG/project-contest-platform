@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -27,9 +28,24 @@ import {
 } from '../components/ui/dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 import AuthTokenManager from '@/auth/authTokenManager';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+
+const profileSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(50, 'Name is too long'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z
+    .string()
+    .refine(
+      (v) => v === '' || (v.length >= 8 && /[A-Z]/.test(v)),
+      'Password must be at least 8 characters with one uppercase letter'
+    ),
+  description: z.string().max(500, 'Description is too long'),
+});
 
 
 function OrganizerProfile() {
+  useDocumentTitle('My Profile');
+  const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -59,8 +75,8 @@ function OrganizerProfile() {
           });
           setAvatarUrl(data.avatarUrl);
         }
-      } catch {
-        // Failed to fetch user data
+      } catch (err) {
+        toast.error('Failed to load profile: ' + (err.response?.data?.message || 'Unknown error'));
       }
     };
 
@@ -74,15 +90,15 @@ function OrganizerProfile() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password) {
-      const passwordRegex = /^(?=.*[A-Z]).{8,}$/;
-      if (!passwordRegex.test(formData.password)) {
-        toast.error(
-          'Password must be at least 8 characters and contain at least one uppercase letter.'
-        );
-        return;
-      }
+    const result = profileSchema.safeParse(formData);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      setErrors(fieldErrors);
+      const first = Object.values(fieldErrors).flat()[0];
+      toast.error(first || 'Please fix the highlighted fields');
+      return;
     }
+    setErrors({});
 
     try {
       const { role, ...profileData } = formData;
@@ -192,7 +208,11 @@ function OrganizerProfile() {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Enter your name"
+                  aria-invalid={Boolean(errors.name)}
                 />
+                {errors.name && (
+                  <p className="text-xs text-destructive">{errors.name[0]}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -204,7 +224,11 @@ function OrganizerProfile() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Enter your email"
+                  aria-invalid={Boolean(errors.email)}
                 />
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email[0]}</p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -216,7 +240,11 @@ function OrganizerProfile() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Enter a new password"
+                  aria-invalid={Boolean(errors.password)}
                 />
+                {errors.password && (
+                  <p className="text-xs text-destructive">{errors.password[0]}</p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -229,7 +257,11 @@ function OrganizerProfile() {
                   placeholder="Tell us about yourself"
                   rows={3}
                   className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-invalid={Boolean(errors.description)}
                 />
+                {errors.description && (
+                  <p className="text-xs text-destructive">{errors.description[0]}</p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-2">

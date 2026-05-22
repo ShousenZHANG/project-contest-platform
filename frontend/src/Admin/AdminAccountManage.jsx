@@ -13,6 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../api/apiClient';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -49,6 +50,7 @@ function roleBadgeVariant(role) {
 }
 
 function AdminAccountManage() {
+  useDocumentTitle('Manage Accounts');
   const [users, setUsers] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);

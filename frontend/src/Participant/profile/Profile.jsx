@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../api/apiClient';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -36,6 +37,7 @@ import {
 const PASSWORD_REGEX = /^(?=.*[A-Z]).{8,}$/;
 
 function Profile() {
+  useDocumentTitle('My Profile');
   const [formData, setFormData] = useState({
     name: '',
     email: '',

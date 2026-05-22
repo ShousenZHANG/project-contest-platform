@@ -8,7 +8,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import apiClient from '../api/apiClient';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -32,6 +34,21 @@ const TEXTAREA_CLASS =
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
+const editContestSchema = z
+  .object({
+    contestName: z.string().trim().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
+    contestDescription: z.string().trim().min(10, 'Description must be at least 10 characters'),
+    category: z.string().min(1, 'Please select a category'),
+    startDate: z.string().min(1, 'Start date is required'),
+    endDate: z.string().min(1, 'End date is required'),
+    submissionFormats: z.array(z.string()).min(1, 'Select at least one submission format'),
+    scoringCriteria: z.array(z.string()).min(1, 'Add at least one scoring criterion'),
+  })
+  .refine((d) => !d.startDate || !d.endDate || new Date(d.endDate) >= new Date(d.startDate), {
+    message: 'End date must be on or after the start date',
+    path: ['endDate'],
+  });
+
 function EditContest() {
   const [contestData, setContestData] = useState({
     contestName: '',
@@ -45,6 +62,8 @@ function EditContest() {
     participationType: '',
   });
 
+  useDocumentTitle('Edit Contest');
+  const [errors, setErrors] = useState({});
   const [newCriteria, setNewCriteria] = useState('');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -71,7 +90,9 @@ function EditContest() {
           });
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        toast.error('Failed to load contest: ' + (err.response?.data?.message || 'Unknown error'));
+      });
   }, [competitionId]);
 
   const handleChange = (e) => {
@@ -115,6 +136,15 @@ function EditContest() {
   };
 
   const handleUpdate = async () => {
+    const result = editContestSchema.safeParse(contestData);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      setErrors(fieldErrors);
+      const first = Object.values(fieldErrors).flat()[0];
+      toast.error(first || 'Please fix the highlighted fields');
+      return;
+    }
+    setErrors({});
     try {
       const start = new Date(contestData.startDate + 'T10:00:00Z');
       const end = new Date(contestData.endDate + 'T18:00:00Z');
@@ -165,7 +195,11 @@ function EditContest() {
                 value={contestData.contestName}
                 onChange={handleChange}
                 placeholder="Enter contest name"
+                aria-invalid={Boolean(errors.contestName)}
               />
+              {errors.contestName && (
+                <p className="text-xs text-destructive">{errors.contestName[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2 md:col-span-2">
@@ -178,7 +212,11 @@ function EditContest() {
                 rows={3}
                 placeholder="Describe your contest"
                 className={TEXTAREA_CLASS}
+                aria-invalid={Boolean(errors.contestDescription)}
               />
+              {errors.contestDescription && (
+                <p className="text-xs text-destructive">{errors.contestDescription[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -189,6 +227,7 @@ function EditContest() {
                 value={contestData.category}
                 onChange={handleChange}
                 className={SELECT_CLASS}
+                aria-invalid={Boolean(errors.category)}
               >
                 <option value="" disabled>
                   Select a category
@@ -199,6 +238,9 @@ function EditContest() {
                   </option>
                 ))}
               </select>
+              {errors.category && (
+                <p className="text-xs text-destructive">{errors.category[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -226,7 +268,11 @@ function EditContest() {
                 name="startDate"
                 value={contestData.startDate}
                 onChange={handleChange}
+                aria-invalid={Boolean(errors.startDate)}
               />
+              {errors.startDate && (
+                <p className="text-xs text-destructive">{errors.startDate[0]}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -237,7 +283,11 @@ function EditContest() {
                 name="endDate"
                 value={contestData.endDate}
                 onChange={handleChange}
+                aria-invalid={Boolean(errors.endDate)}
               />
+              {errors.endDate && (
+                <p className="text-xs text-destructive">{errors.endDate[0]}</p>
+              )}
             </div>
           </div>
 
@@ -274,6 +324,9 @@ function EditContest() {
                 ))}
               </ul>
             )}
+            {errors.scoringCriteria && (
+              <p className="text-xs text-destructive">{errors.scoringCriteria[0]}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -294,6 +347,9 @@ function EditContest() {
                 </label>
               ))}
             </div>
+            {errors.submissionFormats && (
+              <p className="text-xs text-destructive">{errors.submissionFormats[0]}</p>
+            )}
           </div>
 
           <div className="space-y-2">
