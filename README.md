@@ -21,6 +21,9 @@ local environment.
 - [Service Matrix](#service-matrix)
 - [Frontend Architecture](#frontend-architecture)
 - [Backend Contracts](#backend-contracts)
+- [Security](#security)
+- [Observability](#observability)
+- [CI/CD](#cicd)
 - [Quality Gates](#quality-gates)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
@@ -60,27 +63,38 @@ cp .env.example .env
 Fill the required secrets in `.env` before starting the full stack:
 
 ```env
-MYSQL_ROOT_PASSWORD=root
+# Infrastructure credentials — backend services read these via ${VAR:default},
+# so the local stack works with the defaults below. Set strong values for deploys.
+MYSQL_ROOT_PASSWORD=root        # MySQL container root password
+MYSQL_USER=root                 # datasource user (all data services)
+MYSQL_PASSWORD=root             # datasource password (all data services)
 RABBITMQ_USER=guest
 RABBITMQ_PASSWORD=guest
 MINIO_ROOT_USER=minio
 MINIO_ROOT_PASSWORD=minio123
 
-JWT_SECRET=change_me_256bit_hex_secret
+# Auth & web
+JWT_SECRET=change_me_256bit_hex_secret      # REQUIRED — gateway + user-service
+CORS_ALLOWED_ORIGINS=http://localhost:3000  # comma-separated allowed origins
+OAUTH_REDIRECT_BASE_URL=http://localhost:8080  # base host for OAuth callback URLs
 
+# OAuth providers (only for social login)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 
+# SMTP (only for email flows: password reset, notifications)
 MAIL_USERNAME=
 MAIL_PASSWORD=
 ```
 
-OAuth and SMTP values are only needed when exercising those flows, but
-`JWT_SECRET` must be present for the gateway and user-service. Keep the local
-MySQL, RabbitMQ, and MinIO values above unless you also update the matching
-backend service configuration.
+Every backend secret resolves through `${VAR:default}`, so the stack starts on the
+local defaults above even without a `.env`. For any shared or production deploy you
+**must** set strong values — at minimum `JWT_SECRET`, `MYSQL_PASSWORD`,
+`RABBITMQ_PASSWORD`, and `MINIO_ROOT_PASSWORD` — restrict `CORS_ALLOWED_ORIGINS`,
+and point `OAUTH_REDIRECT_BASE_URL` at your public gateway host so OAuth callbacks
+resolve correctly.
 
 ### 2. Start the Stack
 
@@ -255,6 +269,51 @@ Authentication policy:
 - Controller tests for authenticated routes should include both `User-ID` and
   `User-Role` headers.
 
+## Security
+
+Identity is enforced at the edge and validated in depth:
+
+- **Single trusted identity source.** The gateway strips any client-supplied
+  `User-ID` / `User-Role` headers on every request (including public paths) and
+  re-injects them only after verifying the JWT, so downstream identity cannot be
+  spoofed.
+- **JWT.** HMAC-signed (Hutool) with expiry; logout/invalidation is tracked in
+  Redis. The signing secret comes from `JWT_SECRET` with no hardcoded fallback.
+- **OAuth.** GitHub and Google logins use a single-use, session-bound `state`
+  nonce (CSRF protection), and callback URLs are environment-driven.
+- **Passwords** are bcrypt-hashed; password reset is single-use, time-boxed, and
+  returns a neutral response (no account enumeration).
+- **CORS** is an explicit env-driven allowlist used with credentials — never `*`.
+- **Input validation** uses Bean Validation (`@Valid` + constraints) at controller
+  boundaries; uploads use UUID object keys (no path traversal) and never echo
+  internal error messages to clients.
+- **Secrets** are externalized to environment variables; none are committed.
+
+> Before going live: set every secret in `.env`, restrict `CORS_ALLOWED_ORIGINS`,
+> rotate default credentials, and keep backend service ports unmapped to the host
+> (only the gateway `:8080` is exposed).
+
+## Observability
+
+- **Health & readiness** via Spring Boot Actuator (`/actuator/health`); details
+  are shown only to authorized callers.
+- **Metrics** exported in Prometheus format (`/actuator/prometheus`).
+- **Distributed tracing** via Micrometer Tracing → Zipkin (`http://localhost:9411`).
+
+## CI/CD
+
+`Jenkinsfile` defines the delivery pipeline:
+
+1. **Checkout**
+2. **Backend Build & Test** — `./mvnw -B verify` (unit tests + JaCoCo coverage)
+3. **Frontend Build & Test** — `npm ci && npm test && npm run build`
+4. **Security Scan** — Trivy filesystem scan (non-blocking)
+5. **Docker Build** and **Deploy** — `docker compose build` then `up -d`
+6. **Post-deploy Check** — container health
+
+All images are multi-stage and run as a non-root user; Compose services declare
+healthchecks and memory/CPU limits.
+
 ## Quality Gates
 
 Run these before committing changes:
@@ -329,19 +388,17 @@ project-contest-platform/
 
 | Variable | Used by | Required | Purpose |
 | --- | --- | --- | --- |
-| `MYSQL_ROOT_PASSWORD` | MySQL, backend datasource defaults | Yes for Docker | Root database password; local backend config expects `root` |
-| `RABBITMQ_USER` | RabbitMQ | Yes for Docker | RabbitMQ user; local backend config expects `guest` |
-| `RABBITMQ_PASSWORD` | RabbitMQ | Yes for Docker | RabbitMQ password; local backend config expects `guest` |
-| `MINIO_ROOT_USER` | MinIO | Yes for Docker | MinIO user; local file-service config expects `minio` |
-| `MINIO_ROOT_PASSWORD` | MinIO | Yes for Docker | MinIO password; local file-service config expects `minio123` |
-| `JWT_SECRET` | Gateway, user-service | Yes | JWT signing and validation secret |
-| `GOOGLE_CLIENT_ID` | user-service | OAuth only | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | user-service | OAuth only | Google OAuth secret |
-| `GITHUB_CLIENT_ID` | user-service | OAuth only | GitHub OAuth client ID |
-| `GITHUB_CLIENT_SECRET` | user-service | OAuth only | GitHub OAuth secret |
-| `MAIL_USERNAME` | user-service | Email only | SMTP username |
-| `MAIL_PASSWORD` | user-service | Email only | SMTP app password |
-| `VITE_API_BASE_URL` | frontend | Optional | API gateway base URL, default `http://localhost:8080` |
+| `JWT_SECRET` | gateway, user-service | **Yes** | JWT signing/validation secret (no default) |
+| `MYSQL_ROOT_PASSWORD` | MySQL container | Docker | MySQL container root password (default `root`) |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | all data services | Docker | Datasource credentials (default `root` / `root`) |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | RabbitMQ + producers | Docker | Broker credentials (default `guest` / `guest`) |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | MinIO + file-service | Docker | Object-store credentials (default `minio` / `minio123`) |
+| `CORS_ALLOWED_ORIGINS` | gateway | Recommended | Comma-separated allowed origins (default `http://localhost:3000`) |
+| `OAUTH_REDIRECT_BASE_URL` | user-service | OAuth / deploy | Base host for OAuth callback URLs (default `http://localhost:8080`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | user-service | OAuth only | Google OAuth credentials |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | user-service | OAuth only | GitHub OAuth credentials |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | user-service | Email only | SMTP credentials |
+| `VITE_API_BASE_URL` | frontend | Optional | API gateway base URL (default `http://localhost:8080`) |
 
 Never commit `.env`, local database volumes, generated coverage output, or
 browser test artifacts.
