@@ -13,7 +13,7 @@ COPY . .
 WORKDIR /app/backend/api-gateway
 
 # Build the Spring Boot application and skip tests for faster builds
-RUN mvn clean package -DskipTests
+RUN mvn -f /app/pom.xml -pl backend/api-gateway -am clean package -DskipTests
 
 # -----------------------------
 # Stage 2: Create a minimal runtime image
