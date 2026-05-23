@@ -182,12 +182,21 @@
     .float-2 { top: -20px; right: -18px; animation-delay: 1.5s; }
     @keyframes floaty { 50% { transform: translateY(-8px); } }
 
-    /* ---------- Tech strip ---------- */
-    .tech { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 26px 0; background: var(--bg-soft); }
-    .tech-lead { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 16px; }
-    .tech-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 26px; align-items: center; }
-    .tech-row span { color: var(--muted); font-size: 14px; font-weight: 600; }
-    .tech-row .sep { color: var(--border-strong); }
+    /* ---------- Tech marquee (logo cloud) ---------- */
+    .tech { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 32px 0; background: var(--bg-soft); }
+    .tech-lead { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 22px; }
+    .marquee { position: relative; overflow: hidden;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+              mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
+    .marquee-track { display: flex; align-items: center; gap: 56px; width: max-content; animation: scroll 36s linear infinite; }
+    .marquee:hover .marquee-track { animation-play-state: paused; }
+    @keyframes scroll { to { transform: translateX(-50%); } }
+    .m-item { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .m-item img { width: 27px; height: 27px; filter: grayscale(1); opacity: 0.62;
+      transition: filter .25s ease, opacity .25s ease, transform .25s ease; }
+    .m-item:hover img { filter: none; opacity: 1; transform: translateY(-3px) scale(1.06); }
+    .m-item span { font-size: 15.5px; font-weight: 600; color: var(--muted); white-space: nowrap; letter-spacing: -0.01em; }
+    @media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; flex-wrap: wrap; justify-content: center; width: auto; gap: 18px 40px; } .m-item img { filter: none; opacity: 1; } }
 
     /* ---------- Features ---------- */
     .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -336,20 +345,8 @@
 
   <!-- ================= TECH STRIP ================= -->
   <div class="tech" id="stack">
-    <div class="container">
-      <div class="tech-lead">Built on a production microservices stack</div>
-      <div class="tech-row">
-        <span>Java 23</span><span class="sep">·</span>
-        <span>Spring Boot 3.4</span><span class="sep">·</span>
-        <span>7 Microservices</span><span class="sep">·</span>
-        <span>React 19 + Vite</span><span class="sep">·</span>
-        <span>MySQL</span><span class="sep">·</span>
-        <span>Redis</span><span class="sep">·</span>
-        <span>RabbitMQ</span><span class="sep">·</span>
-        <span>MinIO (S3)</span><span class="sep">·</span>
-        <span>Docker</span>
-      </div>
-    </div>
+    <div class="tech-lead">Built on a production microservices stack</div>
+    <div class="marquee"><div class="marquee-track" id="marquee"></div></div>
   </div>
 
   <!-- ================= FEATURES ================= -->
@@ -470,6 +467,16 @@
         '<div class="rtag">'+r[0]+'</div><h3>What they do</h3><ul>'+
         r[2].map(function(li){ return '<li>'+svg(I.check,'')+'<span>'+li+'</span></li>'; }).join('')+'</ul></div>';
     }).join('');
+
+    // tech logo marquee (greyscale → brand colour on hover). Duplicated for a seamless loop.
+    var TECHS = [
+      ['openjdk','Java 23'], ['spring','Spring Boot'], ['react','React 19'], ['vite','Vite'],
+      ['mysql','MySQL'], ['redis','Redis'], ['rabbitmq','RabbitMQ'], ['minio','MinIO'], ['docker','Docker']
+    ];
+    var techSet = TECHS.map(function(t){
+      return '<span class="m-item"><img src="https://cdn.simpleicons.org/'+t[0]+'" alt="" width="27" height="27" loading="lazy" onerror="this.remove()"/><span>'+t[1]+'</span></span>';
+    }).join('');
+    document.getElementById('marquee').innerHTML = techSet + techSet;
 
     document.getElementById('yr').textContent = new Date().getFullYear();
 
