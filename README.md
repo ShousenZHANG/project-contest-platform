@@ -60,7 +60,7 @@ cd project-contest-platform
 cp .env.example .env
 ```
 
-Fill the required secrets in `.env` before starting the full stack:
+`.env.example` ships working local defaults — no edits are needed to run locally. Edit only for OAuth/email or a real deploy:
 
 ```env
 # Infrastructure credentials — backend services read these via ${VAR:default},
@@ -89,12 +89,14 @@ MAIL_USERNAME=
 MAIL_PASSWORD=
 ```
 
-Every backend secret resolves through `${VAR:default}`, so the stack starts on the
-local defaults above even without a `.env`. For any shared or production deploy you
-**must** set strong values — at minimum `JWT_SECRET`, `MYSQL_PASSWORD`,
-`RABBITMQ_PASSWORD`, and `MINIO_ROOT_PASSWORD` — restrict `CORS_ALLOWED_ORIGINS`,
-and point `OAUTH_REDIRECT_BASE_URL` at your public gateway host so OAuth callbacks
-resolve correctly.
+`.env.example` ships consistent, working dev defaults, so `cp .env.example .env`
+followed by the start command below brings the whole stack up with no further edits.
+Infrastructure credentials also have `${VAR:default}` fallbacks in compose; only
+`JWT_SECRET` has no fallback, which is why copying `.env` is step 1. For any shared
+or production deploy you **must** replace every secret — at minimum `JWT_SECRET`,
+`MYSQL_PASSWORD`, `RABBITMQ_PASSWORD`, and `MINIO_ROOT_PASSWORD` — restrict
+`CORS_ALLOWED_ORIGINS`, and point `OAUTH_REDIRECT_BASE_URL` at your public gateway
+host so OAuth callbacks resolve correctly.
 
 ### 2. Start the Stack
 
