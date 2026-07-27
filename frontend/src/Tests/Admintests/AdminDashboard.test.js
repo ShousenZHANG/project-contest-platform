@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import AdminDashboard from "../../Admin/AdminDashboard";
-import { BrowserRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -50,11 +50,7 @@ describe("AdminDashboard", () => {
       },
     });
 
-    render(
-      <BrowserRouter>
-        <AdminDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboard />);
 
     expect(screen.getByRole("status", { name: /Loading platform dashboard/i })).toBeInTheDocument();
     await screen.findByText(/Platform Dashboard/i);
@@ -82,11 +78,7 @@ describe("AdminDashboard", () => {
       },
     });
 
-    render(
-      <BrowserRouter>
-        <AdminDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboard />);
 
     await screen.findByText("Competitions");
     expect(screen.getByText("Participants")).toBeInTheDocument();
@@ -97,11 +89,7 @@ describe("AdminDashboard", () => {
   it("shows (No data) if overview fetch fails", async () => {
     apiClient.get.mockRejectedValue(new Error("Network error"));
 
-    render(
-      <BrowserRouter>
-        <AdminDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminDashboard />);
 
     await screen.findByText(/No data available/i);
   });

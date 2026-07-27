@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import AdminProfile from "../../Admin/AdminProfile";
-import { MemoryRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -33,19 +33,17 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-const renderAdminProfile = () => {
-  render(
-    <MemoryRouter>
-      <AdminProfile />
-    </MemoryRouter>
-  );
-};
+const renderAdminProfile = () => renderWithProviders(<AdminProfile />);
 
 describe("AdminProfile", () => {
   it("updates profile successfully", async () => {
     renderAdminProfile();
 
-    fireEvent.change(await screen.findByPlaceholderText("Enter your name"), {
+    // Wait for the fetched profile to populate the form. Typing before it
+    // lands would be overwritten by the seed.
+    await screen.findByDisplayValue("Test Admin");
+
+    fireEvent.change(screen.getByPlaceholderText("Enter your name"), {
       target: { value: "New Admin" },
     });
     fireEvent.change(await screen.findByPlaceholderText("Leave blank to keep current"), {

@@ -10,7 +10,8 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { getChartColors } from '../lib/chartColors';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import {
@@ -32,8 +33,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { dashboardService } from '../services/judgeService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Card, CardContent } from '../components/ui/card';
 import {
   Tooltip,
@@ -150,21 +152,13 @@ function MetricCard({ id, title, value, tooltip = [] }) {
 function AdminDashboard() {
   useDocumentTitle('Platform Dashboard');
   const colors = useMemo(() => getChartColors(), []);
-  const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get('/dashboard/public/platform-overview');
-        setOverview(res.data || null);
-      } catch {
-        toast.error('Failed to load platform overview');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const { data: overview = null, isPending: loading } = useQuery({
+    queryKey: queryKeys.dashboard.admin(),
+    queryFn: () => unwrap(dashboardService.getPlatformOverview()),
+    // Platform-wide totals; a few minutes stale is fine and keeps tab switches
+    // from re-hitting an aggregation query.
+    staleTime: staleTime.medium,
+  });
 
   const {
     cards,

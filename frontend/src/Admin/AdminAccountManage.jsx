@@ -9,10 +9,13 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { userService } from '../services/userService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -51,58 +54,69 @@ function roleBadgeVariant(role) {
 
 function AdminAccountManage() {
   useDocumentTitle('Manage Accounts');
-  const [users, setUsers] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState('');
   const [keyword, setKeyword] = useState('');
-  const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const fetchUsers = async (currentPage, role, kw) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: currentPage,
-        size: 10,
-        ...(role && { role }),
-        ...(kw && { keyword: kw }),
-        sortBy: 'createdAt',
-        order: 'desc',
-      });
-      const response = await apiClient.get(
-        `/users/admin/list?${params.toString()}`
-      );
-      setUsers(response.data?.data || []);
-      setTotalPages(response.data?.pages || 1);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message || 'Failed to fetch users'
-      );
-    } finally {
-      setLoading(false);
-    }
+  const queryClient = useQueryClient();
+
+  const listParams = {
+    page,
+    size: 10,
+    ...(roleFilter && { role: roleFilter }),
+    ...(keyword && { keyword }),
+    sortBy: 'createdAt',
+    order: 'desc',
   };
+  const listKey = queryKeys.users.adminList(listParams);
 
-  useEffect(() => {
-    fetchUsers(page, roleFilter, keyword);
-  }, [page, roleFilter, keyword]);
+  const { data, isPending: loading } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(userService.listUsersAdmin(listParams)),
+    staleTime: staleTime.short,
+  });
 
-  const confirmDelete = async () => {
+  const users = data?.data ?? [];
+  const totalPages = data?.pages ?? 1;
+
+  const deleteUser = useMutation({
+    mutationFn: (userId) => unwrap(userService.deleteUser(userId)),
+
+    onMutate: async (userId) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+
+      queryClient.setQueryData(listKey, (current) =>
+        current
+          ? { ...current, data: (current.data ?? []).filter((u) => u.id !== userId) }
+          : current
+      );
+
+      return { previous };
+    },
+
+    onError: (error, _userId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(listKey, context.previous);
+      }
+      toast.error(toMessage(error));
+    },
+
+    onSuccess: () => toast.success('User deleted successfully'),
+
+    // Removing a row shifts every later page, so resync the whole admin list.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.users.all }),
+  });
+
+  const confirmDelete = () => {
     if (!pendingDelete) return;
-    setDeleting(true);
-    try {
-      await apiClient.delete(`/users/${pendingDelete.id}`);
-      toast.success('User deleted successfully');
-      setPendingDelete(null);
-      fetchUsers(page, roleFilter, keyword);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to delete user');
-    } finally {
-      setDeleting(false);
-    }
+    const userId = pendingDelete.id;
+    setPendingDelete(null);
+    deleteUser.mutate(userId);
   };
+
+  const deleting = deleteUser.isPending;
 
   const visibleUsers = users.filter((u) => u.role !== 'ADMIN' && u.role !== 'Admin');
   const activeRoleLabel =

@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import AdminAccountManage from "../../Admin/AdminAccountManage";
-import { BrowserRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -42,11 +42,7 @@ afterEach(() => {
 
 describe("AdminAccountManage", () => {
   it("renders and shows loading initially", async () => {
-    render(
-      <BrowserRouter>
-        <AdminAccountManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminAccountManage />);
 
     expect(screen.getByText(/Loading users.../i)).toBeInTheDocument();
 
@@ -54,11 +50,7 @@ describe("AdminAccountManage", () => {
   });
 
   it("renders user data after fetch", async () => {
-    render(
-      <BrowserRouter>
-        <AdminAccountManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminAccountManage />);
 
     await screen.findByText("Test User");
     const rows = await screen.findAllByRole("row");
@@ -72,18 +64,17 @@ describe("AdminAccountManage", () => {
   });
 
   it("deletes a user after confirmation", async () => {
-    render(
-      <BrowserRouter>
-        <AdminAccountManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminAccountManage />);
 
     const deleteButton = await screen.findByRole("button", { name: /Delete/i });
     fireEvent.click(deleteButton);
     fireEvent.click(await screen.findByRole("button", { name: /Delete user/i }));
 
-    expect(apiClient.delete).toHaveBeenCalledWith(
-      expect.stringContaining("/users/user-1")
+    // The mutation dispatches asynchronously, so the call lands a tick later.
+    await waitFor(() =>
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        expect.stringContaining("/users/user-1")
+      )
     );
   });
 });

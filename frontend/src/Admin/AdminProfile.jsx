@@ -9,10 +9,13 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { userService } from '../services/userService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -52,31 +55,67 @@ function AdminProfile() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [tempAvatar, setTempAvatar] = useState(null);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
+
+  // Seed the controlled form the first time the profile arrives, and only then.
+  // Without the guard, every background refetch hands back a fresh object and
+  // this effect would overwrite whatever the admin was in the middle of typing.
+  const seeded = useRef(false);
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await apiClient.get('/users/profile');
-        const data = response.data;
-        if (data) {
-          setFormData({
-            name: data.name || '',
-            email: data.email || '',
-            password: '',
-            description: data.description || '',
-            role: AuthTokenManager.getRole() || '',
-          });
-          setAvatarUrl(data.avatarUrl || '');
-        }
-      } catch {
-        toast.error('Failed to load profile');
-      }
-    };
+    if (!profile || seeded.current) return;
+    seeded.current = true;
+    setFormData({
+      name: profile.name || '',
+      email: profile.email || '',
+      password: '',
+      description: profile.description || '',
+      role: AuthTokenManager.getRole() || '',
+    });
+    setAvatarUrl(profile.avatarUrl || '');
+  }, [profile]);
 
-    fetchUserData();
-  }, []);
+  const closeAvatarDialog = () => {
+    if (tempAvatarUrl) {
+      URL.revokeObjectURL(tempAvatarUrl);
+    }
+    setTempAvatar(null);
+    setTempAvatarUrl('');
+    setAvatarDialogOpen(false);
+  };
+
+  const updateProfile = useMutation({
+    mutationFn: (data) => unwrap(userService.updateProfile(data)),
+    onSuccess: () => {
+      toast.success('Profile updated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const uploadAvatar = useMutation({
+    mutationFn: (file) => {
+      const body = new FormData();
+      body.append('file', file);
+      return unwrap(userService.uploadAvatar(body));
+    },
+    onSuccess: (data) => {
+      setAvatarUrl(data?.avatarUrl ?? '');
+      toast.success('Avatar updated');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+      closeAvatarDialog();
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const saving = updateProfile.isPending;
+  const uploading = uploadAvatar.isPending;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -93,21 +132,8 @@ function AdminProfile() {
       return;
     }
 
-    setSaving(true);
-    try {
-      const { role, ...profileData } = formData;
-      const response = await apiClient.put('/users/profile', {
-        ...profileData,
-        avatarUrl,
-      });
-      if (response.data) {
-        toast.success('Profile updated successfully');
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error updating profile');
-    } finally {
-      setSaving(false);
-    }
+    const { role, ...profileData } = formData;
+    updateProfile.mutate({ ...profileData, avatarUrl });
   };
 
   const handleAvatarChange = (e) => {
@@ -121,42 +147,14 @@ function AdminProfile() {
     }
   };
 
-  const handleAvatarSave = async () => {
+  const handleAvatarSave = () => {
     if (!tempAvatar) return;
 
-    setUploading(true);
-    const formDataUpload = new FormData();
-    formDataUpload.append('file', tempAvatar);
-
-    try {
-      const response = await apiClient.post(
-        '/users/profile/avatar',
-        formDataUpload,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
-      );
-      if (response.data) {
-        setAvatarUrl(response.data.avatarUrl);
-        toast.success('Avatar updated');
-        window.location.reload();
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error uploading avatar');
-    } finally {
-      setUploading(false);
-    }
-
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
-  };
-
-  const closeAvatarDialog = () => {
-    if (tempAvatarUrl) {
-      URL.revokeObjectURL(tempAvatarUrl);
-    }
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
+    // The old implementation called window.location.reload() here to make the
+    // new avatar appear. Invalidating the profile query does the same job
+    // without throwing the page away. The dialog stays open until the upload
+    // lands, so the spinner still means something.
+    uploadAvatar.mutate(tempAvatar);
   };
 
   useEffect(() => {
