@@ -1,5 +1,14 @@
 version: 2
 
+# Grouping policy: every group is restricted to minor and patch updates, so a
+# major bump always arrives as its own PR.
+#
+# The first run without that restriction produced PRs that buried a major
+# upgrade inside a pile of harmless patches — react-router 6 -> 7 rode along
+# with three React patch releases, TypeScript 5 -> 7 with a Vite minor, and
+# Jest 29 -> 30 with the rest of the test tooling. Each of those needs its own
+# review, and bundling them forces an all-or-nothing decision on the whole group.
+
 updates:
   - package-ecosystem: maven
     directory: /
@@ -13,10 +22,14 @@ updates:
       include: scope
     groups:
       spring:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - org.springframework*
           - com.alibaba.cloud*
       test-tooling:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - org.junit*
           - org.mockito*
@@ -36,15 +49,21 @@ updates:
       include: scope
     groups:
       react:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - react
           - react-dom
           - react-router-dom
           - '@types/react*'
       radix:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - '@radix-ui/*'
       build-tooling:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - vite
           - '@vitejs/*'
@@ -52,6 +71,8 @@ updates:
           - tailwindcss
           - typescript
       test-tooling:
+        applies-to: version-updates
+        update-types: [minor, patch]
         patterns:
           - jest
           - jest-*
@@ -63,6 +84,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 5
     labels: [dependencies, ci]
     commit-message:
       prefix: chore
