@@ -19,6 +19,10 @@
         <maven.compiler.source>23</maven.compiler.source>
         <maven.compiler.target>23</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Measured 2026-07-27: 10.7% line / 0.0% branch — effectively untested, floor kept nominal. -->
+        <jacoco.line.min>0.08</jacoco.line.min>
+        <jacoco.branch.min>0.00</jacoco.branch.min>
     </properties>
 
     <dependencies>

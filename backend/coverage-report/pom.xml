@@ -17,9 +17,23 @@
         <maven.compiler.source>23</maven.compiler.source>
         <maven.compiler.target>23</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Measured 2026-07-27: aggregation module, no sources of its own. -->
+        <jacoco.line.min>0.00</jacoco.line.min>
+        <jacoco.branch.min>0.00</jacoco.branch.min>
     </properties>
 
     <dependencies>
+        <!--
+          common-lib was missing here, which kept it out of the aggregate report
+          entirely and made the headline number flattering: it is the least
+          covered module in the build.
+        -->
+        <dependency>
+            <groupId>w16a.danish</groupId>
+            <artifactId>common-lib</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
         <dependency>
             <groupId>w16a.danish</groupId>
             <artifactId>api-gateway</artifactId>

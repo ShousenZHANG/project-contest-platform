@@ -5,6 +5,7 @@ academic contests, and internal judging programs. The system combines a
 Spring Boot microservices backend with a React/Vite frontend and a Docker Compose
 local environment.
 
+[![CI](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-23-orange?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
@@ -304,10 +305,27 @@ Identity is enforced at the edge and validated in depth:
 
 ## CI/CD
 
-`Jenkinsfile` defines the delivery pipeline:
+Two pipelines with separate jobs. GitHub Actions gates changes; Jenkins ships them.
+
+### Continuous integration — `.github/workflows/ci.yml`
+
+Runs on every push to `master` and every pull request, as two parallel jobs:
+
+| Job | Steps |
+|-----|-------|
+| Backend (Java 23) | `./mvnw -B verify` — unit tests, JaCoCo coverage, coverage gate. Uploads the aggregate report as a build artifact. |
+| Frontend (Node 20) | `npm ci`, `npm test`, `npm run build`. |
+
+The backend suite is self-contained — H2 stands in for MySQL and WireMock for
+the Feign targets — so no service containers are started. Both jobs cache their
+dependencies, and a new push cancels the in-flight run for the same branch.
+
+### Continuous delivery — `Jenkinsfile`
+
+Builds images and deploys the Compose stack:
 
 1. **Checkout**
-2. **Backend Build & Test** — `./mvnw -B verify` (unit tests + JaCoCo coverage)
+2. **Backend Build & Test** — `./mvnw -B verify`
 3. **Frontend Build & Test** — `npm ci && npm test && npm run build`
 4. **Security Scan** — Trivy filesystem scan (non-blocking)
 5. **Docker Build** and **Deploy** — `docker compose build` then `up -d`
@@ -316,7 +334,36 @@ Identity is enforced at the edge and validated in depth:
 All images are multi-stage and run as a non-root user; Compose services declare
 healthchecks and memory/CPU limits.
 
+### Dependencies
+
+`.github/dependabot.yml` opens grouped weekly update PRs for Maven, npm and the
+workflow actions themselves.
+
 ## Quality Gates
+
+### Coverage floors
+
+`./mvnw verify` fails the build if a module drops below its coverage floor.
+The floors are anti-regression baselines measured on 2026-07-27 and rounded
+down, declared per module as `jacoco.line.min` / `jacoco.branch.min`:
+
+| Module | Line | Branch | Floor (line / branch) |
+|--------|------|--------|-----------------------|
+| interaction-service | 89.6% | 63.3% | 0.87 / 0.61 |
+| file-service | 80.0% | 58.3% | 0.78 / 0.56 |
+| api-gateway | 78.2% | 47.5% | 0.76 / 0.45 |
+| judge-service | 75.6% | 48.1% | 0.73 / 0.46 |
+| competition-service | 73.5% | 47.1% | 0.71 / 0.45 |
+| user-service | 70.2% | 54.8% | 0.68 / 0.52 |
+| registration-service | 65.2% | 41.5% | 0.63 / 0.39 |
+| common-lib | 10.7% | 0.0% | 0.08 / 0.00 |
+
+They are floors, not targets — raise them as coverage improves. `common-lib` is
+the outstanding gap: it has one test class covering 19 source files, and it was
+missing from the aggregate report until 2026-07-27, which made the headline
+number look better than it was.
+
+### Local checks
 
 Run these before committing changes:
 

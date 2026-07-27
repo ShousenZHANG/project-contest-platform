@@ -46,6 +46,18 @@
         <spring-cloud.version>2024.0.1</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.3.2</spring-cloud-alibaba.version>
         <hutool.version>5.8.36</hutool.version>
+
+        <!--
+          Coverage floors enforced by jacoco:check at verify.
+
+          These are anti-regression baselines, not targets. Each was measured on
+          2026-07-27 and rounded down by roughly two points, so a module cannot
+          quietly lose the coverage it already has. Each module overrides them in
+          its own pom with its own figure; these defaults only apply to a module
+          that forgets to. Raise them as coverage improves.
+        -->
+        <jacoco.line.min>0.60</jacoco.line.min>
+        <jacoco.branch.min>0.35</jacoco.branch.min>
     </properties>
 
 
@@ -272,6 +284,33 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.line.min}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.branch.min}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
