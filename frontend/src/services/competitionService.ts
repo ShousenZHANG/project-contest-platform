@@ -1,10 +1,15 @@
+/**
+ * competitionService.ts
+ *
+ * Every path here is checked against CompetitionsController. The module
+ * previously carried invented routes (`/competitions/my`, `/public/overview`,
+ * `/organizer/dashboard`, `POST /competitions/create`) that no component ever
+ * called, so nothing failed loudly enough to notice.
+ */
+
 import apiClient from '../api/apiClient';
 import type { AxiosResponse } from 'axios';
-import type {
-  Competition,
-  ApiResponse,
-  PageResponse,
-} from '../types/index';
+import type { Competition, ApiResponse } from '../types/index';
 import type {
   CompetitionListResponse,
   CreateCompetitionRequest,
@@ -12,44 +17,66 @@ import type {
   PaginationParams,
 } from '../types/api';
 
-export interface AssignJudgeRequest {
-  judgeId: string;
-  email?: string;
+export interface AssignJudgesRequest {
+  judgeIds: string[];
 }
 
 export const competitionService = {
-  getAll: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<CompetitionListResponse>>> =>
+  /** Paged, filterable list. `GET /competitions/list` */
+  list: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<CompetitionListResponse>>> =>
+    apiClient.get('/competitions/list', { params }),
+
+  /** Public catalogue. `GET /competitions/public/all` */
+  getPublicAll: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<CompetitionListResponse>>> =>
     apiClient.get('/competitions/public/all', { params }),
 
   getById: (id: string): Promise<AxiosResponse<ApiResponse<Competition>>> =>
-    apiClient.get(`/competitions/public/${id}`),
+    apiClient.get(`/competitions/${id}`),
+
+  /**
+   * Every competition the signed-in organizer owns.
+   *
+   * The path really is `achieve` — see CompetitionsController. It reads as a
+   * typo for `archive` but it is the published contract.
+   */
+  getMyOrganized: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<Competition[]>>> =>
+    apiClient.get('/competitions/achieve/my', { params }),
+
+  getByIds: (ids: string[]): Promise<AxiosResponse<ApiResponse<Competition[]>>> =>
+    apiClient.post('/competitions/batch/ids', ids),
 
   create: (data: CreateCompetitionRequest): Promise<AxiosResponse<ApiResponse<Competition>>> =>
-    apiClient.post('/competitions/create', data),
+    apiClient.post('/competitions', data),
 
   update: (id: string, data: UpdateCompetitionRequest): Promise<AxiosResponse<ApiResponse<Competition>>> =>
-    apiClient.put(`/competitions/${id}`, data),
+    apiClient.put(`/competitions/update/${id}`, data),
+
+  updateStatus: (id: string, status: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.put(`/competitions/${id}/status`, null, { params: { status } }),
 
   delete: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/competitions/${id}`),
+    apiClient.delete(`/competitions/delete/${id}`),
 
-  getMyCompetitions: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<PageResponse<Competition>>>> =>
-    apiClient.get('/competitions/my', { params }),
+  isOrganizer: (competitionId: string): Promise<AxiosResponse<ApiResponse<boolean>>> =>
+    apiClient.get('/competitions/is-organizer', { params: { competitionId } }),
 
   uploadMedia: (id: string, formData: FormData): Promise<AxiosResponse<ApiResponse<string[]>>> =>
     apiClient.post(`/competitions/${id}/media`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  getOverview: (): Promise<AxiosResponse<ApiResponse<unknown>>> =>
-    apiClient.get('/competitions/public/overview'),
+  deleteImage: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/competitions/${id}/media/image`),
 
-  getOrganizerDashboard: (): Promise<AxiosResponse<ApiResponse<unknown>>> =>
-    apiClient.get('/competitions/organizer/dashboard'),
+  deleteVideo: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/competitions/${id}/media/video`),
 
-  assignJudge: (competitionId: string, data: AssignJudgeRequest): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post(`/competitions/${competitionId}/judges`, data),
+  assignJudges: (competitionId: string, data: AssignJudgesRequest): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.post(`/competitions/${competitionId}/assign-judges`, data),
 
   getJudges: (competitionId: string): Promise<AxiosResponse<ApiResponse<unknown[]>>> =>
     apiClient.get(`/competitions/${competitionId}/judges`),
+
+  removeJudge: (competitionId: string, judgeId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/competitions/${competitionId}/judges/${judgeId}`),
 };

@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerContestList from "../../Organizer/ContestList";
-import { BrowserRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -39,13 +39,7 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-const renderWithRouter = () => {
-  render(
-    <BrowserRouter>
-      <OrganizerContestList />
-    </BrowserRouter>
-  );
-};
+const renderWithRouter = () => renderWithProviders(<OrganizerContestList />);
 
 describe("OrganizerContestList", () => {
   it("renders contest list after fetch", async () => {

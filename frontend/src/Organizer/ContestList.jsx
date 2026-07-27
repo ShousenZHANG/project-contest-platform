@@ -7,12 +7,15 @@
  * Role: Organizer
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Filter, X, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
-import { extractErrorMessage } from '../services/serviceUtils';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
+import PageSkeleton from '../shared/components/PageSkeleton';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -47,9 +50,6 @@ function statusVariant(status) {
 
 function OrganizerContestList() {
   useDocumentTitle('My Contests');
-  const [competitions, setCompetitions] = useState([]);
-  const [filteredCompetitions, setFilteredCompetitions] = useState([]);
-  const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -58,45 +58,68 @@ function OrganizerContestList() {
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const email = AuthTokenManager.getEmail();
 
-  useEffect(() => {
-    const fetchCompetitions = async () => {
-      try {
-        const response = await apiClient.get('/competitions/achieve/my');
-        const data = response.data;
-        if (Array.isArray(data.data)) {
-          setCompetitions(data.data);
-          setFilteredCompetitions(data.data);
-        }
-      } catch (err) {
-        const msg = extractErrorMessage(err);
-        setError(msg);
-        toast.error(msg);
-      }
-    };
-    fetchCompetitions();
-  }, []);
+  const listKey = queryKeys.competitions.mine();
 
-  useEffect(() => {
-    const filtered = competitions.filter((comp) => {
-      const matchesSearch = comp.name.toLowerCase().includes(searchInput.toLowerCase());
-      const matchesStatus = selectedStatus ? comp.status === selectedStatus : true;
-      const matchesCategory =
-        selectedCategories.length > 0 ? selectedCategories.includes(comp.category) : true;
-      const matchesParticipation = selectedParticipationType
-        ? comp.participationType === selectedParticipationType
-        : true;
-      return matchesSearch && matchesStatus && matchesCategory && matchesParticipation;
-    });
-    setFilteredCompetitions(filtered);
-  }, [
-    searchInput,
-    selectedStatus,
-    selectedCategories,
-    selectedParticipationType,
-    competitions,
-  ]);
+  const {
+    data: competitions = [],
+    isPending,
+    error,
+  } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(competitionService.getMyOrganized()),
+    // The endpoint answers with a PageResponse rather than the ApiResponse
+    // envelope, so the rows sit one level down.
+    select: (page) => (Array.isArray(page?.data) ? page.data : []),
+    staleTime: staleTime.short,
+  });
+
+  // Filtering is derived from state already on hand — deriving it during render
+  // avoids the extra commit an effect-plus-state pair would cost.
+  const filteredCompetitions = useMemo(
+    () =>
+      competitions.filter((comp) => {
+        const matchesSearch = comp.name.toLowerCase().includes(searchInput.toLowerCase());
+        const matchesStatus = selectedStatus ? comp.status === selectedStatus : true;
+        const matchesCategory =
+          selectedCategories.length > 0 ? selectedCategories.includes(comp.category) : true;
+        const matchesParticipation = selectedParticipationType
+          ? comp.participationType === selectedParticipationType
+          : true;
+        return matchesSearch && matchesStatus && matchesCategory && matchesParticipation;
+      }),
+    [competitions, searchInput, selectedStatus, selectedCategories, selectedParticipationType]
+  );
+
+  const deleteCompetition = useMutation({
+    mutationFn: (competitionId) => unwrap(competitionService.delete(competitionId)),
+
+    // Drop the row immediately; the organizer already confirmed in the dialog.
+    onMutate: async (competitionId) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+
+      queryClient.setQueryData(listKey, (page) =>
+        page
+          ? { ...page, data: (page.data ?? []).filter((comp) => comp.id !== competitionId) }
+          : page
+      );
+
+      return { previous };
+    },
+
+    onError: (err, _competitionId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(listKey, context.previous);
+      }
+      toast.error(toMessage(err));
+    },
+
+    onSuccess: () => toast.success('Competition deleted'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: listKey }),
+  });
 
   const handleCreate = () => navigate(`/OrganizerContest/${email}`);
 
@@ -104,18 +127,10 @@ function OrganizerContestList() {
     navigate(`/OrganizerEditContest/${email}?competitionId=${competitionId}`);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     const competitionId = confirmDelete.id;
-    if (!competitionId) return;
-    try {
-      await apiClient.delete(`/competitions/delete/${competitionId}`);
-      setCompetitions((prev) => prev.filter((comp) => comp.id !== competitionId));
-      toast.success('Competition deleted');
-    } catch {
-      toast.error('An error occurred while deleting the competition.');
-    } finally {
-      setConfirmDelete({ open: false, id: null });
-    }
+    setConfirmDelete({ open: false, id: null });
+    if (competitionId) deleteCompetition.mutate(competitionId);
   };
 
   const handleCategoryChange = (category) => {
@@ -217,12 +232,14 @@ function OrganizerContestList() {
         </SheetContent>
       </Sheet>
 
-      {error ? (
+      {isPending ? (
+        <PageSkeleton rows={6} />
+      ) : error ? (
         <div
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
-          {error}
+          {toMessage(error)}
         </div>
       ) : filteredCompetitions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No competitions found.</p>
