@@ -3,78 +3,102 @@
  *
  * Vote count + toggle for a submission. Migrated from MUI to shadcn/ui.
  *
+ * The toggle is optimistic: the count and the button label change on click and
+ * roll back if the request fails. A vote that takes a round trip to acknowledge
+ * feels broken, and this control is the most-clicked thing on the page.
+ *
  * Role: Participant
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { voteService } from '../services/interactionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import AuthTokenManager from '@/auth/authTokenManager';
 
-
 function ViewVote({ submissionId }) {
-  const [votes, setVotes] = useState(0);
-  const [hasVoted, setHasVoted] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const userId = AuthTokenManager.getUserId();
-    const token = AuthTokenManager.getToken();
+  const signedIn = Boolean(AuthTokenManager.getUserId() && AuthTokenManager.getToken());
+  const enabled = Boolean(submissionId) && signedIn;
 
-    if (!submissionId || !userId || !token) return;
+  const countKey = queryKeys.votes.count(submissionId);
+  const statusKey = queryKeys.votes.hasVoted(submissionId);
 
-    apiClient
-      .get('/interactions/votes/count', { params: { submissionId } })
-      .then((res) => {
-        setVotes(res.data || 0);
-      })
-      .catch((err) => {
-        toast.error('Failed to load vote count: ' + (err.response?.data?.message || 'Unknown error'));
-      });
+  // Both endpoints answer with a bare value rather than the ApiResponse
+  // envelope, so unwrap hands back the number and the boolean directly.
+  const { data: votes = 0 } = useQuery({
+    queryKey: countKey,
+    queryFn: () => unwrap(voteService.getCount(submissionId)),
+    enabled,
+    staleTime: staleTime.live,
+  });
 
-    apiClient
-      .get('/interactions/votes/status', { params: { submissionId } })
-      .then((res) => {
-        setHasVoted(res.data === true);
-      })
-      .catch((err) => {
-        toast.error('Failed to load vote status: ' + (err.response?.data?.message || 'Unknown error'));
-      });
-  }, [submissionId]);
+  const { data: hasVoted = false } = useQuery({
+    queryKey: statusKey,
+    queryFn: () => unwrap(voteService.hasVoted(submissionId)),
+    select: (value) => value === true,
+    enabled,
+    staleTime: staleTime.live,
+  });
+
+  const toggleVote = useMutation({
+    mutationFn: (voting) =>
+      voting
+        ? unwrap(voteService.vote(submissionId))
+        : unwrap(voteService.unvote(submissionId)),
+
+    onMutate: async (voting) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: countKey }),
+        queryClient.cancelQueries({ queryKey: statusKey }),
+      ]);
+
+      const previous = {
+        count: queryClient.getQueryData(countKey),
+        status: queryClient.getQueryData(statusKey),
+      };
+
+      queryClient.setQueryData(countKey, (current = 0) =>
+        voting ? current + 1 : Math.max(current - 1, 0)
+      );
+      queryClient.setQueryData(statusKey, voting);
+
+      return previous;
+    },
+
+    onError: (_error, voting, context) => {
+      if (context) {
+        queryClient.setQueryData(countKey, context.count);
+        queryClient.setQueryData(statusKey, context.status);
+      }
+      toast.error(voting ? 'Vote failed.' : 'Cancel vote failed.');
+    },
+
+    onSuccess: (_data, voting) => {
+      if (voting) {
+        toast.success('Vote successful! Thank you!');
+      } else {
+        toast.info('Vote canceled.');
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: countKey });
+      queryClient.invalidateQueries({ queryKey: statusKey });
+    },
+  });
 
   const handleVote = () => {
-    const userId = AuthTokenManager.getUserId();
-    const token = AuthTokenManager.getToken();
-
-    if (!userId || !token) {
+    if (!signedIn) {
       toast.error('User not logged in.');
       return;
     }
-
-    if (!hasVoted) {
-      apiClient
-        .post(`/interactions/votes?submissionId=${submissionId}`)
-        .then(() => {
-          setVotes((prev) => prev + 1);
-          setHasVoted(true);
-          toast.success('Vote successful! Thank you!');
-        })
-        .catch(() => {
-          toast.error('Vote failed.');
-        });
-    } else {
-      apiClient
-        .delete('/interactions/votes', { params: { submissionId } })
-        .then(() => {
-          setVotes((prev) => Math.max(prev - 1, 0));
-          setHasVoted(false);
-          toast.info('Vote canceled.');
-        })
-        .catch(() => {
-          toast.error('Cancel vote failed.');
-        });
-    }
+    toggleVote.mutate(!hasVoted);
   };
 
   return (
@@ -83,6 +107,11 @@ function ViewVote({ submissionId }) {
       <Button
         onClick={handleVote}
         className="bg-warning text-warning-foreground hover:bg-warning/90"
+        aria-label={
+          hasVoted
+            ? `Cancel your vote — ${votes} votes so far`
+            : `Vote for this submission — ${votes} votes so far`
+        }
       >
         {hasVoted ? 'Cancel Vote' : 'Vote'}
       </Button>
