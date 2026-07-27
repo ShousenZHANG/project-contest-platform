@@ -65,8 +65,9 @@ export const competitionService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  deleteImage: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/competitions/${id}/media/image`),
+  /** Removes one image; the target is identified by its URL, not an id. */
+  deleteImage: (id: string, imageUrl: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/competitions/${id}/media/image`, { params: { imageUrl } }),
 
   deleteVideo: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.delete(`/competitions/${id}/media/video`),

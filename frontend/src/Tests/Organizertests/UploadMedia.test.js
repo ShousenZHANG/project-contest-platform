@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithProviders } from "../testUtils";
 import UploadMedia from "../../Organizer/UploadMedia";
 
 beforeAll(() => {
@@ -38,11 +38,7 @@ afterEach(() => {
 
 describe("UploadMedia Component", () => {
   test("previews selected files", async () => {
-    render(
-      <MemoryRouter>
-        <UploadMedia />
-      </MemoryRouter>
-    );
+    renderWithProviders(<UploadMedia />);
   
     const fileInput = screen.getByTestId('file-input');
     const file = new File(["dummy content"], "test.jpg", { type: "image/jpeg" });
@@ -55,11 +51,7 @@ describe("UploadMedia Component", () => {
   });  
 
   test("cancels upload and navigates back", async () => {
-    render(
-      <MemoryRouter>
-        <UploadMedia />
-      </MemoryRouter>
-    );
+    renderWithProviders(<UploadMedia />);
 
     const cancelButton = await screen.findByRole("button", { name: /cancel/i });
     fireEvent.click(cancelButton);

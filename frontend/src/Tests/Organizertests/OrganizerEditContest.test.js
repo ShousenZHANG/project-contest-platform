@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithProviders } from "../testUtils";
 import EditContest from "../../Organizer/EditContest";
 import apiClient from '../../api/apiClient';
 
@@ -50,11 +50,7 @@ afterEach(() => {
 
 describe("EditContest", () => {
   test("renders contest details from API", async () => {
-    render(
-      <MemoryRouter initialEntries={["/edit-contest?competitionId=test-id"]}>
-        <EditContest />
-      </MemoryRouter>
-    );
+    renderWithProviders(<EditContest />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Test Contest")).toBeInTheDocument();
@@ -63,11 +59,7 @@ describe("EditContest", () => {
   });
 
   test("allows adding new scoring criteria", async () => {
-    render(
-      <MemoryRouter initialEntries={["/edit-contest?competitionId=test-id"]}>
-        <EditContest />
-      </MemoryRouter>
-    );
+    renderWithProviders(<EditContest />);
 
     await waitFor(() => screen.getByText("Update Contest"));
 
@@ -84,11 +76,7 @@ describe("EditContest", () => {
     const mockNavigate = jest.fn();
     jest.spyOn(require("react-router-dom"), "useNavigate").mockReturnValue(mockNavigate);
 
-    render(
-      <MemoryRouter initialEntries={["/edit-contest?competitionId=test-id"]}>
-        <EditContest />
-      </MemoryRouter>
-    );
+    renderWithProviders(<EditContest />);
 
     await waitFor(() => screen.getByText("Update Contest"));
 
@@ -113,11 +101,7 @@ describe("EditContest", () => {
     const mockNavigate = jest.fn();
     jest.spyOn(require("react-router-dom"), "useNavigate").mockReturnValue(mockNavigate);
 
-    render(
-      <MemoryRouter initialEntries={["/edit-contest?competitionId=test-id"]}>
-        <EditContest />
-      </MemoryRouter>
-    );
+    renderWithProviders(<EditContest />);
 
     await waitFor(() => screen.getByText("Cancel"));
 

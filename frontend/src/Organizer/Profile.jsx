@@ -6,10 +6,13 @@
  * Allows account deletion. Email and role are read-only.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import apiClient from '../api/apiClient';
+import { userService } from '../services/userService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -60,28 +63,76 @@ function OrganizerProfile() {
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await apiClient.get('/users/profile');
-        const data = response.data;
-        if (data) {
-          setFormData({
-            name: data.name || '',
-            email: data.email || '',
-            password: '',
-            description: data.description || '',
-            role: AuthTokenManager.getRole() || '',
-          });
-          setAvatarUrl(data.avatarUrl);
-        }
-      } catch (err) {
-        toast.error('Failed to load profile: ' + (err.response?.data?.message || 'Unknown error'));
-      }
-    };
+  const queryClient = useQueryClient();
 
-    fetchUserData();
-  }, []);
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
+
+  // Seed the controlled form the first time the profile arrives, and only then:
+  // without the guard a background refetch would overwrite whatever the
+  // organizer was in the middle of typing.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!profile || seeded.current) return;
+    seeded.current = true;
+    setFormData({
+      name: profile.name || '',
+      email: profile.email || '',
+      password: '',
+      description: profile.description || '',
+      role: AuthTokenManager.getRole() || '',
+    });
+    setAvatarUrl(profile.avatarUrl);
+  }, [profile]);
+
+  const handleAvatarDialogClose = () => {
+    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
+    setTempAvatar(null);
+    setTempAvatarUrl('');
+    setAvatarDialogOpen(false);
+  };
+
+  const updateProfile = useMutation({
+    mutationFn: (data) => unwrap(userService.updateProfile(data)),
+    onSuccess: () => {
+      toast.success('Profile updated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const uploadAvatar = useMutation({
+    mutationFn: (file) => {
+      const body = new FormData();
+      body.append('file', file);
+      return unwrap(userService.uploadAvatar(body));
+    },
+    onSuccess: (data) => {
+      if (!data?.avatarUrl) {
+        toast.error('Error uploading avatar');
+        return;
+      }
+      setAvatarUrl(data.avatarUrl);
+      toast.success('Avatar updated');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+      handleAvatarDialogClose();
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: () => unwrap(userService.deleteUser(AuthTokenManager.getUserId())),
+    onSuccess: () => {
+      toast.success('Your account has been deleted.');
+      AuthTokenManager.clearSession();
+      window.location.href = '/';
+    },
+    onError: (error) => toast.error(toMessage(error)),
+    onSettled: () => setDeleteDialogOpen(false),
+  });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -100,13 +151,8 @@ function OrganizerProfile() {
     }
     setErrors({});
 
-    try {
-      const { role, ...profileData } = formData;
-      await apiClient.put('/users/profile', { ...profileData, avatarUrl });
-      toast.success('Profile updated successfully');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error updating profile');
-    }
+    const { role, ...profileData } = formData;
+    updateProfile.mutate({ ...profileData, avatarUrl });
   };
 
   const handleAvatarChange = (e) => {
@@ -118,52 +164,15 @@ function OrganizerProfile() {
     }
   };
 
-  const handleAvatarSave = async () => {
+  // The old implementation reloaded the whole page to show the new avatar.
+  // Invalidating the profile query does the same job, and the dialog stays open
+  // until the upload lands so its disabled state means something.
+  const handleAvatarSave = () => {
     if (!tempAvatar) return;
-
-    const formDataUpload = new FormData();
-    formDataUpload.append('file', tempAvatar);
-
-    try {
-      const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const data = response.data;
-      if (data?.avatarUrl) {
-        setAvatarUrl(data.avatarUrl);
-        window.location.reload();
-      } else {
-        toast.error('Error uploading avatar');
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error uploading avatar');
-    }
-
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
+    uploadAvatar.mutate(tempAvatar);
   };
 
-  const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
-  };
-
-  const handleDeleteAccount = async () => {
-    const userId = AuthTokenManager.getUserId();
-    try {
-      await apiClient.delete(`/users/${userId}`);
-      toast.success('Your account has been deleted.');
-      AuthTokenManager.clearSession();
-      window.location.href = '/';
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error deleting account.');
-    } finally {
-      setDeleteDialogOpen(false);
-    }
-  };
+  const handleDeleteAccount = () => deleteAccount.mutate();
 
   useEffect(() => {
     return () => {

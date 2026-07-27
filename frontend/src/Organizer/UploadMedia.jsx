@@ -4,11 +4,14 @@
  * Upload media (images/videos) for a competition. Migrated from MUI to shadcn/ui.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trash2, Upload as UploadIcon, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import AuthTokenManager from '@/auth/authTokenManager';
@@ -20,29 +23,68 @@ function UploadMedia() {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [existingMedia, setExistingMedia] = useState({ video: null, images: [] });
-  const [contestName, setContestName] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
   const email = AuthTokenManager.getEmail();
 
-  const fetchCurrentMedia = useCallback(async () => {
-    try {
-      const res = await apiClient.get(`/competitions/${id}`);
-      const data = res.data;
-      setContestName(data.name || '');
-      setExistingMedia({
-        video: data.introVideoUrl || null,
-        images: data.imageUrls || [],
-      });
-    } catch (err) {
-      toast.error('Failed to load media: ' + (err.response?.data?.message || 'Unknown error'));
-    }
-  }, [id]);
+  const queryClient = useQueryClient();
+  const detailKey = queryKeys.competitions.detail(id);
 
-  useEffect(() => {
-    fetchCurrentMedia();
-  }, [fetchCurrentMedia]);
+  const { data: competition } = useQuery({
+    queryKey: detailKey,
+    queryFn: () => unwrap(competitionService.getById(id)),
+    enabled: Boolean(id),
+    staleTime: staleTime.medium,
+  });
+
+  const contestName = competition?.name || '';
+  const existingMedia = {
+    video: competition?.introVideoUrl || null,
+    images: competition?.imageUrls || [],
+  };
+
+  const refreshMedia = () => queryClient.invalidateQueries({ queryKey: detailKey });
+
+  const deleteImage = useMutation({
+    mutationFn: (imageUrl) => unwrap(competitionService.deleteImage(id, imageUrl)),
+    onSuccess: () => {
+      toast.success('Image deleted');
+      refreshMedia();
+    },
+    onError: (error) => toast.error('Failed to delete image: ' + toMessage(error)),
+    onSettled: () => setConfirmAction(null),
+  });
+
+  const deleteVideo = useMutation({
+    mutationFn: () => unwrap(competitionService.deleteVideo(id)),
+    onSuccess: () => {
+      toast.success('Video deleted');
+      refreshMedia();
+    },
+    onError: (error) => toast.error('Failed to delete video: ' + toMessage(error)),
+    onSettled: () => setConfirmAction(null),
+  });
+
+  const uploadMedia = useMutation({
+    mutationFn: async (selected) => {
+      // The endpoint takes one file per call, so this stays sequential.
+      for (const file of selected) {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('mediaType', file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
+        await unwrap(competitionService.uploadMedia(id, body));
+      }
+    },
+    onSuccess: () => {
+      toast.success('All media uploaded successfully');
+      setFiles([]);
+      setPreviews([]);
+      refreshMedia();
+      navigate(`/OrganizerContestList/${email}`);
+    },
+    onError: () => toast.error('Upload failed'),
+  });
+
+  const uploading = uploadMedia.isPending;
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -50,42 +92,12 @@ function UploadMedia() {
     setPreviews(selectedFiles.map((file) => URL.createObjectURL(file)));
   };
 
-  const confirmDeleteImage = async (imageUrl) => {
-    try {
-      await apiClient.delete(
-        `/competitions/${id}/media/image?imageUrl=${encodeURIComponent(imageUrl)}`
-      );
-      toast.success('Image deleted');
-      fetchCurrentMedia();
-    } catch (error) {
-      toast.error(
-        'Failed to delete image: ' + (error.response?.data?.message || 'Unknown error')
-      );
-    } finally {
-      setConfirmAction(null);
-    }
-  };
-
-  const confirmDeleteVideo = async () => {
-    try {
-      await apiClient.delete(`/competitions/${id}/media/video`);
-      toast.success('Video deleted');
-      fetchCurrentMedia();
-    } catch (error) {
-      toast.error(
-        'Failed to delete video: ' + (error.response?.data?.message || 'Unknown error')
-      );
-    } finally {
-      setConfirmAction(null);
-    }
-  };
-
   const requestDeleteImage = (imageUrl) => {
     setConfirmAction({
       title: 'Delete image',
       message: 'This removes the selected competition image immediately.',
       confirmLabel: 'Delete',
-      onConfirm: () => confirmDeleteImage(imageUrl),
+      onConfirm: () => deleteImage.mutate(imageUrl),
     });
   };
 
@@ -94,35 +106,16 @@ function UploadMedia() {
       title: 'Delete intro video',
       message: 'This removes the competition intro video immediately.',
       confirmLabel: 'Delete',
-      onConfirm: confirmDeleteVideo,
+      onConfirm: () => deleteVideo.mutate(),
     });
   };
 
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (files.length === 0) {
       toast.warning('Please select file(s) first.');
       return;
     }
-    setUploading(true);
-    try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('mediaType', file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
-
-        const res = await apiClient.post(`/competitions/${id}/media`, formData);
-        if (!res.data) throw new Error('Upload failed');
-      }
-      toast.success('All media uploaded successfully');
-      setFiles([]);
-      setPreviews([]);
-      fetchCurrentMedia();
-      navigate(`/OrganizerContestList/${email}`);
-    } catch {
-      toast.error('Upload failed');
-    } finally {
-      setUploading(false);
-    }
+    uploadMedia.mutate(files);
   };
 
   const noExistingMedia = !existingMedia.video && existingMedia.images.length === 0;

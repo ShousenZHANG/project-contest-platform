@@ -4,12 +4,15 @@
  * Edit an existing competition. Migrated from MUI to shadcn/ui.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import apiClient from '../api/apiClient';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -70,30 +73,43 @@ function EditContest() {
   const competitionId = searchParams.get('competitionId');
   const { email } = useParams();
 
+  const queryClient = useQueryClient();
+
+  const { data: competition } = useQuery({
+    queryKey: queryKeys.competitions.detail(competitionId),
+    queryFn: () => unwrap(competitionService.getById(competitionId)),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.medium,
+  });
+
+  // Seed the form the first time the contest arrives, and only then. A
+  // background refetch must not overwrite edits in progress.
+  const seeded = useRef(false);
   useEffect(() => {
-    if (!competitionId) return;
-    apiClient
-      .get(`/competitions/${competitionId}`)
-      .then((res) => {
-        const data = res.data;
-        if (data && data.id) {
-          setContestData({
-            contestName: data.name,
-            contestDescription: data.description,
-            category: data.category,
-            startDate: data.startDate.slice(0, 10),
-            endDate: data.endDate.slice(0, 10),
-            isPublic: data.isPublic ? 'Public' : 'Private',
-            scoringCriteria: data.scoringCriteria || [],
-            submissionFormats: data.allowedSubmissionTypes || [],
-            participationType: data.participationType,
-          });
-        }
-      })
-      .catch((err) => {
-        toast.error('Failed to load contest: ' + (err.response?.data?.message || 'Unknown error'));
-      });
-  }, [competitionId]);
+    if (!competition?.id || seeded.current) return;
+    seeded.current = true;
+    setContestData({
+      contestName: competition.name,
+      contestDescription: competition.description,
+      category: competition.category,
+      startDate: competition.startDate.slice(0, 10),
+      endDate: competition.endDate.slice(0, 10),
+      isPublic: competition.isPublic ? 'Public' : 'Private',
+      scoringCriteria: competition.scoringCriteria || [],
+      submissionFormats: competition.allowedSubmissionTypes || [],
+      participationType: competition.participationType,
+    });
+  }, [competition]);
+
+  const updateContest = useMutation({
+    mutationFn: (payload) => unwrap(competitionService.update(competitionId, payload)),
+    onSuccess: () => {
+      toast.success('Contest updated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all });
+      navigate(`/OrganizerContestList/${email}`);
+    },
+    onError: (error) => toast.error('Failed to update contest: ' + toMessage(error)),
+  });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -145,34 +161,24 @@ function EditContest() {
       return;
     }
     setErrors({});
-    try {
-      const start = new Date(contestData.startDate + 'T10:00:00Z');
-      const end = new Date(contestData.endDate + 'T18:00:00Z');
 
-      const payload = {
-        name: contestData.contestName,
-        description: contestData.contestDescription,
-        category: contestData.category,
-        startDate: start.toISOString().replace('.000', ''),
-        endDate: end.toISOString().replace('.000', ''),
-        isPublic: contestData.isPublic === 'Public',
-        status: getAutoStatus(),
-        allowedSubmissionTypes: contestData.submissionFormats,
-        scoringCriteria: contestData.scoringCriteria,
-        participationType: contestData.participationType,
-        imageUrls: [],
-        introVideoUrl: '',
-      };
+    const start = new Date(contestData.startDate + 'T10:00:00Z');
+    const end = new Date(contestData.endDate + 'T18:00:00Z');
 
-      await apiClient.put(`/competitions/update/${competitionId}`, payload);
-      toast.success('Contest updated successfully');
-      navigate(`/OrganizerContestList/${email}`);
-    } catch (error) {
-      toast.error(
-        'Failed to update contest: ' +
-          (error.response?.data?.message || 'Unknown error')
-      );
-    }
+    updateContest.mutate({
+      name: contestData.contestName,
+      description: contestData.contestDescription,
+      category: contestData.category,
+      startDate: start.toISOString().replace('.000', ''),
+      endDate: end.toISOString().replace('.000', ''),
+      isPublic: contestData.isPublic === 'Public',
+      status: getAutoStatus(),
+      allowedSubmissionTypes: contestData.submissionFormats,
+      scoringCriteria: contestData.scoringCriteria,
+      participationType: contestData.participationType,
+      imageUrls: [],
+      introVideoUrl: '',
+    });
   };
 
   return (

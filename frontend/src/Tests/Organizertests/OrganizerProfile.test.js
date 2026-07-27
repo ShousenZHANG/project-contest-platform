@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import OrganizerProfile from "../../Organizer/Profile";
-import { MemoryRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -35,18 +35,18 @@ afterEach(() => {
 });
 
 const renderProfile = () => {
-  render(
-    <MemoryRouter>
-      <OrganizerProfile />
-    </MemoryRouter>
-  );
+  renderWithProviders(<OrganizerProfile />);
 };
 
 describe("OrganizerProfile", () => {
   it("updates profile successfully", async () => {
     renderProfile();
 
-    fireEvent.change(await screen.findByPlaceholderText("Enter your name"), {
+    // Wait for the fetched profile to seed the form; typing before it lands
+    // would be overwritten.
+    await screen.findByDisplayValue("Test User");
+
+    fireEvent.change(screen.getByPlaceholderText("Enter your name"), {
       target: { value: "New Name" },
     });
     fireEvent.change(await screen.findByPlaceholderText("Enter your email"), {
