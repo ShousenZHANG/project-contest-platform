@@ -1,71 +1,114 @@
-import { useState, useCallback, useEffect } from 'react';
-import apiClient from '../../api/apiClient';
+import { useCallback, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { commentService } from '../../services/interactionService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap, toMessage } from '../../api/queryFn';
 
 const PAGE_SIZE = 5;
 
 /**
  * Encapsulates all comment data-fetching and mutation for a given submissionId.
  *
+ * Posting is optimistic: the comment appears at the top of the first page
+ * straight away and is removed again if the request fails. Editing and deleting
+ * invalidate rather than patch — a stale edit that silently reverts is more
+ * confusing than a brief spinner.
+ *
  * @param {string} submissionId
  */
 export function useCommentThread(submissionId) {
-  const [comments, setComments] = useState([]);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
 
-  const fetchComments = useCallback(
-    async (pageToFetch = 1, reset = false) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await apiClient.get('/interactions/comments/list', {
-          params: {
-            submissionId,
-            page: pageToFetch,
-            size: PAGE_SIZE,
-            sortBy: 'createdAt',
-            order: 'desc',
-          },
-        });
-        const fetched = res.data.data || [];
-        const pages = res.data.pages || 1;
-        setTotalPages(pages);
-        setPage(pageToFetch);
-        if (reset) {
-          setComments(fetched);
-        } else {
-          setComments((prev) => [...prev, ...fetched]);
-        }
-      } catch (err) {
-        setError(err?.response?.data?.message || 'Failed to fetch comments.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [submissionId]
+  const params = { page, size: PAGE_SIZE, sortBy: 'createdAt', order: 'desc' };
+  const listKey = queryKeys.comments.bySubmission(submissionId, params);
+
+  const {
+    data,
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(commentService.getBySubmission(submissionId, params)),
+    enabled: Boolean(submissionId),
+    staleTime: staleTime.short,
+  });
+
+  const comments = data?.data ?? [];
+  const totalPages = data?.pages ?? 1;
+
+  /** Invalidates every page of this submission's thread. */
+  const invalidateThread = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.comments.all, 'bySubmission', submissionId],
+      }),
+    [queryClient, submissionId]
   );
 
-  useEffect(() => {
-    if (submissionId) {
-      fetchComments(1, true);
-    }
-  }, [submissionId, fetchComments]);
+  const post = useMutation({
+    mutationFn: ({ content, parentId }) =>
+      unwrap(
+        commentService.create({
+          submissionId,
+          content,
+          ...(parentId ? { parentId } : {}),
+        })
+      ),
+
+    onMutate: async ({ content, parentId }) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+
+      // Only page 1 shows the newest comment, and the list is sorted desc.
+      if (page === 1) {
+        queryClient.setQueryData(listKey, (current) => {
+          const optimistic = {
+            id: `optimistic-${Date.now()}`,
+            content,
+            parentId: parentId ?? null,
+            createdAt: new Date().toISOString(),
+            pending: true,
+          };
+          return current
+            ? { ...current, data: [optimistic, ...(current.data ?? [])] }
+            : current;
+        });
+      }
+
+      return { previous };
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(listKey, context.previous);
+      }
+    },
+
+    onSettled: invalidateThread,
+  });
+
+  const edit = useMutation({
+    mutationFn: ({ commentId, content }) =>
+      unwrap(commentService.update(commentId, { submissionId, content })),
+    onSettled: invalidateThread,
+  });
+
+  const remove = useMutation({
+    mutationFn: (commentId) => unwrap(commentService.delete(commentId)),
+    onSettled: invalidateThread,
+  });
 
   const postComment = useCallback(
     async (content, parentId = null) => {
       if (!content.trim()) {
         throw new Error('Comment cannot be empty.');
       }
-      await apiClient.post('/interactions/comments', {
-        submissionId,
-        content,
-        ...(parentId ? { parentId } : {}),
-      });
-      await fetchComments(1, true);
+      setPage(1);
+      await post.mutateAsync({ content, parentId });
     },
-    [submissionId, fetchComments]
+    [post]
   );
 
   const editComment = useCallback(
@@ -73,29 +116,26 @@ export function useCommentThread(submissionId) {
       if (!content.trim()) {
         throw new Error('Content cannot be empty.');
       }
-      await apiClient.put(`/interactions/comments/${commentId}`, {
-        submissionId,
-        content,
-      });
-      await fetchComments(1, true);
+      await edit.mutateAsync({ commentId, content });
     },
-    [submissionId, fetchComments]
+    [edit]
   );
 
   const deleteComment = useCallback(
     async (commentId) => {
-      await apiClient.delete(`/interactions/comments/${commentId}`);
-      await fetchComments(1, true);
+      await remove.mutateAsync(commentId);
     },
-    [fetchComments]
+    [remove]
   );
 
-  const handlePageChange = useCallback(
-    (_event, value) => {
-      fetchComments(value, true);
-    },
-    [fetchComments]
-  );
+  const fetchComments = useCallback((pageToFetch = 1) => setPage(pageToFetch), []);
+
+  const handlePageChange = useCallback((_event, value) => setPage(value), []);
+
+  const error =
+    (queryError && toMessage(queryError)) ||
+    (post.error && toMessage(post.error)) ||
+    null;
 
   return {
     comments,
