@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import AdminCompetitionsManage from "../../Admin/AdminCompetitionsManage";
-import { BrowserRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -66,22 +66,14 @@ afterEach(() => {
 
 describe("AdminCompetitionsManage", () => {
   it("renders and shows loading initially", async () => {
-    render(
-      <BrowserRouter>
-        <AdminCompetitionsManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminCompetitionsManage />);
 
     expect(screen.getByText(/Loading competitions.../i)).toBeInTheDocument();
     await screen.findByText(/All Competitions/i);
   });
 
   it("renders competition data after fetch", async () => {
-    render(
-      <BrowserRouter>
-        <AdminCompetitionsManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminCompetitionsManage />);
 
     await screen.findByText("Awesome Competition");
     expect(screen.getByText("Design & Creativity")).toBeInTheDocument();
@@ -89,11 +81,7 @@ describe("AdminCompetitionsManage", () => {
   });
 
   it("filters competitions by search input", async () => {
-    render(
-      <BrowserRouter>
-        <AdminCompetitionsManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminCompetitionsManage />);
 
     await screen.findByText("Awesome Competition");
 
@@ -105,11 +93,7 @@ describe("AdminCompetitionsManage", () => {
   });
 
   it("opens competition detail dialog on click", async () => {
-    render(
-      <BrowserRouter>
-        <AdminCompetitionsManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminCompetitionsManage />);
 
     await screen.findByText("Awesome Competition");
 
@@ -121,11 +105,7 @@ describe("AdminCompetitionsManage", () => {
   });
 
   it("deletes a competition after confirmation", async () => {
-    render(
-      <BrowserRouter>
-        <AdminCompetitionsManage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<AdminCompetitionsManage />);
 
     await screen.findByText("Awesome Competition");
 
@@ -133,8 +113,11 @@ describe("AdminCompetitionsManage", () => {
     fireEvent.click(deleteButton);
     fireEvent.click(await screen.findByRole("button", { name: /Delete competition/i }));
 
-    expect(apiClient.delete).toHaveBeenCalledWith(
-      expect.stringContaining("/competitions/delete/comp-1")
+    // The mutation dispatches asynchronously, so the call lands a tick later.
+    await waitFor(() =>
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        expect.stringContaining("/competitions/delete/comp-1")
+      )
     );
   });
 });

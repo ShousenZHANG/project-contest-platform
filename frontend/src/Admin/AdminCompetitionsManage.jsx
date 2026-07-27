@@ -9,7 +9,8 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
   Trash2,
@@ -18,7 +19,9 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -70,76 +73,81 @@ function statusBadgeVariant(status) {
 
 function AdminCompetitionsManage() {
   useDocumentTitle('Manage Competitions');
-  const [competitions, setCompetitions] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
 
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
-  const [selectedComp, setSelectedComp] = useState(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailId, setDetailId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const fetchCompetitions = async (currentPage, kw, status, category) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: currentPage,
-        size: 10,
-        ...(kw && { keyword: kw }),
-        ...(status && { status }),
-        ...(category && { category }),
-      });
-      const response = await apiClient.get(
-        `/competitions/list?${params.toString()}`
-      );
-      setCompetitions(response.data?.data || []);
-      setTotalPages(response.data?.pages || 1);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message || 'Failed to fetch competitions'
-      );
-    } finally {
-      setLoading(false);
-    }
+  const queryClient = useQueryClient();
+
+  const listParams = {
+    page,
+    size: 10,
+    ...(keyword && { keyword }),
+    ...(statusFilter && { status: statusFilter }),
+    ...(categoryFilter && { category: categoryFilter }),
   };
+  const listKey = queryKeys.competitions.list(listParams);
 
-  useEffect(() => {
-    fetchCompetitions(page, keyword, statusFilter, categoryFilter);
-  }, [page, keyword, statusFilter, categoryFilter]);
+  const { data: listPage, isPending: loading } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(competitionService.list(listParams)),
+    staleTime: staleTime.short,
+  });
 
-  const fetchCompetitionDetail = async (id) => {
-    try {
-      const response = await apiClient.get(`/competitions/${id}`);
-      setSelectedComp(response.data);
-      setDetailOpen(true);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message || 'Failed to fetch competition detail'
+  const competitions = listPage?.data ?? [];
+  const totalPages = listPage?.pages ?? 1;
+
+  // Detail is a query rather than an imperative fetch, so reopening a
+  // competition the admin already looked at is instant.
+  const { data: selectedComp } = useQuery({
+    queryKey: queryKeys.competitions.detail(detailId),
+    queryFn: () => unwrap(competitionService.getById(detailId)),
+    enabled: Boolean(detailId),
+    staleTime: staleTime.medium,
+  });
+
+  const detailOpen = Boolean(detailId);
+
+  const deleteCompetition = useMutation({
+    mutationFn: (competitionId) => unwrap(competitionService.delete(competitionId)),
+
+    onMutate: async (competitionId) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData(listKey);
+
+      queryClient.setQueryData(listKey, (current) =>
+        current
+          ? { ...current, data: (current.data ?? []).filter((c) => c.id !== competitionId) }
+          : current
       );
-    }
-  };
 
-  const confirmDelete = async () => {
+      return { previous };
+    },
+
+    onError: (error, _competitionId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(listKey, context.previous);
+      }
+      toast.error(toMessage(error));
+    },
+
+    onSuccess: () => toast.success('Competition deleted successfully'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all }),
+  });
+
+  const confirmDelete = () => {
     if (!pendingDelete) return;
-    setDeleting(true);
-    try {
-      await apiClient.delete(`/competitions/delete/${pendingDelete.id}`);
-      toast.success('Competition deleted successfully');
-      setCompetitions((prev) => prev.filter((c) => c.id !== pendingDelete.id));
-      setPendingDelete(null);
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message || 'Failed to delete competition'
-      );
-    } finally {
-      setDeleting(false);
-    }
+    const competitionId = pendingDelete.id;
+    setPendingDelete(null);
+    deleteCompetition.mutate(competitionId);
   };
+
+  const deleting = deleteCompetition.isPending;
 
   const activeStatusLabel =
     STATUS_FILTERS.find((s) => s.value === statusFilter)?.label || 'All statuses';
@@ -291,7 +299,7 @@ function AdminCompetitionsManage() {
                     <td className="px-3 py-1.5">
                       <button
                         type="button"
-                        onClick={() => fetchCompetitionDetail(comp.id)}
+                        onClick={() => setDetailId(comp.id)}
                         className="font-medium text-primary hover:underline text-left"
                       >
                         {comp.name}
@@ -362,7 +370,7 @@ function AdminCompetitionsManage() {
       </div>
 
       {/* Detail dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+      <Dialog open={detailOpen} onOpenChange={(open) => !open && setDetailId(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 pr-6">
@@ -482,7 +490,7 @@ function AdminCompetitionsManage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailOpen(false)}>
+            <Button variant="outline" onClick={() => setDetailId(null)}>
               Close
             </Button>
           </DialogFooter>
