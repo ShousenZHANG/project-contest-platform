@@ -7,10 +7,13 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../../api/apiClient';
+import { userService } from '../../services/userService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap, toMessage } from '../../api/queryFn';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -51,31 +54,81 @@ function Profile() {
   const [tempAvatar, setTempAvatar] = useState(null);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
+
+  // Seed the controlled form the first time the profile arrives, and only then.
+  // A background refetch must not overwrite edits in progress.
+  const seeded = useRef(false);
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await apiClient.get('/users/profile');
-        const data = response.data;
-        if (data) {
-          setFormData({
-            name: data.name || '',
-            email: data.email || '',
-            password: '',
-            description: data.description || '',
-            role: AuthTokenManager.getRole() || '',
-          });
-          setAvatarUrl(data.avatarUrl);
-        }
-      } catch (error) {
-        // Failed to fetch user data
-      }
-    };
+    if (!profile || seeded.current) return;
+    seeded.current = true;
+    setFormData({
+      name: profile.name || '',
+      email: profile.email || '',
+      password: '',
+      description: profile.description || '',
+      role: AuthTokenManager.getRole() || '',
+    });
+    setAvatarUrl(profile.avatarUrl);
+  }, [profile]);
 
-    fetchUserData();
-  }, []);
+  const handleAvatarDialogClose = () => {
+    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
+    setTempAvatar(null);
+    setTempAvatarUrl('');
+    setAvatarDialogOpen(false);
+  };
+
+  const updateProfile = useMutation({
+    mutationFn: (data) => unwrap(userService.updateProfile(data)),
+    onSuccess: () => {
+      toast.success('Profile updated successfully!');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const uploadAvatar = useMutation({
+    mutationFn: (file) => {
+      const body = new FormData();
+      body.append('file', file);
+      return unwrap(userService.uploadAvatar(body));
+    },
+    onSuccess: (data) => {
+      if (!data?.avatarUrl) {
+        toast.error('Error uploading avatar.');
+        return;
+      }
+      setAvatarUrl(data.avatarUrl);
+      toast.success('Avatar updated');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
+      handleAvatarDialogClose();
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: () => unwrap(userService.deleteUser(AuthTokenManager.getUserId())),
+    onSuccess: () => {
+      toast.success('Your account has been deleted.');
+      AuthTokenManager.clearSession();
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1200);
+    },
+    onError: (error) => toast.error(toMessage(error)),
+    onSettled: () => setDeleteDialogOpen(false),
+  });
+
+  const submitting = updateProfile.isPending;
+  const uploading = uploadAvatar.isPending;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -92,17 +145,8 @@ function Profile() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const { role, ...profileData } = formData;
-      await apiClient.put('/users/profile', { ...profileData, avatarUrl });
-      toast.success('Profile updated successfully!');
-    } catch (error) {
-      const msg = error.response?.data?.message || 'Error updating profile.';
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
+    const { role, ...profileData } = formData;
+    updateProfile.mutate({ ...profileData, avatarUrl });
   };
 
   const handleAvatarChange = (e) => {
@@ -129,59 +173,14 @@ function Profile() {
     setTempAvatarUrl(URL.createObjectURL(renamedFile));
   };
 
-  const handleAvatarSave = async () => {
+  // The old implementation reloaded the page to show the new avatar.
+  // Invalidating the profile query does the same job without discarding it.
+  const handleAvatarSave = () => {
     if (!tempAvatar) return;
-
-    const formDataUpload = new FormData();
-    formDataUpload.append('file', tempAvatar);
-
-    setUploading(true);
-    try {
-      const response = await apiClient.post('/users/profile/avatar', formDataUpload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const data = response.data;
-      if (data?.avatarUrl) {
-        setAvatarUrl(data.avatarUrl);
-        setTempAvatar(null);
-        setTempAvatarUrl('');
-        setAvatarDialogOpen(false);
-        window.location.reload(true);
-      } else {
-        toast.error('Error uploading avatar.');
-      }
-    } catch (error) {
-      const msg = error.response?.data?.message || 'Failed to upload avatar.';
-      toast.error(msg);
-    } finally {
-      setUploading(false);
-    }
+    uploadAvatar.mutate(tempAvatar);
   };
 
-  const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
-  };
-
-  const handleDeleteAccount = async () => {
-    const userId = AuthTokenManager.getUserId();
-
-    try {
-      await apiClient.delete(`/users/${userId}`);
-      toast.success('Your account has been deleted.');
-      AuthTokenManager.clearSession();
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1200);
-    } catch (error) {
-      const msg = error.response?.data?.message || 'Error deleting account.';
-      toast.error(msg);
-    } finally {
-      setDeleteDialogOpen(false);
-    }
-  };
+  const handleDeleteAccount = () => deleteAccount.mutate();
 
   useEffect(() => {
     return () => {
