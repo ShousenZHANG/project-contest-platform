@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# A new push to the same branch makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Java 23)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 23
+        uses: actions/setup-java@v4
+        with:
+          java-version: '23'
+          distribution: temurin
+          cache: maven
+
+      - name: Build and test
+        # The suite is self-contained: H2 in place of MySQL, WireMock in place
+        # of the Feign targets. No service containers are needed.
+        run: ./mvnw -B --no-transfer-progress verify
+
+      - name: Upload JaCoCo aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: backend/coverage-report/target/site/jacoco-aggregate/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend:
+    name: Frontend (Node 20)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        # --forceExit because the suite leaves open handles behind and Jest
+        # otherwise hangs until the job times out. Tracked as a follow-up.
+        run: npm test -- --ci --runInBand --forceExit
+
+      - name: Build
+        run: npm run build

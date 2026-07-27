@@ -1,0 +1,69 @@
+version: 2
+
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      spring:
+        patterns:
+          - org.springframework*
+          - com.alibaba.cloud*
+      test-tooling:
+        patterns:
+          - org.junit*
+          - org.mockito*
+          - org.assertj*
+          - org.wiremock*
+          - org.jacoco*
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      react:
+        patterns:
+          - react
+          - react-dom
+          - react-router-dom
+          - '@types/react*'
+      radix:
+        patterns:
+          - '@radix-ui/*'
+      build-tooling:
+        patterns:
+          - vite
+          - '@vitejs/*'
+          - '@tailwindcss/*'
+          - tailwindcss
+          - typescript
+      test-tooling:
+        patterns:
+          - jest
+          - jest-*
+          - babel-jest
+          - '@testing-library/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: chore
+      include: scope

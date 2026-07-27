@@ -1,0 +1,73 @@
+name: Bug report
+description: Something in the platform behaves differently from what it should.
+labels: [bug, needs-triage]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where does this happen? Pick the closest match.
+      options:
+        - frontend (React app)
+        - api-gateway
+        - user-service
+        - competition-service
+        - file-service
+        - registration-service
+        - interaction-service
+        - judge-service
+        - infrastructure (Docker, MySQL, Redis, RabbitMQ, Nacos, MinIO)
+        - docs
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: role
+    attributes:
+      label: Acting as
+      description: Which role were you signed in as?
+      options:
+        - Participant
+        - Organizer
+        - Judge
+        - Admin
+        - signed out (public pages)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Errors and logs
+      description: >
+        Browser console output, or `docker compose logs <service>` for a
+        backend problem. Redact tokens and credentials before pasting.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or tag
+      description: Output of `git rev-parse --short HEAD`.
+    validations:
+      required: false
