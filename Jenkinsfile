@@ -29,7 +29,7 @@ pipeline {
         stage('Frontend Build & Test') {
             steps {
                 echo 'Installing dependencies, running tests, and building frontend...'
-                sh 'cd frontend && (npm ci || npm install) && npm test -- --watchAll=false --runInBand && npm run build'
+                sh 'cd frontend && npm ci && npm test -- --ci --runInBand --forceExit && npm run build'
             }
         }
 

@@ -55,7 +55,6 @@ frontend/coverage-summary/
 frontend/playwright-report/
 frontend/test-results/
 frontend/yarn.lock
-frontend/package-lock.json
 frontend/.vscode/
 !frontend/src/lib/
 !frontend/src/lib/**
