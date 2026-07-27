@@ -141,9 +141,11 @@ function Hero() {
               variants={item}
               className="mt-6 text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.05]"
             >
-              Run contests
-              <br />
-              <span className="text-gradient-brand">from idea to awards.</span>
+              {/* The literal space keeps the accessible name readable as
+                  "Run contests from idea to awards." — block spans alone make
+                  the name-computation run the two lines together. */}
+              <span className="block">Run contests</span>{' '}
+              <span className="block text-gradient-brand">from idea to awards.</span>
             </motion.h1>
 
             <motion.p

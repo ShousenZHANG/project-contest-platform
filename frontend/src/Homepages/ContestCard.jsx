@@ -142,6 +142,7 @@ function ContestCard({ contest, onCardClick }) {
           size="sm"
           onClick={handleVoteClick}
           className="flex-1"
+          aria-label={`Vote for ${contest.title} — ${voteCount} votes so far`}
         >
           <ThumbsUp className="h-4 w-4" />
           <span>Vote</span>
@@ -154,6 +155,7 @@ function ContestCard({ contest, onCardClick }) {
           size="sm"
           onClick={handleJoinClick}
           className="flex-1"
+          aria-label={`Join ${contest.title}`}
         >
           <Flag className="h-4 w-4" />
           Join
