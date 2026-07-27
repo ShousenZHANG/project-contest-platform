@@ -8,10 +8,10 @@ flowchart LR
   Frontend["React 19 + Vite frontend"] --> Gateway["API Gateway :8080"]
   Gateway --> User["user-service :8081"]
   Gateway --> Competition["competition-service :8082"]
-  Gateway --> Registration["registration-service :8083"]
-  Gateway --> Judge["judge-service :8084"]
-  Gateway --> File["file-service :8085"]
-  Gateway --> Interaction["interaction-service :8086"]
+  Gateway --> File["file-service :8083"]
+  Gateway --> Registration["registration-service :8084"]
+  Gateway --> Interaction["interaction-service :8085"]
+  Gateway --> Judge["judge-service :8086"]
 
   User --> MySQL[(MySQL)]
   Competition --> MySQL

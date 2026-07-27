@@ -48,10 +48,10 @@ All services register with Nacos and communicate through OpenFeign where cross-s
 | api-gateway | 8080 | All `/` prefixed routes | JWT auth filter, routing, CORS |
 | user-service | 8081 | `/users/**`, `/teams/**` | Users, roles, OAuth, teams |
 | competition-service | 8082 | `/competitions/**` | Competition CRUD, organizer/judge assignment |
-| registration-service | 8083 | `/registrations/**`, `/submissions/**` | Registration, submissions |
-| judge-service | 8084 | `/judges/**`, `/winners/**`, `/dashboard/**` | Scoring, reviews, winner selection |
-| file-service | 8085 | `/files/**` | MinIO file upload/download |
-| interaction-service | 8086 | `/interactions/**` | Voting, commenting on submissions |
+| file-service | 8083 | `/files/**` | MinIO file upload/download |
+| registration-service | 8084 | `/registrations/**`, `/submissions/**` | Registration, submissions |
+| interaction-service | 8085 | `/interactions/**` | Voting, commenting on submissions |
+| judge-service | 8086 | `/judges/**`, `/winners/**`, `/dashboard/**` | Scoring, reviews, winner selection |
 
 ### Infrastructure Dependencies
 

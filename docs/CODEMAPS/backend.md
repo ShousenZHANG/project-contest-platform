@@ -61,7 +61,7 @@ GET    /is-organizer                 → check if user is organizer
 GET    /public/all                   → list all (for dashboard)
 PUT    /{id}/status                  → update status (internal)
 
-## registration-service (:8083) — /registrations/**, /submissions/**
+## registration-service (:8084) — /registrations/**, /submissions/**
 
 ### CompetitionParticipantsController /registrations
 POST   /{competitionId}                              → register individual
@@ -101,7 +101,7 @@ GET    /public/{competitionId}/submission-trend         → submission trend
 GET    /public/platform/submission-statistics           → platform submission stats
 GET    /public/platform/submission-trend                → platform submission trend
 
-## judge-service (:8084) — /judges/**, /winners/**, /dashboard/**
+## judge-service (:8086) — /judges/**, /winners/**, /dashboard/**
 
 ### SubmissionJudgesController /judges
 POST   /score                        → score a submission
@@ -120,14 +120,14 @@ GET    /scored-list                  → scored submissions list
 GET    /public/statistics            → competition statistics
 GET    /public/platform-overview     → platform overview data
 
-## file-service (:8085) — /files/**
+## file-service (:8083) — /files/**
 
 POST   /upload/avatar                → upload avatar image
 POST   /upload/promo                 → upload promo material
 POST   /upload/submission            → upload submission file
 DELETE /delete                       → delete file by URL
 
-## interaction-service (:8086) — /interactions/**
+## interaction-service (:8085) — /interactions/**
 
 POST   /comments                     → add comment
 DELETE /comments/{id}                → delete comment

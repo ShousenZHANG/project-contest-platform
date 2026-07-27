@@ -96,16 +96,38 @@ Defined in `src/styles/globals.css`:
 | Phase | Scope | Duration | Status |
 |-------|-------|----------|--------|
 | 0 | Design ADR + git cleanup | < 1 hr | ✅ |
-| 1 | Foundation — globals.css, lib/utils.ts, shadcn primitives, AppShell (Sidebar/Topbar/dark mode toggle), font loading | 4-6 hr | 🚧 |
-| 2 | Auth pages (Login/Register/Reset) | 2-3 hr | ⏳ |
-| 3 | Public Homepages (vibrant hero, contest cards) | 3-4 hr | ⏳ |
-| 4 | Participant pages (30 pages — submission flow, contest browsing, team management) | 8-10 hr | ⏳ |
-| 5 | Organizer pages (12 pages — contest CRUD, judge assignment) | 5-6 hr | ⏳ |
-| 6 | Judge pages (scoring flows) | 3-4 hr | ⏳ |
-| 7 | Admin pages (6 pages — user management, dashboard) | 3-4 hr | ⏳ |
-| 8 | Cleanup — remove MUI, remove dual theme, audit a11y, run lighthouse, finalize tokens | 2-3 hr | ⏳ |
+| 1 | Foundation — globals.css, lib/utils.ts, shadcn primitives, AppShell (Sidebar/Topbar/dark mode toggle), font loading | 4-6 hr | ✅ |
+| 2 | Auth pages (Login/Register/Reset) | 2-3 hr | ✅ |
+| 3 | Public Homepages (vibrant hero, contest cards) | 3-4 hr | ✅ |
+| 4 | Participant pages (30 pages — submission flow, contest browsing, team management) | 8-10 hr | ✅ |
+| 5 | Organizer pages (12 pages — contest CRUD, judge assignment) | 5-6 hr | ✅ |
+| 6 | Judge pages (scoring flows) | 3-4 hr | ✅ |
+| 7 | Admin pages (6 pages — user management, dashboard) | 3-4 hr | ✅ |
+| 8 | Cleanup — remove MUI, remove dual theme, audit a11y, run lighthouse, finalize tokens | 2-3 hr | 🚧 |
 
 **Total estimated effort: 30-40 hr split across multiple sessions.**
+
+### Phase 8 residue (audited 2026-07-27)
+
+The page migration (phases 1-7) landed: no `.jsx` under `src/` imports a per-page
+stylesheet any more, and MUI is gone from `package.json`. Phase 8 was only
+partly done, and the audit found this left over:
+
+- 42 orphaned per-page `.css` files (4,793 lines) that nothing imported — **removed**.
+- 8 dependencies installed but never imported (`@tanstack/react-table`,
+  `@radix-ui/react-{select,checkbox,switch,popover,progress}`, `react-day-picker`,
+  `react-image-crop`) — **removed**. Note this walks back the "TanStack Table"
+  and "react-day-picker" implicit decisions above: neither was ever adopted.
+- Dead `@mui` `manualChunks` branch in `vite.config.js` — **removed**.
+- Render-blocking Font Awesome + Material Icons CDN stylesheets in `index.html`
+  with zero usages left — **removed**.
+- Decision 8 (motion system) is effectively unimplemented: `framer-motion` is
+  imported by exactly one file, and `prefers-reduced-motion` is honoured in one
+  place. **Still open.**
+- Decision 11 (WCAG AA) has not been audited. **Still open.**
+- `@tanstack/react-query` is installed and `QueryClientProvider` is mounted, but
+  there are zero `useQuery`/`useMutation` call sites; 38 components fetch inside
+  `useEffect`. Tracked separately as the data-layer pass. **Still open.**
 
 ### Migration safety
 
