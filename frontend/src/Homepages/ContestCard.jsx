@@ -6,7 +6,7 @@
  * instead of relying on fragile external image URLs.
  *
  * Behavior preserved: clicking the card fires onCardClick(contest), Vote hits
- * POST /interactions/votes/count, Join hits POST /registrations/{id}. Auth
+ * POST /interactions/votes, Join hits POST /registrations/{id}. Auth
  * required for both — toast on success/error.
  */
 
@@ -39,7 +39,9 @@ function ContestCard({ contest, onCardClick }) {
     }
 
     try {
-      await apiClient.post(`/interactions/votes/count`, null, {
+      // POST /interactions/votes casts the vote. /votes/count is a GET that
+      // reads the tally back — posting to it returned 405 every time.
+      await apiClient.post('/interactions/votes', null, {
         params: { submissionId: contest.id },
       });
       setVoteCount((v) => v + 1);
