@@ -18,7 +18,8 @@ import type {
 } from '../types/api';
 
 export interface AssignJudgesRequest {
-  judgeIds: string[];
+  /** The controller matches judges by email address, not by id. */
+  judgeEmails: string[];
 }
 
 export const competitionService = {
@@ -75,8 +76,11 @@ export const competitionService = {
   assignJudges: (competitionId: string, data: AssignJudgesRequest): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.post(`/competitions/${competitionId}/assign-judges`, data),
 
-  getJudges: (competitionId: string): Promise<AxiosResponse<ApiResponse<unknown[]>>> =>
-    apiClient.get(`/competitions/${competitionId}/judges`),
+  getJudges: (
+    competitionId: string,
+    params?: PaginationParams
+  ): Promise<AxiosResponse<ApiResponse<unknown[]>>> =>
+    apiClient.get(`/competitions/${competitionId}/judges`, { params }),
 
   removeJudge: (competitionId: string, judgeId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.delete(`/competitions/${competitionId}/judges/${judgeId}`),

@@ -7,12 +7,15 @@
  * Role: Organizer
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
-import { extractErrorMessage } from '../services/serviceUtils';
+import { competitionService } from '../services/competitionService';
+import { submissionService } from '../services/registrationService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -46,53 +49,49 @@ function OrganizerSubmissions() {
   const navigate = useNavigate();
   const email = AuthTokenManager.getEmail();
 
-  const [submissions, setSubmissions] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [sortBy] = useState('createdAt');
   const [order, setOrder] = useState('desc');
-  const [loading, setLoading] = useState(false);
-  const [competitionName, setCompetitionName] = useState('');
-
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('');
   const [reviewComments, setReviewComments] = useState('');
 
-  const fetchSubmissions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(
-        `/submissions/public?competitionId=${competitionId}&page=${page}&size=10&keyword=${keyword}&sortBy=${sortBy}&order=${order}`
-      );
-      const data = res.data;
-      setSubmissions(data.data || []);
-      setTotalPages(data.pages || 1);
-      setTotalCount(data.total || 0);
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [competitionId, page, keyword, sortBy, order]);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const fetchCompetitionName = async () => {
-      try {
-        const res = await apiClient.get(`/competitions/${competitionId}`);
-        setCompetitionName(res.data.name || 'Unnamed Competition');
-      } catch (err) {
-        toast.error(extractErrorMessage(err));
-      }
-    };
-    fetchCompetitionName();
-  }, [competitionId]);
+  const listParams = { competitionId, page, size: 10, keyword, sortBy, order };
+  const listKey = queryKeys.submissions.byCompetition(competitionId, listParams);
 
-  useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
+  const { data: listPage, isPending: loading } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(submissionService.getPublic(listParams)),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.short,
+  });
+
+  const submissions = listPage?.data ?? [];
+  const totalPages = listPage?.pages ?? 1;
+  const totalCount = listPage?.total ?? 0;
+
+  const { data: competition } = useQuery({
+    queryKey: queryKeys.competitions.detail(competitionId),
+    queryFn: () => unwrap(competitionService.getById(competitionId)),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.medium,
+  });
+
+  const competitionName = competition?.name || 'Unnamed Competition';
+
+  const reviewSubmission = useMutation({
+    mutationFn: (data) => unwrap(submissionService.review(data)),
+    onSuccess: () => {
+      toast.success('Review submitted successfully');
+      setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
+    },
+    onError: (error) => toast.error('Review failed: ' + toMessage(error)),
+  });
 
   const handleSearch = (e) => {
     setKeyword(e.target.value);
@@ -113,22 +112,13 @@ function OrganizerSubmissions() {
     setDialogOpen(true);
   };
 
-  const handleReviewSubmit = async () => {
+  const handleReviewSubmit = () => {
     if (!selectedSubmission) return;
-    try {
-      await apiClient.post('/submissions/review', {
-        submissionId: selectedSubmission.id,
-        reviewStatus,
-        reviewComments,
-      });
-      toast.success('Review submitted successfully');
-      setDialogOpen(false);
-      fetchSubmissions();
-    } catch (error) {
-      toast.error(
-        'Review failed: ' + (error.response?.data?.message || 'Error submitting review')
-      );
-    }
+    reviewSubmission.mutate({
+      submissionId: selectedSubmission.id,
+      reviewStatus,
+      reviewComments,
+    });
   };
 
   return (

@@ -7,12 +7,15 @@
  * Role: Organizer
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Trash2, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
-import { extractErrorMessage } from '../services/serviceUtils';
+import { competitionService } from '../services/competitionService';
+import { registrationService } from '../services/registrationService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -37,94 +40,98 @@ function ParticipantList() {
 
   const initialType = location.state?.participationType || '';
   const [participationType, setParticipationType] = useState(initialType);
-  const [participants, setParticipants] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null, kind: null });
 
-  const [competitionInfo, setCompetitionInfo] = useState({
-    name: '',
-    category: '',
-    startDate: '',
-    endDate: '',
-    status: '',
+  const queryClient = useQueryClient();
+  const enabled = Boolean(competitionId);
+
+  const { data: competition } = useQuery({
+    queryKey: queryKeys.competitions.detail(competitionId),
+    queryFn: () => unwrap(competitionService.getById(competitionId)),
+    enabled,
+    staleTime: staleTime.medium,
   });
 
-  const fetchCompetitionInfo = useCallback(async () => {
-    try {
-      const res = await apiClient.get(`/competitions/${competitionId}`);
-      const data = res.data;
-      setCompetitionInfo({
-        name: data.name || 'Unnamed Competition',
-        category: data.category || 'Unknown',
-        startDate: data.startDate ? new Date(data.startDate).toLocaleDateString() : '',
-        endDate: data.endDate ? new Date(data.endDate).toLocaleDateString() : '',
-        status: data.status || '',
-      });
-      setParticipationType(
-        (prev) => prev || data.selectedParticipationType || 'INDIVIDUAL'
+  const competitionInfo = {
+    name: competition?.name || 'Unnamed Competition',
+    category: competition?.category || 'Unknown',
+    startDate: competition?.startDate
+      ? new Date(competition.startDate).toLocaleDateString()
+      : '',
+    endDate: competition?.endDate ? new Date(competition.endDate).toLocaleDateString() : '',
+    status: competition?.status || '',
+  };
+
+  // The competition decides the default mode, but an explicit choice by the
+  // organizer wins from then on.
+  useEffect(() => {
+    if (!competition) return;
+    setParticipationType(
+      (prev) => prev || competition.selectedParticipationType || 'INDIVIDUAL'
+    );
+  }, [competition]);
+
+  const isTeamMode = participationType === 'TEAM';
+
+  const participantsParams = {
+    page,
+    size: 10,
+    keyword,
+    sortBy: 'registeredAt',
+    order: sortOrder,
+  };
+  const teamsParams = { page, size: 10, keyword, sortBy: 'createdAt', order: sortOrder };
+
+  const participantsKey = queryKeys.registrations.participants(
+    competitionId,
+    participantsParams
+  );
+  const teamsKey = [
+    ...queryKeys.registrations.all,
+    'teams',
+    competitionId,
+    teamsParams,
+  ];
+
+  const participantsQuery = useQuery({
+    queryKey: participantsKey,
+    queryFn: () =>
+      unwrap(registrationService.getParticipants(competitionId, participantsParams)),
+    enabled: enabled && participationType === 'INDIVIDUAL',
+    staleTime: staleTime.short,
+  });
+
+  const teamsQuery = useQuery({
+    queryKey: teamsKey,
+    queryFn: () => unwrap(registrationService.getRegisteredTeams(competitionId, teamsParams)),
+    enabled: enabled && isTeamMode,
+    staleTime: staleTime.short,
+  });
+
+  const activeQuery = isTeamMode ? teamsQuery : participantsQuery;
+  const participants = participantsQuery.data?.data ?? [];
+  const teams = teamsQuery.data?.data ?? [];
+  const totalPages = activeQuery.data?.pages ?? 1;
+  const totalCount = activeQuery.data?.total ?? 0;
+  const loading = activeQuery.isPending;
+
+  const removeRegistration = useMutation({
+    mutationFn: ({ id, kind }) =>
+      kind === 'TEAM'
+        ? unwrap(registrationService.removeTeam(competitionId, id))
+        : unwrap(registrationService.removeParticipant(competitionId, id)),
+    onSuccess: (_data, { kind }) => {
+      toast.success(
+        kind === 'TEAM' ? 'Team removed successfully' : 'Participant removed successfully'
       );
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    }
-  }, [competitionId]);
-
-  const fetchParticipants = useCallback(
-    async (pageNum = 1, kw = '', order = 'asc') => {
-      setLoading(true);
-      try {
-        const res = await apiClient.get(
-          `/registrations/${competitionId}/participants?page=${pageNum}&size=10&keyword=${kw}&sortBy=registeredAt&order=${order}`
-        );
-        const data = res.data;
-        setParticipants(data.data || []);
-        setTotalPages(data.pages || 1);
-        setTotalCount(data.total || 0);
-      } catch (err) {
-        toast.error(extractErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
     },
-    [competitionId]
-  );
-
-  const fetchTeams = useCallback(
-    async (pageNum = 1, kw = '', order = 'asc') => {
-      setLoading(true);
-      try {
-        const res = await apiClient.get(
-          `/registrations/public/${competitionId}/teams?page=${pageNum}&size=10&keyword=${kw}&sortBy=createdAt&order=${order}`
-        );
-        const data = res.data;
-        setTeams(data.data || []);
-        setTotalPages(data.pages || 1);
-        setTotalCount(data.total || 0);
-      } catch (err) {
-        toast.error(extractErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [competitionId]
-  );
-
-  useEffect(() => {
-    fetchCompetitionInfo();
-  }, [fetchCompetitionInfo]);
-
-  useEffect(() => {
-    if (participationType === 'TEAM') {
-      fetchTeams(page, keyword, sortOrder);
-    } else if (participationType === 'INDIVIDUAL') {
-      fetchParticipants(page, keyword, sortOrder);
-    }
-  }, [fetchTeams, fetchParticipants, page, keyword, sortOrder, participationType]);
+    onError: () => toast.error('Error occurred during deletion'),
+    onSettled: () => setConfirmDelete({ open: false, id: null, kind: null }),
+  });
 
   const handleSearch = (e) => {
     setKeyword(e.target.value);
@@ -183,28 +190,9 @@ function ParticipantList() {
     }
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     const { id, kind } = confirmDelete;
-    if (!id) return;
-    try {
-      if (kind === 'TEAM') {
-        await apiClient.delete(
-          `/registrations/teams/${competitionId}/team/${id}/by-organizer`
-        );
-        toast.success('Team removed successfully');
-        fetchTeams(page, keyword, sortOrder);
-      } else {
-        await apiClient.delete(
-          `/registrations/${competitionId}/participants/${id}`
-        );
-        toast.success('Participant removed successfully');
-        fetchParticipants(page, keyword, sortOrder);
-      }
-    } catch {
-      toast.error('Error occurred during deletion');
-    } finally {
-      setConfirmDelete({ open: false, id: null, kind: null });
-    }
+    if (id) removeRegistration.mutate({ id, kind });
   };
 
   const data = participationType === 'TEAM' ? teams : participants;

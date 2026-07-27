@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerSubmissions from "../../Organizer/CheckSubmissions";
-import { BrowserRouter } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -54,11 +54,10 @@ afterEach(() => {
 
 describe("OrganizerSubmissions", () => {
   it("renders and shows loading spinner", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerSubmissions />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerSubmissions />, {
+      route: "/OrganizerSubmissions/comp-1",
+      routePath: "/OrganizerSubmissions/:competitionId",
+    });
 
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
     await waitFor(() => {
@@ -67,11 +66,10 @@ describe("OrganizerSubmissions", () => {
   });
 
   it("renders fetched submission data", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerSubmissions />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerSubmissions />, {
+      route: "/OrganizerSubmissions/comp-1",
+      routePath: "/OrganizerSubmissions/:competitionId",
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/Awesome Project/i)).toBeInTheDocument();
@@ -80,11 +78,10 @@ describe("OrganizerSubmissions", () => {
   });
 
   it("opens and closes the review dialog", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerSubmissions />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerSubmissions />, {
+      route: "/OrganizerSubmissions/comp-1",
+      routePath: "/OrganizerSubmissions/:competitionId",
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/Awesome Project/i)).toBeInTheDocument();

@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import ParticipantList from "../../Organizer/ParticipantList";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -68,13 +68,10 @@ beforeEach(() => {
 });
 
 const renderWithRouter = () => {
-  render(
-    <MemoryRouter initialEntries={["/participant-list/test-competition"]}>
-      <Routes>
-        <Route path="/participant-list/:competitionId" element={<ParticipantList />} />
-      </Routes>
-    </MemoryRouter>
-  );
+  renderWithProviders(<ParticipantList />, {
+    route: "/participant-list/test-competition",
+    routePath: "/participant-list/:competitionId",
+  });
 };
 
 describe("ParticipantList", () => {
@@ -97,8 +94,13 @@ describe("ParticipantList", () => {
     fireEvent.change(searchInput, { target: { value: "Alice" } });
 
     await waitFor(() => {
+      // Query values now travel as Axios params rather than being baked into
+      // the path; the request on the wire is unchanged.
       expect(apiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining("/participants?page=1&size=10&keyword=Alice")
+        expect.stringContaining("/participants"),
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, size: 10, keyword: "Alice" }),
+        })
       );
     });
   });

@@ -7,11 +7,15 @@
  * Role: Organizer
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { competitionService } from '../services/competitionService';
+import { registrationService } from '../services/registrationService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -33,60 +37,76 @@ function OrganizerAddJudge() {
   const email = AuthTokenManager.getEmail();
 
   const [judgeEmail, setJudgeEmail] = useState('');
-  const [judges, setJudges] = useState([]);
-  const [competitionName, setCompetitionName] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [participantsEmails, setParticipantsEmails] = useState(new Set());
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get(`/competitions/${competitionId}`);
-        setCompetitionName(res.data.name || 'Unnamed Competition');
-      } catch {
-        // fetch error handled silently
-      }
-    })();
-  }, [competitionId]);
+  const queryClient = useQueryClient();
+  const enabled = Boolean(competitionId);
 
-  const fetchJudges = useCallback(
-    async (currentPage = 1) => {
-      try {
-        const res = await apiClient.get(
-          `/competitions/${competitionId}/judges?page=${currentPage}&size=10`
-        );
-        const data = res.data;
-        setJudges(data.data || []);
-        setTotalPages(data.pages || 1);
-      } catch {
-        // fetch error handled silently
-      }
+  const { data: competition } = useQuery({
+    queryKey: queryKeys.competitions.detail(competitionId),
+    queryFn: () => unwrap(competitionService.getById(competitionId)),
+    enabled,
+    staleTime: staleTime.medium,
+  });
+
+  const competitionName = competition?.name || 'Unnamed Competition';
+
+  const judgesParams = { page, size: 10 };
+  const judgesKey = [...queryKeys.competitions.judges(competitionId), judgesParams];
+
+  const { data: judgesPage } = useQuery({
+    queryKey: judgesKey,
+    queryFn: () => unwrap(competitionService.getJudges(competitionId, judgesParams)),
+    enabled,
+    staleTime: staleTime.short,
+  });
+
+  const judges = judgesPage?.data ?? [];
+  const totalPages = judgesPage?.pages ?? 1;
+
+  const participantsParams = { page: 1, size: 10000 };
+  const { data: participantsEmails = new Set() } = useQuery({
+    queryKey: queryKeys.registrations.participants(competitionId, participantsParams),
+    queryFn: () =>
+      unwrap(registrationService.getParticipants(competitionId, participantsParams)),
+    // Only the email set is used here; keeping the raw page cached means the
+    // participant list page can share this entry.
+    select: (payload) => new Set((payload?.data ?? []).map((p) => p.email)),
+    enabled,
+    staleTime: staleTime.medium,
+  });
+
+  const refreshJudges = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.competitions.judges(competitionId) });
+
+  const assignJudges = useMutation({
+    mutationFn: (judgeEmails) =>
+      unwrap(competitionService.assignJudges(competitionId, { judgeEmails })),
+    onSuccess: (data) => {
+      toast.success(typeof data === 'string' ? data : JSON.stringify(data));
+      setJudgeEmail('');
+      refreshJudges();
     },
-    [competitionId]
-  );
-
-  useEffect(() => {
-    fetchJudges(page);
-  }, [competitionId, page, fetchJudges]);
-
-  const fetchParticipants = useCallback(async () => {
-    try {
-      const res = await apiClient.get(
-        `/registrations/${competitionId}/participants?page=1&size=10000`
+    onError: (error) => {
+      const errData = error.response?.data;
+      toast.error(
+        typeof errData === 'string'
+          ? errData
+          : errData?.error || 'Error assigning judge'
       );
-      const data = res.data;
-      const emailsSet = new Set((data.data || []).map((p) => p.email));
-      setParticipantsEmails(emailsSet);
-    } catch {
-      // fetch error handled silently
-    }
-  }, [competitionId]);
+    },
+  });
 
-  useEffect(() => {
-    fetchParticipants();
-  }, [competitionId, fetchParticipants]);
+  const removeJudge = useMutation({
+    mutationFn: (judgeId) => unwrap(competitionService.removeJudge(competitionId, judgeId)),
+    onSuccess: (data) => {
+      toast.success(typeof data === 'string' ? data : 'Judge removed');
+      refreshJudges();
+    },
+    onError: () => toast.error('Error deleting judge'),
+    onSettled: () => setConfirmDelete({ open: false, id: null }),
+  });
 
   const handleAddJudge = async () => {
     const trimmedEmails = judgeEmail
@@ -107,42 +127,12 @@ function OrganizerAddJudge() {
       return;
     }
 
-    try {
-      const res = await apiClient.post(
-        `/competitions/${competitionId}/assign-judges`,
-        { judgeEmails: trimmedEmails }
-      );
-      const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-      toast.success(text);
-      setJudgeEmail('');
-      fetchJudges(page);
-    } catch (error) {
-      const errData = error.response?.data;
-      const errorMessage =
-        typeof errData === 'string'
-          ? errData
-          : errData?.error
-            ? errData.error
-            : 'Error assigning judge';
-      toast.error(errorMessage);
-    }
+    assignJudges.mutate(trimmedEmails);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     const judgeId = confirmDelete.id;
-    if (!judgeId) return;
-    try {
-      const res = await apiClient.delete(
-        `/competitions/${competitionId}/judges/${judgeId}`
-      );
-      const msg = typeof res.data === 'string' ? res.data : 'Judge removed';
-      toast.success(msg);
-      fetchJudges(page);
-    } catch {
-      toast.error('Error deleting judge');
-    } finally {
-      setConfirmDelete({ open: false, id: null });
-    }
+    if (judgeId) removeJudge.mutate(judgeId);
   };
 
   return (

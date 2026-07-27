@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import OrganizerAddJudge from "../../Organizer/OrganizerAddJudge";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
 
 jest.mock("../../api/apiClient");
@@ -52,15 +52,11 @@ beforeEach(() => {
   mockNavigate.mockClear();
 });
 
-const renderWithRouter = () => {
-  render(
-    <MemoryRouter initialEntries={["/organizer-add-judge/test-competition"]}>
-      <Routes>
-        <Route path="/organizer-add-judge/:competitionId" element={<OrganizerAddJudge />} />
-      </Routes>
-    </MemoryRouter>
-  );
-};
+const renderWithRouter = () =>
+  renderWithProviders(<OrganizerAddJudge />, {
+    route: "/organizer-add-judge/test-competition",
+    routePath: "/organizer-add-judge/:competitionId",
+  });
 
 describe("OrganizerAddJudge", () => {
   test("renders competition name and judges list", async () => {
