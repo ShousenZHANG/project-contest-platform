@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithProviders } from "../testUtils";
 import SubmissionRatings from "../../Organizer/SubmissionRatings";
 import apiClient from '../../api/apiClient';
 
@@ -34,11 +34,7 @@ afterEach(() => {
 
 describe("SubmissionRatings", () => {
   it("renders rated submissions table after data loads", async () => {
-    render(
-      <MemoryRouter>
-        <SubmissionRatings />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SubmissionRatings />);
 
     await waitFor(() => {
       expect(screen.getByText("Rated Submissions Comparison")).toBeInTheDocument();
@@ -46,28 +42,26 @@ describe("SubmissionRatings", () => {
   });
 
   it("triggers auto award when clicking the button", async () => {
-    render(
-      <MemoryRouter>
-        <SubmissionRatings />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SubmissionRatings />);
 
     const autoAwardButton = await screen.findByText(/Auto Award Winners/i);
     fireEvent.click(autoAwardButton);
 
     await waitFor(() => {
+      // competitionId now travels as an Axios param rather than being baked
+      // into the path string; the request on the wire is identical.
       expect(apiClient.post).toHaveBeenCalledWith(
-        expect.stringContaining("/winners/auto-award")
+        "/winners/auto-award",
+        null,
+        expect.objectContaining({
+          params: { competitionId: "test-competition-id" },
+        })
       );
     });
   });
 
   it("navigates back to submissions list when clicking back button", async () => {
-    render(
-      <MemoryRouter>
-        <SubmissionRatings />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SubmissionRatings />);
 
     const backButton = await screen.findByText(/Back to Submissions List/i);
     fireEvent.click(backButton);

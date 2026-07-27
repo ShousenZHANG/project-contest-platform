@@ -7,7 +7,8 @@
  * Role: Organizer
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { getChartColors } from '../lib/chartColors';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Loader2 } from 'lucide-react';
@@ -25,8 +26,10 @@ import {
   Line,
 } from 'recharts';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
-import { extractErrorMessage } from '../services/serviceUtils';
+import { competitionService } from '../services/competitionService';
+import { dashboardService } from '../services/judgeService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Card, CardContent } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import {
@@ -76,60 +79,80 @@ function MetricCard({ label, value, unit = '', tooltipRows = [] }) {
 function OrganizerDashboard() {
   useDocumentTitle('Competition Dashboard');
   const colors = useMemo(() => getChartColors(), []);
-  const [stats, setStats] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [selectedComp, setSelectedComp] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get('/competitions/achieve/my?page=1&size=100');
-        const { data: competitions = [] } = res.data;
+  const listParams = { page: 1, size: 100 };
 
-        const list = await Promise.all(
-          competitions.map(async (c) => {
-            const [statRes, detailRes] = await Promise.all([
-              apiClient.get(`/dashboard/public/statistics?competitionId=${c.id}`),
-              apiClient.get(`/competitions/${c.id}`),
-            ]);
-            const stat = statRes.data;
-            const detail = detailRes.data;
+  const {
+    data: competitions = [],
+    isPending: listPending,
+    error: listError,
+  } = useQuery({
+    queryKey: queryKeys.competitions.mine(listParams),
+    queryFn: () => unwrap(competitionService.getMyOrganized(listParams)),
+    select: (page) => (Array.isArray(page?.data) ? page.data : []),
+    staleTime: staleTime.short,
+  });
 
-            const totalSubs = stat.submissionCount || 0;
-            const approved = stat.approvedSubmissionCount || 0;
+  // Statistics and detail are fetched per competition. useQueries keeps the
+  // fan-out but caches each competition separately, so adding one contest no
+  // longer refetches the statistics of every other one.
+  const statQueries = useQueries({
+    queries: competitions.map((c) => ({
+      queryKey: [...queryKeys.dashboard.organizer(), c.id],
+      queryFn: () => unwrap(dashboardService.getCompetitionStatistics(c.id)),
+      staleTime: staleTime.medium,
+    })),
+  });
 
-            return {
-              id: c.id,
-              name: c.name,
-              status: (detail.status || detail.competitionStatus || 'UNKNOWN').toUpperCase(),
-              regs:
-                stat.participationType === 'INDIVIDUAL'
-                  ? stat.individualParticipantCount || 0
-                  : stat.teamParticipantCount || 0,
-              subs: totalSubs,
-              judges: stat.judgeCount || 0,
-              approvePct: totalSubs > 0 ? (approved / totalSubs) * 100 : 0,
-              trend:
-                Object.keys(stat.individualParticipantTrend || {}).length > 0
-                  ? stat.individualParticipantTrend
-                  : Object.keys(stat.teamParticipantTrend || {}).length > 0
-                    ? stat.teamParticipantTrend
-                    : stat.submissionTrend,
-            };
-          })
-        );
+  const detailQueries = useQueries({
+    queries: competitions.map((c) => ({
+      queryKey: queryKeys.competitions.detail(c.id),
+      queryFn: () => unwrap(competitionService.getById(c.id)),
+      staleTime: staleTime.medium,
+    })),
+  });
 
-        setStats(list);
-      } catch (e) {
-        const msg = extractErrorMessage(e);
-        setError(msg);
-        toast.error(msg);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const loading =
+    listPending ||
+    statQueries.some((q) => q.isPending) ||
+    detailQueries.some((q) => q.isPending);
+
+  const error =
+    listError ||
+    statQueries.find((q) => q.error)?.error ||
+    detailQueries.find((q) => q.error)?.error ||
+    null;
+
+  // Not memoized on purpose: useQueries hands back a fresh array every render,
+  // so a useMemo keyed on it would recompute anyway while looking like it did
+  // not. The map is over at most 100 rows.
+  const stats = competitions.map((c, i) => {
+    const stat = statQueries[i]?.data ?? {};
+    const detail = detailQueries[i]?.data ?? {};
+
+    const totalSubs = stat.submissionCount || 0;
+    const approved = stat.approvedSubmissionCount || 0;
+
+    return {
+      id: c.id,
+      name: c.name,
+      status: (detail.status || detail.competitionStatus || 'UNKNOWN').toUpperCase(),
+      regs:
+        stat.participationType === 'INDIVIDUAL'
+          ? stat.individualParticipantCount || 0
+          : stat.teamParticipantCount || 0,
+      subs: totalSubs,
+      judges: stat.judgeCount || 0,
+      approvePct: totalSubs > 0 ? (approved / totalSubs) * 100 : 0,
+      trend:
+        Object.keys(stat.individualParticipantTrend || {}).length > 0
+          ? stat.individualParticipantTrend
+          : Object.keys(stat.teamParticipantTrend || {}).length > 0
+            ? stat.teamParticipantTrend
+            : stat.submissionTrend,
+    };
+  });
 
   const { totals, tooltipMap } = useMemo(() => {
     const sum = { regs: 0, subs: 0, judges: 0 };
@@ -217,7 +240,7 @@ function OrganizerDashboard() {
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
-          {error}
+          {toMessage(error)}
         </div>
       ) : stats.length === 0 ? (
         <p className="text-sm text-muted-foreground">(No competitions yet)</p>

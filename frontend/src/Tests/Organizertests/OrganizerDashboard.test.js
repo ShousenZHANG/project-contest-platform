@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
+import { renderWithProviders } from "../testUtils";
 import OrganizerDashboard from "../../Organizer/Dashboard";
 import apiClient from '../../api/apiClient';
 
@@ -50,20 +50,12 @@ afterEach(() => {
 
 describe("OrganizerDashboard", () => {
   it("renders loading spinner initially", () => {
-    render(
-      <BrowserRouter>
-        <OrganizerDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerDashboard />);
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
   });
 
   it("renders dashboard metrics after loading", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerDashboard />);
 
     await waitFor(() => {
       expect(screen.getByText(/Participants/i)).toBeInTheDocument();
@@ -74,11 +66,7 @@ describe("OrganizerDashboard", () => {
   });
 
   it("shows status distribution and trend viewer", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerDashboard />);
 
     await waitFor(() => {
       expect(screen.getByText(/Status Distribution/i)).toBeInTheDocument();
@@ -87,11 +75,7 @@ describe("OrganizerDashboard", () => {
   });
 
   it("can select a competition for trend viewing", async () => {
-    render(
-      <BrowserRouter>
-        <OrganizerDashboard />
-      </BrowserRouter>
-    );
+    renderWithProviders(<OrganizerDashboard />);
 
     await waitFor(() => {
       expect(screen.getByLabelText(/Select competition/i)).toBeInTheDocument();

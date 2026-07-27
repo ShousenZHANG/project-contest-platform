@@ -7,12 +7,14 @@
  * Role: Organizer
  */
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
-import { extractErrorMessage } from '../services/serviceUtils';
+import { winnerService } from '../services/judgeService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
@@ -28,30 +30,18 @@ function SortIcon({ active, direction }) {
 function SubmissionRatings() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [submissions, setSubmissions] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'totalScore', direction: 'desc' });
 
-  const fetchRatings = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(
-        `/winners/scored-list?competitionId=${competitionId}`
-      );
-      const data = res.data;
-      if (Array.isArray(data.data)) {
-        setSubmissions(data.data);
-      }
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [competitionId]);
+  const queryClient = useQueryClient();
+  const scoredKey = [...queryKeys.winners.byCompetition(competitionId), 'scored'];
 
-  useEffect(() => {
-    fetchRatings();
-  }, [fetchRatings]);
+  const { data: submissions = [], isPending: loading } = useQuery({
+    queryKey: scoredKey,
+    queryFn: () => unwrap(winnerService.getScoredList({ competitionId })),
+    select: (payload) => (Array.isArray(payload?.data) ? payload.data : []),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.short,
+  });
 
   const allCriteria = useMemo(
     () =>
@@ -93,12 +83,13 @@ function SubmissionRatings() {
     }));
   };
 
-  const handleAutoAward = async () => {
-    try {
-      await apiClient.post(`/winners/auto-award?competitionId=${competitionId}`);
+  const autoAward = useMutation({
+    mutationFn: () => unwrap(winnerService.autoAward(competitionId)),
+    onSuccess: () => {
       toast.success('Auto-award completed successfully');
-      fetchRatings();
-    } catch (error) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.winners.all });
+    },
+    onError: (error) => {
       const status = error.response?.status;
       if (status === 400) {
         toast.warning('No scored submissions found.');
@@ -107,8 +98,10 @@ function SubmissionRatings() {
       } else {
         toast.error('Failed to connect to server.');
       }
-    }
-  };
+    },
+  });
+
+  const handleAutoAward = () => autoAward.mutate();
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6">
