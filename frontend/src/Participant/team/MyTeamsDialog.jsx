@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import EditTeamDialog from './EditTeamDialog';
-import { getTeamCreator, getTeamDetail } from './teamApi';
+import { teamService } from '@/services/teamService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 
 function MyTeamsDialog({
   open,
@@ -32,46 +35,48 @@ function MyTeamsDialog({
   userData,
   onUpdate,
 }) {
-  const [editOpen, setEditOpen] = useState(false);
-  const [teamToEdit, setTeamToEdit] = useState(null);
-  const [creatorMap, setCreatorMap] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [editTeamId, setEditTeamId] = useState(null);
   const [teamToDelete, setTeamToDelete] = useState(null);
 
+  // The creator of each team decides whether the edit and delete controls show.
+  // These used to be fetched in a sequential for-loop, so a dialog listing ten
+  // teams waited out ten round trips one after another.
+  const creatorQueries = useQueries({
+    queries: (open ? myTeams : []).map((team) => ({
+      queryKey: queryKeys.teams.creator(team.id),
+      queryFn: () => unwrap(teamService.getCreator(team.id)),
+      staleTime: staleTime.long,
+    })),
+  });
+
+  const loading = creatorQueries.some((q) => q.isPending);
+  const error = '';
+
+  const creatorMap = {};
+  (open ? myTeams : []).forEach((team, i) => {
+    const creator = creatorQueries[i] && creatorQueries[i].data;
+    creatorMap[team.id] = creator ? creator.id : null;
+  });
+
+  const { data: teamToEdit = null, error: editError } = useQuery({
+    queryKey: queryKeys.teams.detail(editTeamId),
+    queryFn: () => unwrap(teamService.getById(editTeamId)),
+    enabled: Boolean(editTeamId),
+    staleTime: staleTime.medium,
+  });
+
+  // Fire the toast from an effect, not during render: the error stays set
+  // until the query is retried, so a render-time toast would repeat forever.
   useEffect(() => {
-    if (!open || myTeams.length === 0) return;
-
-    const fetchCreators = async () => {
-      setLoading(true);
-      setError('');
-      const newMap = {};
-
-      for (const team of myTeams) {
-        try {
-          const creator = await getTeamCreator(team.id, userData);
-          newMap[team.id] = creator.id;
-        } catch {
-          newMap[team.id] = null;
-        }
-      }
-
-      setCreatorMap(newMap);
-      setLoading(false);
-    };
-
-    fetchCreators();
-  }, [open, myTeams, userData]);
-
-  const handleOpenEdit = async (team) => {
-    try {
-      const fullTeam = await getTeamDetail(team.id);
-      setTeamToEdit(fullTeam);
-      setEditOpen(true);
-    } catch (err) {
-      toast.error('Failed to load team info: ' + err.message);
+    if (editError) {
+      toast.error('Failed to load team info: ' + toMessage(editError));
+      setEditTeamId(null);
     }
-  };
+  }, [editError]);
+
+  const editOpen = Boolean(editTeamId) && Boolean(teamToEdit);
+
+  const handleOpenEdit = (team) => setEditTeamId(team.id);
 
   const confirmDelete = () => {
     if (teamToDelete) {
@@ -156,11 +161,11 @@ function MyTeamsDialog({
       {teamToEdit && (
         <EditTeamDialog
           open={editOpen}
-          onClose={() => setEditOpen(false)}
+          onClose={() => setEditTeamId(null)}
           team={teamToEdit}
           userData={userData}
           onUpdated={() => {
-            setEditOpen(false);
+            setEditTeamId(null);
             onUpdate();
           }}
         />

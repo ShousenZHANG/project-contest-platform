@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,7 +27,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { teamSchema } from '@/shared/schemas/teamSchema';
-import { updateTeam, removeTeamMember, getTeamDetail } from './teamApi';
+import { teamService } from '@/services/teamService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 
 const formSchema = z.object({
   name: teamSchema.shape.name,
@@ -34,9 +37,8 @@ const formSchema = z.object({
 });
 
 function EditTeamDialog({ open, onClose, team, userData, onUpdated }) {
-  const [members, setMembers] = useState([]);
-  const [loadError, setLoadError] = useState('');
   const [memberToRemove, setMemberToRemove] = useState(null);
+  const queryClient = useQueryClient();
 
   const isCreator = team?.createdBy === userData.userId;
 
@@ -50,53 +52,84 @@ function EditTeamDialog({ open, onClose, team, userData, onUpdated }) {
     defaultValues: { name: '', description: '' },
   });
 
+  // Reset the form whenever a different team is opened. The form owns its
+  // values after that, so a background refetch cannot overwrite an edit.
   useEffect(() => {
     if (!team) return;
     reset({ name: team.name || '', description: team.description || '' });
-    setLoadError('');
-    if (isCreator) {
-      getTeamDetail(team.id)
-        .then((data) => setMembers(data.members || []))
-        .catch((err) =>
-          setLoadError('Failed to load team members: ' + err.message)
-        );
-    }
-  }, [team, isCreator, reset]);
+  }, [team, reset]);
 
-  const onSubmit = (values) => {
-    return new Promise((resolve) => {
-      updateTeam(
-        team.id,
-        { name: values.name.trim(), description: (values.description || '').trim() },
-        userData,
-        {
-          onSuccess: () => {
-            toast.success('Team updated successfully');
-            onUpdated();
-            resolve();
-          },
-          onError: (msg) => {
-            toast.error(msg);
-            resolve();
-          },
-        }
+  const detailKey = queryKeys.teams.detail(team && team.id);
+
+  const { data: detail, error: loadQueryError } = useQuery({
+    queryKey: detailKey,
+    queryFn: () => unwrap(teamService.getById(team.id)),
+    enabled: Boolean(team && team.id && isCreator),
+    staleTime: staleTime.medium,
+  });
+
+  const members = (detail && detail.members) || [];
+  const loadError = loadQueryError
+    ? 'Failed to load team members: ' + toMessage(loadQueryError)
+    : '';
+
+  const updateTeam = useMutation({
+    mutationFn: (values) =>
+      unwrap(
+        teamService.update(team.id, {
+          name: values.name.trim(),
+          description: (values.description || '').trim(),
+        })
+      ),
+    onSuccess: () => {
+      toast.success('Team updated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all });
+      onUpdated();
+    },
+    onError: (error) => {
+      const status = error && error.response && error.response.status;
+      if (status === 403) toast.error('You are not authorized to update this team.');
+      else if (status === 404) toast.error('Team not found.');
+      else toast.error(toMessage(error));
+    },
+  });
+
+  const removeMember = useMutation({
+    mutationFn: (member) => unwrap(teamService.removeMember(team.id, member.userId)),
+    onMutate: async (member) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData(detailKey);
+      queryClient.setQueryData(detailKey, (current) =>
+        current
+          ? {
+              ...current,
+              members: (current.members || []).filter((m) => m.userId !== member.userId),
+            }
+          : current
       );
-    });
-  };
-
-  const confirmRemove = async () => {
-    const member = memberToRemove;
-    if (!member) return;
-    try {
-      await removeTeamMember(team.id, member.userId, userData);
-      setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+      return { previous };
+    },
+    onError: (error, _member, context) => {
+      if (context && context.previous !== undefined) {
+        queryClient.setQueryData(detailKey, context.previous);
+      }
+      toast.error('Failed to remove: ' + toMessage(error));
+    },
+    onSuccess: () => {
       toast.success('Member removed successfully');
       onUpdated();
-    } catch (err) {
-      toast.error('Failed to remove: ' + err.message);
-    } finally {
+    },
+    onSettled: () => {
       setMemberToRemove(null);
-    }
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all });
+    },
+  });
+
+  // react-hook-form keeps isSubmitting true until this promise settles.
+  const onSubmit = (values) => updateTeam.mutateAsync(values).catch(() => {});
+
+  const confirmRemove = () => {
+    if (memberToRemove) removeMember.mutate(memberToRemove);
   };
 
   return (
