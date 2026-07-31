@@ -49,9 +49,24 @@ client they wrap is service-specific.
 **Negative**
 - One more indirection between a service and its Feign client. Justified where the guard repeats;
   a gateway wrapping a single call site would be shallow — do not add one there.
-- Existing fallback classes under `feign/fallback/` still return nulls that the gateway then
-  re-interprets. That is two places expressing the same policy. Folding the fallbacks into the
-  gateway is worth doing and has not been done.
+
+## Fallbacks report outages, they do not fake absence
+
+A circuit-breaker fallback answers when the upstream service is down, so what it returns decides
+what the user is told.
+
+judge-service's fallbacks returned an empty body, and `require` reported that as
+404 "Competition not found" — an outage described to the user as a deletion, with the wrong status
+code and no signal that anything was operationally wrong. registration-service's equivalent
+fallback already threw `ServiceUnavailableException`; judge-service now follows the same rule.
+
+The split is by intent, not by return type:
+
+- **Single-entity reads and writes throw 503.** Callers treat these as required, so a fabricated
+  absence becomes a lie.
+- **Batch reads and authorisation checks degrade quietly** — an empty list, or `false`. These
+  decorate a page or gate an action, and failing the whole request for one of them is worse than
+  showing less.
 
 ## Scope note
 

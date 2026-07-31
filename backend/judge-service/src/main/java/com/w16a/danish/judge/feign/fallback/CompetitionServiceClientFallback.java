@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
+import com.w16a.danish.common.exception.ServiceUnavailableException;
 
 @Slf4j
 @Component
@@ -16,8 +17,7 @@ public class CompetitionServiceClientFallback implements CompetitionServiceClien
 
     @Override
     public ResponseEntity<CompetitionResponseVO> getCompetitionById(String competitionId) {
-        log.warn("[Fallback] competition-service unavailable — getCompetitionById id={}", competitionId);
-        return ResponseEntity.ok(null);
+        throw new ServiceUnavailableException("competition-service", "getCompetitionById");
     }
 
     @Override
@@ -46,7 +46,6 @@ public class CompetitionServiceClientFallback implements CompetitionServiceClien
 
     @Override
     public ResponseEntity<CompetitionResponseVO> updateCompetitionStatus(String competitionId, String newStatus) {
-        log.error("[Fallback] competition-service unavailable — updateCompetitionStatus failed id={}", competitionId);
-        return ResponseEntity.ok(null);
+        throw new ServiceUnavailableException("competition-service", "updateCompetitionStatus");
     }
 }

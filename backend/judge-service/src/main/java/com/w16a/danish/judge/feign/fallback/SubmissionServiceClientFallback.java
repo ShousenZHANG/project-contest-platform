@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import com.w16a.danish.common.exception.ServiceUnavailableException;
 
 @Slf4j
 @Component
@@ -89,14 +90,12 @@ public class SubmissionServiceClientFallback implements SubmissionServiceClient 
 
     @Override
     public ResponseEntity<SubmissionInfoVO> getMySubmissionBasic(String competitionId, String userId) {
-        log.warn("[Fallback] registration-service unavailable — getMySubmissionBasic");
-        return ResponseEntity.ok(null);
+        throw new ServiceUnavailableException("registration-service", "getMySubmissionBasic");
     }
 
     @Override
     public ResponseEntity<SubmissionInfoVO> getTeamSubmissionBasic(String competitionId, String teamId) {
-        log.warn("[Fallback] registration-service unavailable — getTeamSubmissionBasic");
-        return ResponseEntity.ok(null);
+        throw new ServiceUnavailableException("registration-service", "getTeamSubmissionBasic");
     }
 
     @Override
