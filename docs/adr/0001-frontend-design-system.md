@@ -165,5 +165,7 @@ Reversing requires re-introducing MUI components to whatever pages were migrated
 
 ## Related
 
-- ADRs to follow: 0002 dark-mode persistence strategy, 0003 chart palette, 0004 image/Lottie strategy
-- Tracking issue: refactor/frontend-shadcn-migration
+- [ADR-0002](0002-react-query-data-layer.md) — React Query as the data layer
+- [ADR-0003](0003-cross-service-gateway-seam.md) — the cross-service gateway seam
+- Domain vocabulary: [CONTEXT.md](../../CONTEXT.md)
+- Still unwritten: dark-mode persistence strategy, chart palette, image/Lottie strategy
