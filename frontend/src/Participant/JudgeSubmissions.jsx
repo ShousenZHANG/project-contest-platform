@@ -7,10 +7,13 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ChevronLeft, ChevronRight, Scale } from 'lucide-react';
-import apiClient from '../api/apiClient';
+import { judgeService } from '../services/judgeService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
@@ -25,43 +28,41 @@ import {
 
 function JudgeSubmissions() {
   const { competitionId } = useParams();
-  const [submissions, setSubmissions] = useState([]);
   const [keyword, setKeyword] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [judgeDetail, setJudgeDetail] = useState(null);
+  const [detailId, setDetailId] = useState(null);
   const navigate = useNavigate();
 
-  const fetchSubmissions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(
-        `/judges/pending-submissions?competitionId=${competitionId}&keyword=${keyword}&page=${page}&size=10&sortOrder=desc`
-      );
-      setSubmissions(res.data.data || []);
-      setTotalPages(res.data.pages || 1);
-    } catch (err) {
-      // Failed to fetch submissions
-    } finally {
-      setLoading(false);
-    }
-  }, [competitionId, keyword, page]);
-
-  useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
-
-  const handleViewJudgingDetail = async (submissionId) => {
-    try {
-      const res = await apiClient.get(`/judges/${submissionId}/detail`);
-      setJudgeDetail(res.data);
-      setOpenDialog(true);
-    } catch (err) {
-      // Failed to fetch judging detail
-    }
+  const listParams = {
+    competitionId,
+    keyword,
+    page,
+    size: 10,
+    sortOrder: 'desc',
   };
+
+  const { data: listPage, isPending: loading } = useQuery({
+    queryKey: queryKeys.judges.assignedSubmissions(competitionId, listParams),
+    queryFn: () => unwrap(judgeService.getPendingSubmissions(listParams)),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.short,
+  });
+
+  const submissions = (listPage && listPage.data) || [];
+  const totalPages = (listPage && listPage.pages) || 1;
+
+  // Keyed by submission, so reopening a detail the judge already looked at
+  // renders from cache.
+  const { data: judgeDetail = null } = useQuery({
+    queryKey: [...queryKeys.judges.all, 'detail', detailId],
+    queryFn: () => unwrap(judgeService.getSubmissionDetail(detailId)),
+    enabled: Boolean(detailId),
+    staleTime: staleTime.medium,
+  });
+
+  const openDialog = Boolean(detailId);
+
+  const handleViewJudgingDetail = (submissionId) => setDetailId(submissionId);
 
   return (
     <>
@@ -198,7 +199,7 @@ function JudgeSubmissions() {
         </div>
       </div>
 
-      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+      <Dialog open={openDialog} onOpenChange={(o) => !o && setDetailId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center justify-center gap-2">
@@ -226,7 +227,7 @@ function JudgeSubmissions() {
             ))}
           </div>
           <DialogFooter>
-            <Button onClick={() => setOpenDialog(false)}>Close</Button>
+            <Button onClick={() => setDetailId(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

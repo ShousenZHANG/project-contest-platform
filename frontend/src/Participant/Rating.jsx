@@ -7,11 +7,15 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ExternalLink } from 'lucide-react';
-import apiClient from '../api/apiClient';
+import { judgeService } from '../services/judgeService';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -25,32 +29,31 @@ import {
 import { Separator } from '../components/ui/separator';
 
 function Rating() {
-  const [competitions, setCompetitions] = useState([]);
-  const [selectedComp, setSelectedComp] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailId, setDetailId] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchCompetitions = async () => {
-      try {
-        const res = await apiClient.get(`/judges/my-competitions?page=1&size=100`);
-        setCompetitions(res.data.data || []);
-      } catch (err) {
-        // Failed to fetch competitions
-      }
-    };
-    fetchCompetitions();
-  }, []);
+  const listParams = { page: 1, size: 100 };
 
-  const fetchCompetitionDetail = async (id) => {
-    try {
-      const res = await apiClient.get(`/competitions/${id}`);
-      setSelectedComp(res.data);
-      setDialogOpen(true);
-    } catch (error) {
-      toast.error('Failed to fetch competition detail');
-    }
+  const { data: competitions = [] } = useQuery({
+    queryKey: [...queryKeys.judges.all, 'myCompetitions', listParams],
+    queryFn: () => unwrap(judgeService.getMyCompetitions(listParams)),
+    select: (payload) => (payload && payload.data) || [],
+    staleTime: staleTime.short,
+  });
+
+  const { data: selectedComp = null } = useQuery({
+    queryKey: queryKeys.competitions.detail(detailId),
+    queryFn: () => unwrap(competitionService.getById(detailId)),
+    enabled: Boolean(detailId),
+    staleTime: staleTime.medium,
+  });
+
+  const dialogOpen = Boolean(detailId);
+  const setDialogOpen = (openState) => {
+    if (!openState) setDetailId(null);
   };
+
+  const fetchCompetitionDetail = (id) => setDetailId(id);
 
   return (
     <>

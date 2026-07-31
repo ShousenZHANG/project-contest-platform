@@ -7,11 +7,14 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import apiClient from '../api/apiClient';
+import { judgeService } from '../services/judgeService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Label } from '../components/ui/label';
@@ -20,62 +23,63 @@ function ReRating() {
   const { competitionId, submissionId } = useParams();
   const navigate = useNavigate();
 
-  const [scoringCriteria, setScoringCriteria] = useState([]);
   const [scores, setScores] = useState({});
   const [weights, setWeights] = useState({});
   const [feedback, setFeedback] = useState('');
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
+  const { data: detail, isPending: loading } = useQuery({
+    queryKey: [...queryKeys.judges.all, 'detail', submissionId],
+    queryFn: () => unwrap(judgeService.getSubmissionDetail(submissionId)),
+    enabled: Boolean(submissionId),
+    staleTime: staleTime.medium,
+  });
+
+  const scoringCriteria = ((detail && detail.scores) || []).map((s) => s.criterion);
+
+  // Seed the sliders and feedback from the existing review once, then leave
+  // them alone: a background refetch must not discard the judge's revisions.
+  const seeded = useRef(false);
   useEffect(() => {
-    const fetchJudgingDetails = async () => {
-      try {
-        const res = await apiClient.get(`/judges/${submissionId}/detail`);
-        const data = res.data;
-        const newScores = {};
-        const newWeights = {};
-        data.scores.forEach((s) => {
-          newScores[s.criterion] = s.score;
-          newWeights[s.criterion] = s.weight;
-        });
-        setScoringCriteria(data.scores.map((s) => s.criterion));
-        setScores(newScores);
-        setWeights(newWeights);
-        setFeedback(data.judgeComments || '');
-      } catch (err) {
-        // Failed to fetch judging detail
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (seeded.current || !detail || !detail.scores) return;
+    seeded.current = true;
 
-    fetchJudgingDetails();
-  }, [submissionId]);
+    const nextScores = {};
+    const nextWeights = {};
+    detail.scores.forEach((s) => {
+      nextScores[s.criterion] = s.score;
+      nextWeights[s.criterion] = s.weight;
+    });
+    setScores(nextScores);
+    setWeights(nextWeights);
+    setFeedback(detail.judgeComments || '');
+  }, [detail]);
 
   const handleSliderChange = (criterion, value) => {
     setScores((prev) => ({ ...prev, [criterion]: value }));
   };
 
-  const handleSubmit = async () => {
-    const scoreArray = scoringCriteria.map((criterion) => ({
-      criterion,
-      score: scores[criterion],
-      weight: weights[criterion],
-    }));
-
-    try {
-      await apiClient.put(`/judges/${submissionId}`, {
-        competitionId,
-        submissionId,
-        judgeComments: feedback,
-        scores: scoreArray,
-      });
+  const updateRating = useMutation({
+    mutationFn: (body) => unwrap(judgeService.updateScore(submissionId, body)),
+    onSuccess: () => {
       toast.success('Rating updated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.judges.all });
       setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1200);
-    } catch (err) {
-      const errorMsg = err.response?.data?.error || 'Error updating rating';
-      toast.error(errorMsg);
-    }
-  };
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const handleSubmit = () =>
+    updateRating.mutate({
+      competitionId,
+      submissionId,
+      judgeComments: feedback,
+      scores: scoringCriteria.map((criterion) => ({
+        criterion,
+        score: scores[criterion],
+        weight: weights[criterion],
+      })),
+    });
 
   return (
     <div className="p-6">

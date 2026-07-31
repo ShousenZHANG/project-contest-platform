@@ -7,11 +7,15 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import apiClient from '../api/apiClient';
+import { judgeService } from '../services/judgeService';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Label } from '../components/ui/label';
@@ -20,57 +24,57 @@ function RatingDetail() {
   const { competitionId, submissionId } = useParams();
   const navigate = useNavigate();
 
-  const [scoringCriteria, setScoringCriteria] = useState([]);
   const [scores, setScores] = useState({});
   const [feedback, setFeedback] = useState('');
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: competition, isPending: loading } = useQuery({
+    queryKey: queryKeys.competitions.detail(competitionId),
+    queryFn: () => unwrap(competitionService.getById(competitionId)),
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.medium,
+  });
 
+  const scoringCriteria = (competition && competition.scoringCriteria) || [];
+
+  // Seed each slider at 5 the first time the criteria arrive. Guarded so a
+  // background refetch cannot reset scores the judge has already moved.
+  const seeded = useRef(false);
   useEffect(() => {
-    const fetchScoringCriteria = async () => {
-      try {
-        const res = await apiClient.get(`/competitions/${competitionId}`);
-        const criteria = res.data.scoringCriteria || [];
-        setScoringCriteria(criteria);
-        const defaultScores = criteria.reduce((acc, criterion) => {
-          acc[criterion] = 5;
-          return acc;
-        }, {});
-        setScores(defaultScores);
-      } catch (err) {
-        // Failed to fetch competition details
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchScoringCriteria();
-  }, [competitionId]);
+    if (seeded.current || scoringCriteria.length === 0) return;
+    seeded.current = true;
+    setScores(
+      scoringCriteria.reduce((acc, criterion) => {
+        acc[criterion] = 5;
+        return acc;
+      }, {})
+    );
+  }, [scoringCriteria]);
 
   const handleSliderChange = (criterion, value) => {
     setScores((prev) => ({ ...prev, [criterion]: value }));
   };
 
-  const handleSubmitRating = async () => {
-    const ratingsArray = scoringCriteria.map((criterion) => ({
-      criterion,
-      score: scores[criterion],
-      weight: 1.0 / scoringCriteria.length,
-    }));
-
-    try {
-      await apiClient.post(`/judges/score`, {
-        competitionId,
-        submissionId,
-        judgeComments: feedback,
-        scores: ratingsArray,
-      });
+  const submitRating = useMutation({
+    mutationFn: (body) => unwrap(judgeService.score(body)),
+    onSuccess: () => {
       toast.success('Rating submitted successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.judges.all });
       setTimeout(() => navigate(`/JudgeSubmissions/${competitionId}`), 1200);
-    } catch (err) {
-      const errorMsg = err.response?.data?.error || 'Error submitting rating';
-      toast.error(errorMsg);
-    }
-  };
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const handleSubmitRating = () =>
+    submitRating.mutate({
+      competitionId,
+      submissionId,
+      judgeComments: feedback,
+      scores: scoringCriteria.map((criterion) => ({
+        criterion,
+        score: scores[criterion],
+        weight: 1.0 / scoringCriteria.length,
+      })),
+    });
 
   return (
     <div className="p-6">
