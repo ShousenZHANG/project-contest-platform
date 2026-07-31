@@ -10,10 +10,10 @@
  */
 
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { registrationService } from '@/services/registrationService';
-import { queryKeys } from '@/api/queryKeys';
+import { queryKeys, staleTime } from '@/api/queryKeys';
 import { unwrap } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,42 +44,77 @@ function ChangeContestList({ contest, onClick }) {
   };
 
   const queryClient = useQueryClient();
+  const signedIn = Boolean(AuthTokenManager.getToken());
+  const statusKey = [...queryKeys.registrations.all, 'status', contest?.id];
+
+  // Knowing whether the user is already in lets the button say so, and gives
+  // the mutations a value to flip optimistically. Without it the only way to
+  // find out was to try to register and read the failure.
+  const { data: isRegistered = false } = useQuery({
+    queryKey: statusKey,
+    queryFn: () => unwrap(registrationService.getStatus(contest.id)),
+    select: (value) => value === true || value === 'true',
+    enabled: signedIn && Boolean(contest?.id),
+    staleTime: staleTime.short,
+  });
 
   const invalidateRegistrations = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
 
+  /** Flip the cached status and hand back the previous value for rollback. */
+  const setStatusOptimistically = async (next) => {
+    await queryClient.cancelQueries({ queryKey: statusKey });
+    const previous = queryClient.getQueryData(statusKey);
+    queryClient.setQueryData(statusKey, next);
+    return { previous };
+  };
+
   const register = useMutation({
     mutationFn: () => unwrap(registrationService.register(contest.id)),
-    onSuccess: () => {
-      toast.success('Registration successful!');
-      invalidateRegistrations();
-    },
-    onError: (error) => {
+    onMutate: () => setStatusOptimistically(true),
+    onSuccess: () => toast.success('Registration successful!'),
+    onError: (error, _vars, context) => {
       const errData = error.response?.data;
-      // The backend reports an existing registration as an error; offer to
-      // cancel it rather than showing a failure the user cannot act on.
+      // 'Already registered' means the optimistic value was right and the
+      // cached status was stale, so it stays flipped.
       if (errData?.error === 'You have already registered for this competition') {
         setOpenDialog(true);
-      } else {
-        toast.error('Registration failed due to network or server error.');
+        return;
       }
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(statusKey, context.previous);
+      }
+      toast.error('Registration failed due to network or server error.');
     },
+    onSettled: invalidateRegistrations,
   });
 
   const cancelRegistration = useMutation({
     mutationFn: () => unwrap(registrationService.cancel(contest.id)),
-    onSuccess: () => {
-      toast.success('Registration cancelled successfully!');
+    onMutate: () => setStatusOptimistically(false),
+    onSuccess: () => toast.success('Registration cancelled successfully!'),
+    onError: (_error, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(statusKey, context.previous);
+      }
+      toast.error('Cancellation failed due to network or server error.');
+    },
+    onSettled: () => {
+      setOpenDialog(false);
       invalidateRegistrations();
     },
-    onError: () => toast.error('Cancellation failed due to network or server error.'),
-    onSettled: () => setOpenDialog(false),
   });
 
   const handleJoinClick = (e) => {
     e.stopPropagation();
-    if (!AuthTokenManager.getToken()) {
+    if (!signedIn) {
       toast.warning('Please log in first!');
+      return;
+    }
+    // Already in: go straight to the cancel prompt instead of provoking a
+    // failed registration to get there.
+    if (isRegistered) {
+      setOpenDialog(true);
       return;
     }
     register.mutate();
@@ -110,8 +145,12 @@ function ChangeContestList({ contest, onClick }) {
           </span>
         </td>
         <td className="px-4 py-3 text-sm">
-          <Button size="sm" onClick={handleJoinClick}>
-            Join
+          <Button
+            size="sm"
+            variant={isRegistered ? 'outline' : 'default'}
+            onClick={handleJoinClick}
+          >
+            {isRegistered ? 'Registered' : 'Join'}
           </Button>
         </td>
       </tr>

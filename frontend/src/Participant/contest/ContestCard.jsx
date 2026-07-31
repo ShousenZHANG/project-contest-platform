@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Flag, Eye, Tag, Play, Clock, Lock, Loader2 } from 'lucide-react';
@@ -38,6 +38,27 @@ function ContestCard({ contest, onLoginRequest }) {
   const [teamsLoading, setTeamsLoading] = useState(false);
 
   const queryClient = useQueryClient();
+  const signedIn = Boolean(AuthTokenManager.getToken());
+  const statusKey = [...queryKeys.registrations.all, 'status', contest?.id];
+
+  // Individual registration status, so the button can say whether the user is
+  // already in and the mutations have something to flip.
+  const { data: isRegistered = false } = useQuery({
+    queryKey: statusKey,
+    queryFn: () => unwrap(registrationService.getStatus(contest.id)),
+    select: (value) => value === true || value === 'true',
+    enabled:
+      signedIn && Boolean(contest?.id) && contest?.participationType !== 'TEAM',
+    staleTime: staleTime.short,
+  });
+
+  /** Flip the cached status and hand back the previous value for rollback. */
+  const setStatusOptimistically = async (next) => {
+    await queryClient.cancelQueries({ queryKey: statusKey });
+    const previous = queryClient.getQueryData(statusKey);
+    queryClient.setQueryData(statusKey, next);
+    return { previous };
+  };
 
   const invalidateRegistrations = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
@@ -104,26 +125,38 @@ function ContestCard({ contest, onLoginRequest }) {
 
   const registerIndividual = useMutation({
     mutationFn: () => unwrap(registrationService.register(contest.id)),
-    onSuccess: () => {
-      toast.success('Registration successful!');
-      invalidateRegistrations();
-    },
-    onError: (err) => {
+    onMutate: () => setStatusOptimistically(true),
+    onSuccess: () => toast.success('Registration successful!'),
+    onError: (err, _vars, context) => {
       const data = err.response?.data;
       const text = typeof data === 'string' ? data : JSON.stringify(data || '');
-      if (text.includes('already registered')) setOpenRegDialog(true);
-      else toast.error('Registration failed.');
+      // 'Already registered' means the optimistic value was right all along.
+      if (text.includes('already registered')) {
+        setOpenRegDialog(true);
+        return;
+      }
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(statusKey, context.previous);
+      }
+      toast.error('Registration failed.');
     },
+    onSettled: invalidateRegistrations,
   });
 
   const cancelIndividual = useMutation({
     mutationFn: () => unwrap(registrationService.cancel(contest.id)),
-    onSuccess: () => {
-      toast.success('Cancelled successfully!');
+    onMutate: () => setStatusOptimistically(false),
+    onSuccess: () => toast.success('Cancelled successfully!'),
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(statusKey, context.previous);
+      }
+      toast.error('Cancellation failed.');
+    },
+    onSettled: () => {
+      setOpenRegDialog(false);
       invalidateRegistrations();
     },
-    onError: () => toast.error('Cancellation failed.'),
-    onSettled: () => setOpenRegDialog(false),
   });
 
   const registerTeam = (teamId) => registerTeamMutation.mutateAsync(teamId).catch(() => {});
@@ -148,6 +181,13 @@ function ContestCard({ contest, onLoginRequest }) {
     if (contest.participationType === 'TEAM') {
       await fetchCreatedTeams();
       setOpenTeamDialog(true);
+      return;
+    }
+
+    // Already in: open the cancel prompt rather than provoking a failed
+    // registration to reach it.
+    if (isRegistered) {
+      setOpenRegDialog(true);
       return;
     }
 
@@ -229,10 +269,20 @@ function ContestCard({ contest, onLoginRequest }) {
         <CardFooter className="gap-2 p-4 pt-0">
           <Button
             onClick={handleJoinClick}
-            className="bg-warning text-warning-foreground hover:bg-warning/90"
+            variant={isRegistered ? 'outline' : 'default'}
+            className={
+              isRegistered
+                ? undefined
+                : 'bg-warning text-warning-foreground hover:bg-warning/90'
+            }
+            aria-label={
+              isRegistered
+                ? `You are registered for ${contest.name}`
+                : `Join ${contest.name}`
+            }
           >
             <Flag className="mr-2 h-4 w-4" />
-            Join
+            {isRegistered ? 'Registered' : 'Join'}
           </Button>
           <Button
             variant="outline"
