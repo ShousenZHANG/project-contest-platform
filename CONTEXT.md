@@ -172,8 +172,9 @@ submission services hold the writes. Add new reports to the analytics services.
 cache entries that drift apart silently.
 
 **Service modules** in `src/services/` are the only place a URL literal belongs. Every path there
-is checked against its controller — several were not, once, and pointed at routes that had never
-existed.
+is checked against its controller by `src/Tests/serviceRoutes.test.js`, which reads the Java
+controllers directly. A route with nothing behind it fails the build — several used to exist, and
+pointed at endpoints that had never been written.
 
 **staleTime tiers** — `live` (vote counts), `short` (lists), `medium` (detail pages), `long`
 (profiles). Pick by how fast the data actually goes stale.
