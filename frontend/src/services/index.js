@@ -4,4 +4,3 @@ export { registrationService, submissionService } from './registrationService';
 export { judgeService, winnerService, dashboardService } from './judgeService';
 export { teamService } from './teamService';
 export { commentService, voteService } from './interactionService';
-export { fileService } from './fileService';
