@@ -5,6 +5,7 @@ import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
+import com.w16a.danish.registration.service.IParticipantAnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,9 @@ class CompetitionParticipantsControllerTest {
 
     @MockitoBean
     private ICompetitionParticipantsService participantsService;
+
+    @MockitoBean
+    private IParticipantAnalyticsService participantAnalyticsService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -213,7 +217,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Get registration statistics for competition successfully")
     void testGetRegistrationStatistics() throws Exception {
-        when(participantsService.getRegistrationStatistics(any()))
+        when(participantAnalyticsService.getRegistrationStatistics(any()))
                 .thenReturn(new RegistrationStatisticsVO());
 
         mockMvc.perform(get("/registrations/public/{competitionId}/statistics", "comp-1"))
@@ -223,7 +227,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Get participant trend successfully")
     void testGetParticipantTrend() throws Exception {
-        when(participantsService.getParticipantTrend(any()))
+        when(participantAnalyticsService.getParticipantTrend(any()))
                 .thenReturn(Map.of());
 
         mockMvc.perform(get("/registrations/public/{competitionId}/participant-trend", "comp-1"))
@@ -233,7 +237,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Get platform participant statistics successfully")
     void testGetPlatformParticipantStatistics() throws Exception {
-        when(participantsService.getPlatformParticipantStatistics())
+        when(participantAnalyticsService.getPlatformParticipantStatistics())
                 .thenReturn(new PlatformParticipantStatisticsVO());
 
         mockMvc.perform(get("/registrations/public/platform/participant-statistics"))
@@ -243,7 +247,7 @@ class CompetitionParticipantsControllerTest {
     @Test
     @DisplayName("✅ Get platform participant trend successfully")
     void testGetPlatformParticipantTrend() throws Exception {
-        when(participantsService.getPlatformParticipantTrend())
+        when(participantAnalyticsService.getPlatformParticipantTrend())
                 .thenReturn(Map.of());
 
         mockMvc.perform(get("/registrations/public/platform/participant-trend"))

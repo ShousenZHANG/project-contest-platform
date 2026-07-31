@@ -172,34 +172,4 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      */
     Boolean existsRegistrationByTeamId(String teamId);
 
-    /**
-     * Get statistics summary for a competition, including total participants and teams.
-     *
-     * @param competitionId ID of the competition
-     * @return Registration statistics
-     */
-    RegistrationStatisticsVO getRegistrationStatistics(String competitionId);
-
-    /**
-     * Get daily participant registration trends for a specific competition.
-     *
-     * @param competitionId ID of the competition
-     * @return A map of date to registration counts
-     */
-    Map<String, Map<String, Integer>> getParticipantTrend(String competitionId);
-
-    /**
-     * Get overall platform participant statistics across all competitions.
-     *
-     * @return Platform-wide participant statistics
-     */
-    PlatformParticipantStatisticsVO getPlatformParticipantStatistics();
-
-    /**
-     * Get daily participant registration trends across all competitions on the platform.
-     *
-     * @return A map of date to registration counts
-     */
-    Map<String, Map<String, Integer>> getPlatformParticipantTrend();
-
 }

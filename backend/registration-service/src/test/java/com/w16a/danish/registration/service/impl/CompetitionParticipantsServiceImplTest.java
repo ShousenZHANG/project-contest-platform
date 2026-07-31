@@ -273,47 +273,6 @@ class CompetitionParticipantsServiceImplTest {
     }
 
     @Test
-    @DisplayName("✅ Should get platform statistics successfully")
-    void testGetPlatformParticipantStatistics_Success() {
-        // stub total individual
-        when(partQuery.isNotNull(any())).thenReturn(partQuery);
-        when(partQuery.count()).thenReturn(42L);
-
-        // stub team total
-        when(competitionTeamsService.countTeamParticipants()).thenReturn(7);
-
-        assertThatCode(() -> service.getPlatformParticipantStatistics())
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("✅ Should get platform trend successfully")
-    void testGetPlatformParticipantTrend_Success() {
-        // individual side
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionParticipants> indivQ = mock(LambdaQueryChainWrapper.class);
-        when(service.lambdaQuery()).thenReturn(indivQ);
-        // explicitly match the SFunction[] var‐args overload
-        when(indivQ.select(
-                (SFunction<CompetitionParticipants, ?>[]) any(SFunction[].class)
-        )).thenReturn(indivQ);
-        when(indivQ.list()).thenReturn(Collections.emptyList());
-
-        // team side
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionTeams> teamQ = mock(LambdaQueryChainWrapper.class);
-        when(competitionTeamsService.lambdaQuery()).thenReturn(teamQ);
-        // same trick for CompetitionTeams
-        when(teamQ.select(
-                (SFunction<CompetitionTeams, ?>[]) any(SFunction[].class)
-        )).thenReturn(teamQ);
-        when(teamQ.list()).thenReturn(Collections.emptyList());
-
-        assertThatCode(() -> service.getPlatformParticipantTrend())
-                .doesNotThrowAnyException();
-    }
-
-    @Test
     @DisplayName("✅ Should list competitions registered by team successfully")
     void testGetCompetitionsRegisteredByTeam_Success() {
         // 1) Stub competitionTeamsService.lambdaQuery().eq(...).list()
@@ -425,68 +384,6 @@ class CompetitionParticipantsServiceImplTest {
                 "teamName",// sortBy
                 "asc"      // order
         )).doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("✅ Should get participant trend successfully")
-    void testGetParticipantTrend_Success() {
-        // 1) Stub competition lookup
-        CompetitionResponseVO compVo = new CompetitionResponseVO();
-        doReturn(compVo).when(competitionGateway).require("comp-1");
-
-        // 2) Stub individual registrations query
-        CompetitionParticipants ip1 = new CompetitionParticipants()
-                .setCreatedAt(LocalDateTime.now().minusDays(2));
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionParticipants> indivQ =
-                mock(LambdaQueryChainWrapper.class);
-        // ensure service.lambdaQuery() returns our mock wrapper
-        doReturn(indivQ).when(service).lambdaQuery();
-        // stub the .eq(...) and .list() chain
-        when(indivQ.eq(any(SFunction.class), eq("comp-1"))).thenReturn(indivQ);
-        when(indivQ.list()).thenReturn(List.of(ip1));
-
-        // 3) Stub team registrations query
-        CompetitionTeams tp1 = new CompetitionTeams()
-                .setJoinedAt(LocalDateTime.now().minusDays(1));
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionTeams> teamQ =
-                mock(LambdaQueryChainWrapper.class);
-        doReturn(teamQ).when(competitionTeamsService).lambdaQuery();
-        when(teamQ.eq(any(SFunction.class), eq("comp-1"))).thenReturn(teamQ);
-        when(teamQ.list()).thenReturn(List.of(tp1));
-
-        // Act & Assert
-        assertThatCode(() -> service.getParticipantTrend("comp-1"))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("✅ Should get registration statistics successfully")
-    void testGetRegistrationStatistics_Success() {
-        // 1) Stub competition lookup
-        CompetitionResponseVO comp = new CompetitionResponseVO();
-        when(competitionGateway.require(eq("comp-1"))).thenReturn(comp);
-
-        // 2) Stub service.lambdaQuery() for individual participants
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionParticipants> partQ =
-                mock(LambdaQueryChainWrapper.class);
-        when(service.lambdaQuery()).thenReturn(partQ);
-        when(partQ.eq(any(), any())).thenReturn(partQ);
-        when(partQ.count()).thenReturn(5L);
-
-        // 3) Stub competitionTeamsService.lambdaQuery() for team participants
-        @SuppressWarnings("unchecked")
-        LambdaQueryChainWrapper<CompetitionTeams> teamPartQ =
-                mock(LambdaQueryChainWrapper.class);
-        when(competitionTeamsService.lambdaQuery()).thenReturn(teamPartQ);
-        when(teamPartQ.eq(any(), any())).thenReturn(teamPartQ);
-        when(teamPartQ.count()).thenReturn(3L);
-
-        // Act & Assert
-        assertThatCode(() -> service.getRegistrationStatistics("comp-1"))
-                .doesNotThrowAnyException();
     }
 
     @Test

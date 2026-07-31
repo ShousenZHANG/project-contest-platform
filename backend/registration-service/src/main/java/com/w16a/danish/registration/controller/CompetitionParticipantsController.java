@@ -7,6 +7,7 @@ import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
+import com.w16a.danish.registration.service.IParticipantAnalyticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CompetitionParticipantsController {
 
     private final ICompetitionParticipantsService participantsService;
+    private final IParticipantAnalyticsService participantAnalyticsService;
 
     @Operation(
             summary = "Register for a competition",
@@ -359,7 +361,7 @@ public class CompetitionParticipantsController {
     public ResponseEntity<RegistrationStatisticsVO> getRegistrationStatistics(
             @PathVariable("competitionId") String competitionId) {
 
-        RegistrationStatisticsVO statistics = participantsService.getRegistrationStatistics(competitionId);
+        RegistrationStatisticsVO statistics = participantAnalyticsService.getRegistrationStatistics(competitionId);
         return ResponseEntity.ok(statistics);
     }
 
@@ -379,7 +381,7 @@ public class CompetitionParticipantsController {
     public ResponseEntity<Map<String, Map<String, Integer>>> getParticipantTrend(
             @PathVariable("competitionId") String competitionId) {
 
-        Map<String, Map<String, Integer>> trend = participantsService.getParticipantTrend(competitionId);
+        Map<String, Map<String, Integer>> trend = participantAnalyticsService.getParticipantTrend(competitionId);
         return ResponseEntity.ok(trend);
     }
 
@@ -393,7 +395,7 @@ public class CompetitionParticipantsController {
     )
     @GetMapping("/public/platform/participant-statistics")
     public ResponseEntity<PlatformParticipantStatisticsVO> getPlatformParticipantStatistics() {
-        PlatformParticipantStatisticsVO statistics = participantsService.getPlatformParticipantStatistics();
+        PlatformParticipantStatisticsVO statistics = participantAnalyticsService.getPlatformParticipantStatistics();
         return ResponseEntity.ok(statistics);
     }
 
@@ -407,7 +409,7 @@ public class CompetitionParticipantsController {
     )
     @GetMapping("/public/platform/participant-trend")
     public ResponseEntity<Map<String, Map<String, Integer>>> getPlatformParticipantTrend() {
-        Map<String, Map<String, Integer>> trend = participantsService.getPlatformParticipantTrend();
+        Map<String, Map<String, Integer>> trend = participantAnalyticsService.getPlatformParticipantTrend();
         return ResponseEntity.ok(trend);
     }
 
