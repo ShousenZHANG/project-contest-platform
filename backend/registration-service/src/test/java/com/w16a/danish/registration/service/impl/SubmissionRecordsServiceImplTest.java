@@ -36,6 +36,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SubmissionRecordsServiceImplTest {
 
@@ -63,9 +64,7 @@ class SubmissionRecordsServiceImplTest {
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
 
-        Field baseMapperField = SubmissionRecordsServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(submissionService, submissionRecordsMapper);
+        ReflectionTestUtils.setField(submissionService, "baseMapper", submissionRecordsMapper);
 
         Field participantsField = SubmissionRecordsServiceImpl.class.getDeclaredField("competitionParticipantsService");
         participantsField.setAccessible(true);
@@ -97,9 +96,7 @@ class SubmissionRecordsServiceImplTest {
         when(submissionQuery.one()).thenReturn(null);
 
         // Setup analyticsService baseMapper and competitionServiceClient
-        Field analyticsMapperField = SubmissionAnalyticsServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        analyticsMapperField.setAccessible(true);
-        analyticsMapperField.set(analyticsService, submissionRecordsMapper);
+        ReflectionTestUtils.setField(analyticsService, "baseMapper", submissionRecordsMapper);
 
         Field analyticsCompField = SubmissionAnalyticsServiceImpl.class.getDeclaredField("competitionServiceClient");
         analyticsCompField.setAccessible(true);

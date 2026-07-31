@@ -35,6 +35,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class CompetitionServiceImplTest {
 
@@ -54,9 +55,7 @@ class CompetitionServiceImplTest {
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
 
-        var baseMapperField = CompetitionsServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(competitionsService, competitionsMapper);
+        ReflectionTestUtils.setField(competitionsService, "baseMapper", competitionsMapper);
 
         LambdaQueryChainWrapper<Competitions> mockQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(mockQuery).when(competitionsService).lambdaQuery();

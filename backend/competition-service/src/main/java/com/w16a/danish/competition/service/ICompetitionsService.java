@@ -5,7 +5,7 @@ import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
 import com.w16a.danish.competition.domain.po.Competitions;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;

@@ -16,6 +16,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link TeamMembersServiceImpl}.
@@ -33,9 +34,7 @@ class TeamMembersServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        java.lang.reflect.Field baseMapperField = TeamMembersServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(teamMembersService, teamMembersMapper);
+        ReflectionTestUtils.setField(teamMembersService, "baseMapper", teamMembersMapper);
     }
 
     // === save ===

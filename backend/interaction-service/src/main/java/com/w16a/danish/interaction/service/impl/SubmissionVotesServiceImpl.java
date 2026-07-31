@@ -5,7 +5,7 @@ import com.w16a.danish.interaction.domain.po.SubmissionVotes;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.mapper.SubmissionVotesMapper;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

@@ -5,7 +5,7 @@ import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SubmissionJudgesServiceImplTest {
 
@@ -59,9 +60,7 @@ class SubmissionJudgesServiceImplTest {
         MockitoAnnotations.openMocks(this);
 
         // 👉 Inject mocked submissionJudgesMapper to baseMapper field
-        var baseMapperField = ServiceImpl.class.getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(submissionJudgesService, submissionJudgesMapper);
+        ReflectionTestUtils.setField(submissionJudgesService, "baseMapper", submissionJudgesMapper);
     }
 
     @Test

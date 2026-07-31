@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SubmissionVotesServiceImplTest {
 
@@ -30,9 +31,7 @@ class SubmissionVotesServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        var baseMapperField = SubmissionVotesServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(submissionVotesService, submissionVotesMapper);
+        ReflectionTestUtils.setField(submissionVotesService, "baseMapper", submissionVotesMapper);
 
         LambdaQueryChainWrapper<SubmissionVotes> query = mock(LambdaQueryChainWrapper.class);
         doReturn(query).when(submissionVotesService).lambdaQuery();

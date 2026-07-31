@@ -25,7 +25,7 @@ import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;

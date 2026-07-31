@@ -3,7 +3,7 @@ package com.w16a.danish.registration.service.impl;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.mapper.CompetitionOrganizersMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;

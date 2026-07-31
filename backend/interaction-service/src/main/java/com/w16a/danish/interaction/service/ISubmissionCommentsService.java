@@ -3,7 +3,7 @@ package com.w16a.danish.interaction.service;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.po.SubmissionComments;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.interaction.domain.vo.SubmissionCommentVO;
 

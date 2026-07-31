@@ -28,6 +28,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link TeamServiceImpl}.
@@ -52,9 +53,7 @@ class TeamServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        java.lang.reflect.Field baseMapperField = TeamServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(teamService, teamMapper);
+        ReflectionTestUtils.setField(teamService, "baseMapper", teamMapper);
     }
 
     private static RequestContext ctx(String userId, String role) {

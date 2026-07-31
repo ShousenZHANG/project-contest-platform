@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class SubmissionCommentsServiceImplTest {
 
@@ -56,9 +57,7 @@ class SubmissionCommentsServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        var baseMapperField = SubmissionCommentsServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(submissionCommentsService, submissionCommentsMapper);
+        ReflectionTestUtils.setField(submissionCommentsService, "baseMapper", submissionCommentsMapper);
 
         LambdaQueryChainWrapper<SubmissionComments> query = mock(LambdaQueryChainWrapper.class);
         doReturn(query).when(submissionCommentsService).lambdaQuery();

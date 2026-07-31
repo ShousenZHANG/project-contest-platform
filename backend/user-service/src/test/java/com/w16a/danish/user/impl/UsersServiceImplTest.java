@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for UsersServiceImpl covering all core functionalities.
@@ -72,9 +73,7 @@ class UsersServiceImplTest {
         when(jwtConfig.getSecret()).thenReturn("mocked-secret");
         when(jwtConfig.getExpiration()).thenReturn(3600000L);
 
-        java.lang.reflect.Field baseMapperField = UsersServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(usersService, usersMapper);
+        ReflectionTestUtils.setField(usersService, "baseMapper", usersMapper);
 
         // Default mock for lambdaQuery
         LambdaQueryChainWrapper<Users> userQuery = mock(LambdaQueryChainWrapper.class);

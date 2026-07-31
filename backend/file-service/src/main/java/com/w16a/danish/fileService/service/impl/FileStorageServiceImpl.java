@@ -70,7 +70,7 @@ public class FileStorageServiceImpl implements FileStorageService {
                     PutObjectArgs.builder()
                             .bucket(bucketType.getBucketName())
                             .object(objectName)
-                            .stream(file.getInputStream(), file.getSize(), -1)
+                            .stream(file.getInputStream(), file.getSize(), -1L)
                             .contentType(file.getContentType())
                             .build()
             );

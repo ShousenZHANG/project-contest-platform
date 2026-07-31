@@ -1,7 +1,7 @@
 package com.w16a.danish.user.service;
 
 import com.w16a.danish.user.domain.po.Roles;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 
 /**

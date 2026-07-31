@@ -1,7 +1,7 @@
 package com.w16a.danish.competition.service;
 
 import com.w16a.danish.competition.domain.po.CompetitionOrganizers;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 
 /**

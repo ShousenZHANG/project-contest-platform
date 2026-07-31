@@ -29,7 +29,7 @@ import com.w16a.danish.competition.mapper.CompetitionsMapper;
 import com.w16a.danish.competition.service.ICompetitionJudgesService;
 import com.w16a.danish.competition.service.ICompetitionOrganizersService;
 import com.w16a.danish.competition.service.ICompetitionsService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;

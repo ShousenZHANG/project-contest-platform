@@ -2,7 +2,7 @@ package com.w16a.danish.registration.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.w16a.danish.registration.domain.vo.*;

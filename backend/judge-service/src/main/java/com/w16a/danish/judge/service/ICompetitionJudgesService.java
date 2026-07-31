@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.service;
 
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 /**
  * <p>

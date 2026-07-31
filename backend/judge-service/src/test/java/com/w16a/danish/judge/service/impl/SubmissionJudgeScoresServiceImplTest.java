@@ -1,7 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.mapper.SubmissionJudgeScoresMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +18,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for SubmissionJudgeScoresServiceImpl.
@@ -36,9 +37,7 @@ class SubmissionJudgeScoresServiceImplTest {
         MockitoAnnotations.openMocks(this);
 
         // Inject mocked baseMapper into ServiceImpl (required for lambdaQuery to work)
-        var baseMapperField = ServiceImpl.class.getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(submissionJudgeScoresService, submissionJudgeScoresMapper);
+        ReflectionTestUtils.setField(submissionJudgeScoresService, "baseMapper", submissionJudgeScoresMapper);
     }
 
     @Test

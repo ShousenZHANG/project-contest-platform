@@ -22,7 +22,7 @@ import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.CompetitionParticipantsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.registration.service.ICompetitionTeamsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
 import lombok.RequiredArgsConstructor;

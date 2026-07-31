@@ -27,7 +27,7 @@ import com.w16a.danish.user.mapper.UsersMapper;
 import com.w16a.danish.user.service.IRolesService;
 import com.w16a.danish.user.service.IUserRolesService;
 import com.w16a.danish.user.service.IUsersService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.user.util.JwtUtil;
 import com.w16a.danish.user.util.PasswordUtil;
 import jakarta.mail.internet.MimeMessage;

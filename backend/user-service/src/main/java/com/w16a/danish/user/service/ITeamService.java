@@ -4,7 +4,7 @@ import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.domain.dto.TeamCreateDTO;
 import com.w16a.danish.user.domain.dto.TeamUpdateDTO;
 import com.w16a.danish.user.domain.po.Team;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.vo.*;

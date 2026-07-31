@@ -2,7 +2,7 @@ package com.w16a.danish.registration.service;
 
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.registration.domain.vo.*;

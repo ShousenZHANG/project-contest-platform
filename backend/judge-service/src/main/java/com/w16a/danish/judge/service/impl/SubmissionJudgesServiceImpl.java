@@ -20,7 +20,7 @@ import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

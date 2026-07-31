@@ -15,6 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link UserRolesServiceImpl}.
@@ -32,9 +33,7 @@ class UserRolesServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        java.lang.reflect.Field baseMapperField = UserRolesServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(userRolesService, userRolesMapper);
+        ReflectionTestUtils.setField(userRolesService, "baseMapper", userRolesMapper);
     }
 
     // === save ===

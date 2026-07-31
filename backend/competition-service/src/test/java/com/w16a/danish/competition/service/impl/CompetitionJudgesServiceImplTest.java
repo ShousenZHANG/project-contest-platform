@@ -15,6 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for CompetitionJudgesServiceImpl (ServiceImpl delegate).
@@ -35,9 +36,7 @@ class CompetitionJudgesServiceImplTest {
         MockitoAnnotations.openMocks(this);
 
         // Inject mock mapper via reflection (same pattern as CompetitionServiceImplTest)
-        var baseMapperField = CompetitionJudgesServiceImpl.class.getSuperclass().getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(service, mapper);
+        ReflectionTestUtils.setField(service, "baseMapper", mapper);
     }
 
     // -------------------------------------------------------------------------

@@ -2,7 +2,7 @@ package com.w16a.danish.judge.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.config.AwardNotifier;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
@@ -58,9 +58,7 @@ class SubmissionWinnersServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        var baseMapperField = ServiceImpl.class.getDeclaredField("baseMapper");
-        baseMapperField.setAccessible(true);
-        baseMapperField.set(winnersService, submissionWinnersMapper);
+        ReflectionTestUtils.setField(winnersService, "baseMapper", submissionWinnersMapper);
     }
 
     @Test

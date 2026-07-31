@@ -16,7 +16,7 @@ import com.w16a.danish.user.feign.SubmissionServiceClient;
 import com.w16a.danish.user.mapper.TeamMapper;
 import com.w16a.danish.user.service.ITeamMembersService;
 import com.w16a.danish.user.service.ITeamService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.user.service.IUsersService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

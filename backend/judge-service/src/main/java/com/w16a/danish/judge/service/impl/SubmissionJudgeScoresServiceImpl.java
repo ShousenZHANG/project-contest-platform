@@ -3,7 +3,7 @@ package com.w16a.danish.judge.service.impl;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.mapper.SubmissionJudgeScoresMapper;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
