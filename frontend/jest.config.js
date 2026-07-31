@@ -18,7 +18,7 @@ module.exports = {
   ],
   testPathIgnorePatterns: [
     "/node_modules/",
-    "/test_participant/",
+    "/e2e/",
     "/playwright-report/",
     "/test-results/",
     "\\.spec\\.[jt]sx?$"

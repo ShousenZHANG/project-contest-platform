@@ -122,7 +122,7 @@ partly done, and the audit found this left over:
 - Render-blocking Font Awesome + Material Icons CDN stylesheets in `index.html`
   with zero usages left — **removed**.
 - Decision 8 (motion system) — **closed**, see below.
-- Decision 11 (WCAG AA) has not been audited. **Still open.**
+- Decision 11 (WCAG AA) — **closed**, see below.
 - `@tanstack/react-query` is installed and `QueryClientProvider` is mounted, but
   there are zero `useQuery`/`useMutation` call sites; 38 components fetch inside
   `useEffect`. — **closed** by ADR-0002.
@@ -149,6 +149,36 @@ Two things were found while implementing it:
 
 The hero keeps framer-motion: its staggered entrance is orchestration, which is
 what the library is actually good at. Nothing else needs it.
+
+### Decision 11, as audited
+
+The claim is now checkable: `e2e/a11y.spec.js` runs axe-core against every public
+route, an authenticated route, and an open dialog, in both light and dark mode,
+and asserts zero WCAG 2.1 AA violations. Keyboard behaviour that axe cannot judge
+— skip link first in the tab order, focus trapped inside a dialog, a visible ring
+on whatever the keyboard reaches — is asserted directly.
+
+The audit found the palette itself was the problem, and that the ADR had been
+asserting a threshold its own colour choices missed:
+
+- **indigo-500 measured 4.43:1 on white.** Under 4.5, so every primary button and
+  every `text-primary` failed. Light mode moved to indigo-600 (6.18:1); dark mode
+  went the other way, to a lighter indigo with dark text on it, because the same
+  value cannot serve both backgrounds.
+- **All four functional colours failed in both roles.** `text-warning` measured
+  2.13:1. They had been picked as fills and then also used as text; each one now
+  clears 4.5:1 as a fill under its foreground and as text on the background, with
+  a lighter dark-mode counterpart.
+- **`text-warning-foreground` and its three siblings were not utilities.** The
+  `@theme` bridge exposed `--color-warning` but not `--color-warning-foreground`,
+  so badges fell back to the inherited body colour — dark text on a coloured
+  fill. Same defect as the modal animation classes: a name that resolves to
+  nothing. Bridged.
+- **The public layout had no skip link.** AppShell provided one for signed-in
+  users only, so the decision held for half the product. PublicLayout now owns
+  the same skip link and `#main` landmark.
+- **Icon-only pagination buttons had no accessible name** on the Contest and
+  Project pages. A screen reader announced them as "button". Labelled.
 
 ### Migration safety
 

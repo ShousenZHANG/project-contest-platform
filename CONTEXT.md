@@ -183,6 +183,11 @@ existed.
 component that writes its own `duration-*` has left the system. Reduced motion is handled once,
 globally, so no component checks for it.
 
+**Colour tokens** are chosen for contrast, not for looks. Every one of them clears WCAG AA (4.5:1)
+both as a fill under its `-foreground` and as text on the background, in light and dark mode.
+Changing one means re-measuring it — `e2e/a11y.spec.js` will fail otherwise. A new token needs
+its `-foreground` twin bridged in `@theme`, or the utility silently does nothing.
+
 ---
 
 ## Decisions on record

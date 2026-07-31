@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 export default defineConfig({
-  testDir: './test_participant',
+  testDir: './e2e',
   timeout: 30 * 1000,
   expect: {
     timeout: 5000,

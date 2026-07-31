@@ -295,6 +295,7 @@ function Contest() {
               size="sm"
               variant="outline"
               disabled={page <= 1}
+              aria-label="Previous page"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -306,6 +307,7 @@ function Contest() {
               size="sm"
               variant="outline"
               disabled={page >= pages}
+              aria-label="Next page"
               onClick={() => setPage((p) => Math.min(pages, p + 1))}
             >
               <ChevronRight className="h-4 w-4" />
