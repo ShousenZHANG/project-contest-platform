@@ -7,12 +7,15 @@
  * Role: Public User
  * Developer: Ziqi Yi (migrated)
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Loader2, FileText, Pin, Paperclip, Award } from "lucide-react";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import apiClient from "../api/apiClient";
+import { submissionService } from "../services/registrationService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap, toMessage } from "../api/queryFn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,23 +26,22 @@ function TeamPublicDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { teamName, teamDescription } = location.state || {};
-  const [submission, setSubmission] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    data: submission = null,
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: [...queryKeys.submissions.all, "teamSubmission", competitionId, teamId],
+    queryFn: () => unwrap(submissionService.getTeamSubmission(competitionId, teamId)),
+    enabled: Boolean(competitionId && teamId),
+    staleTime: staleTime.medium,
+  });
 
-  useEffect(() => {
-    const fetchSubmission = async () => {
-      try {
-        const res = await apiClient.get(`/submissions/public/teams/${competitionId}/${teamId}`);
-        setSubmission(res.data);
-      } catch (err) {
-        setError(err.response?.data?.message || "No submission found for this team.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSubmission();
-  }, [competitionId, teamId]);
+  // A missing submission comes back as an error from this endpoint rather than
+  // an empty body, so the fallback copy stays the same as before.
+  const error = queryError
+    ? toMessage(queryError) || "No submission found for this team."
+    : null;
 
   return (
     <>

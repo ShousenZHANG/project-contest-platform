@@ -7,12 +7,15 @@
  * Role: Public User
  * Developer: Ziqi Yi (migrated)
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Users } from "lucide-react";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import apiClient from "../api/apiClient";
+import { registrationService } from "../services/registrationService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap, toMessage } from "../api/queryFn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/shared/components/EmptyState";
@@ -20,27 +23,21 @@ import EmptyState from "@/shared/components/EmptyState";
 function TeamListPage() {
   const { contestId } = useParams();
   const navigate = useNavigate();
-  const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const params = { page: 1, size: 100 };
 
-  useEffect(() => {
-    const fetchTeams = async () => {
-      try {
-        const response = await apiClient.get(
-          `/registrations/public/${contestId}/teams`,
-          { params: { page: 1, size: 100 } }
-        );
-        setTeams(response.data.data || []);
-      } catch (err) {
-        setError(err.message || "Failed to fetch team data");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const {
+    data: teams = [],
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: [...queryKeys.registrations.all, "teams", contestId, params],
+    queryFn: () => unwrap(registrationService.getRegisteredTeams(contestId, params)),
+    select: (payload) => (payload && payload.data) || [],
+    enabled: Boolean(contestId),
+    staleTime: staleTime.short,
+  });
 
-    fetchTeams();
-  }, [contestId]);
+  const error = queryError ? toMessage(queryError) : null;
 
   return (
     <>
