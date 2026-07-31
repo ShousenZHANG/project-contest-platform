@@ -7,10 +7,13 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import apiClient from '../../api/apiClient';
+import { competitionService } from '../../services/competitionService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap } from '../../api/queryFn';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -24,7 +27,6 @@ function Contest() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedParticipationType, setSelectedParticipationType] = useState('');
-  const [contests, setContests] = useState([]);
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isListView, setIsListView] = useState(false);
@@ -40,23 +42,18 @@ function Contest() {
     );
   };
 
-  useEffect(() => {
-    const fetchContests = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (searchTerm) params.append('keyword', searchTerm);
-        if (selectedCategories.length > 0) params.append('category', selectedCategories.join(','));
-        if (selectedStatus) params.append('status', selectedStatus);
+  const listParams = {
+    ...(searchTerm && { keyword: searchTerm }),
+    ...(selectedCategories.length > 0 && { category: selectedCategories.join(',') }),
+    ...(selectedStatus && { status: selectedStatus }),
+  };
 
-        const res = await apiClient.get(`/competitions/list?${params.toString()}`);
-        setContests(res.data.data || []);
-      } catch (error) {
-        // Failed to fetch contests
-      }
-    };
-
-    fetchContests();
-  }, [searchTerm, selectedCategories, selectedStatus]);
+  const { data: contests = [] } = useQuery({
+    queryKey: queryKeys.competitions.list(listParams),
+    queryFn: () => unwrap(competitionService.list(listParams)),
+    select: (payload) => (payload && payload.data) || [],
+    staleTime: staleTime.short,
+  });
 
   const formatDateRange = (start, end) => {
     if (!start || !end) return 'N/A';

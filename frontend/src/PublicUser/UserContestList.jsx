@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
@@ -25,16 +26,16 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react";
-import apiClient from "../api/apiClient";
+import { competitionService } from "../services/competitionService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap, toMessage } from "../api/queryFn";
 import { toast } from "sonner";
-import { extractErrorMessage } from '../services/serviceUtils';
 
 function Contest() {
   useDocumentTitle('Contests');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedParticipationType, setSelectedParticipationType] = useState("");
-  const [contests, setContests] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isListView, setIsListView] = useState(false);
@@ -48,23 +49,24 @@ function Contest() {
     );
   };
 
+  const listParams = {
+    ...(searchTerm && { keyword: searchTerm }),
+    ...(selectedCategories.length > 0 && { category: selectedCategories.join(",") }),
+    ...(selectedStatus && { status: selectedStatus }),
+  };
+
+  // Shares its cache entry with the participant contest list, which reads the
+  // same endpoint with the same filters.
+  const { data: contests = [], error: listError } = useQuery({
+    queryKey: queryKeys.competitions.list(listParams),
+    queryFn: () => unwrap(competitionService.list(listParams)),
+    select: (payload) => (payload && payload.data) || [],
+    staleTime: staleTime.short,
+  });
+
   useEffect(() => {
-    const fetchContests = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (searchTerm) params.append("keyword", searchTerm);
-        if (selectedCategories.length > 0) params.append("category", selectedCategories.join(","));
-        if (selectedStatus) params.append("status", selectedStatus);
-
-        const response = await apiClient.get(`/competitions/list`, { params });
-        setContests(response.data.data || []);
-      } catch (err) {
-        toast.error(extractErrorMessage(err));
-      }
-    };
-
-    fetchContests();
-  }, [searchTerm, selectedCategories, selectedStatus]);
+    if (listError) toast.error(toMessage(listError));
+  }, [listError]);
 
   const formatDateRange = (start, end) => {
     if (!start || !end) return "N/A";

@@ -7,10 +7,13 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import apiClient from '../../api/apiClient';
+import { competitionService } from '../../services/competitionService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap } from '../../api/queryFn';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -29,27 +32,20 @@ function DetailRow({ label, value }) {
 function ContestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [contestDetail, setContestDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  const fetchContestDetail = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.get(`/competitions/${id}`);
-      setContestDetail(res.data);
-    } catch (err) {
-      setError('Failed to load contest details.');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const {
+    data: contestDetail = null,
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeys.competitions.detail(id),
+    queryFn: () => unwrap(competitionService.getById(id)),
+    enabled: Boolean(id),
+    staleTime: staleTime.medium,
+  });
 
-  useEffect(() => {
-    fetchContestDetail();
-  }, [fetchContestDetail]);
+  const error = queryError ? 'Failed to load contest details.' : null;
 
   const images = contestDetail?.imageUrls || [];
 

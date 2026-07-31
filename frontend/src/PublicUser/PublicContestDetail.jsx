@@ -7,7 +7,8 @@
  * Developer: Beiqi Dai, Zhaoyi Yang
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
@@ -18,32 +19,29 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import defaultImage from "./1.jpg";
-import apiClient from "../api/apiClient";
+import { competitionService } from "../services/competitionService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap } from "../api/queryFn";
 
 function PublicContestDetail() {
   const { id: contestId } = useParams();
   const navigate = useNavigate();
-  const [contestDetail, setContestDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  useEffect(() => {
-    const fetchContestDetail = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await apiClient.get(`/competitions/${contestId}`);
-        setContestDetail(response.data);
-      } catch (err) {
-        setError("Failed to load contest details.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Same cache entry the participant-side detail page uses, so moving between
+  // the public and signed-in views of a contest does not refetch it.
+  const {
+    data: contestDetail = null,
+    isPending: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeys.competitions.detail(contestId),
+    queryFn: () => unwrap(competitionService.getById(contestId)),
+    enabled: Boolean(contestId),
+    staleTime: staleTime.medium,
+  });
 
-    fetchContestDetail();
-  }, [contestId]);
+  const error = queryError ? "Failed to load contest details." : null;
 
   if (loading) {
     return (
