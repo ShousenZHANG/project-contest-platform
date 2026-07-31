@@ -7,29 +7,29 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
-import apiClient from '@/api/apiClient';
+import { userService } from '@/services/userService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap } from '@/api/queryFn';
 import ParticipantTeam from './ParticipantTeam';
 import MyTeamsDialog from './MyTeamsDialog';
 
 function TeamPage() {
-  const [userData, setUserData] = useState(null);
   const [viewMode] = useState('explore');
   const [myDialogOpen, setMyDialogOpen] = useState(false);
   const [myTeams, setMyTeams] = useState([]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get('/users/profile');
-        setUserData(res.data);
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to fetch user data:', error);
-      }
-    })();
-  }, []);
+  const queryClient = useQueryClient();
+
+  // Same cache entry ParticipantTeam reads, so the profile is fetched once for
+  // the pair rather than once each.
+  const { data: userData = null } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -56,7 +56,7 @@ function TeamPage() {
           onClose={() => setMyDialogOpen(false)}
           myTeams={myTeams}
           userData={userData}
-          onUpdate={() => window.location.reload()}
+          onUpdate={() => queryClient.invalidateQueries({ queryKey: queryKeys.teams.all })}
         />
       </div>
     </div>

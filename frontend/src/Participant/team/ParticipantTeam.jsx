@@ -9,86 +9,160 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, Plus, FolderKanban } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import apiClient from '@/api/apiClient';
+import { userService } from '@/services/userService';
+import { teamService } from '@/services/teamService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 import TeamCreateDialog from './TeamCreateDialog';
 import MyTeamsDialog from './MyTeamsDialog';
 import TeamList from './TeamList';
 import AuthTokenManager from '@/auth/authTokenManager';
 
-import {
-  fetchJoinedTeams,
-  fetchTeams,
-  fetchMyTeams,
-  createTeam,
-  joinTeam,
-  leaveTeam,
-  deleteTeam,
-} from './teamApi';
+const MY_TEAMS_PARAMS = { page: 1, size: 1000 };
 
 function ParticipantTeam() {
-  const [userData, setUserData] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
-  const [teams, setTeams] = useState([]);
-  const [joinedTeams, setJoinedTeams] = useState(new Set());
-  const [myTeams, setMyTeams] = useState([]);
   const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [order, setOrder] = useState('asc');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get('/users/profile');
-        const data = res.data;
-        data.userId = AuthTokenManager.getUserId();
-        setUserData(data);
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to fetch user data:', error);
-      }
-    })();
-  }, []);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (userData?.userId) {
-      fetchJoinedTeams(userData, setJoinedTeams);
-      fetchTeams({ page, keyword, sortBy, order }, setTeams, setPages);
-    }
-  }, [userData, page, keyword, sortBy, order]);
+  // Shares a cache entry with TeamPage, which used to issue this same request
+  // separately.
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
+
+  const userData = profile ? { ...profile, userId: AuthTokenManager.getUserId() } : null;
+
+  const listParams = { page, size: 5, sortBy, order, keyword };
+  const listKey = queryKeys.teams.list(listParams);
+  const myTeamsKey = queryKeys.teams.myJoined(MY_TEAMS_PARAMS);
+  const signedIn = Boolean(userData && userData.userId);
+
+  const { data: listPage } = useQuery({
+    queryKey: listKey,
+    queryFn: () => unwrap(teamService.getAll(listParams)),
+    enabled: signedIn,
+    staleTime: staleTime.short,
+  });
+
+  const teams = (listPage && listPage.data) || [];
+  const pages = (listPage && listPage.pages) || 1;
+
+  const { data: myTeams = [] } = useQuery({
+    queryKey: myTeamsKey,
+    queryFn: () => unwrap(teamService.getMyJoined(MY_TEAMS_PARAMS)),
+    select: (payload) => (payload && payload.data) || [],
+    enabled: signedIn,
+    staleTime: staleTime.short,
+  });
+
+  // Membership is derived from the same response instead of a second request.
+  // The old code called /teams/my-joined twice for exactly this.
+  const joinedTeams = new Set(myTeams.map((t) => t.id));
+
+  const invalidateTeams = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.teams.all });
+
+  /** Optimistically add or drop a team from the my-joined list. */
+  const patchMembership = (team, joining) =>
+    queryClient.setQueryData(myTeamsKey, (current) => {
+      const rows = (current && current.data) || [];
+      const next = joining
+        ? rows.filter((t) => t.id !== team.id).concat(team)
+        : rows.filter((t) => t.id !== team.id);
+      return current ? { ...current, data: next } : current;
+    });
+
+  const joinTeam = useMutation({
+    mutationFn: (team) => {
+      if (team.createdBy === (userData && userData.userId)) {
+        throw new Error('You are the creator');
+      }
+      return unwrap(teamService.join(team.id));
+    },
+    onMutate: async (team) => {
+      await queryClient.cancelQueries({ queryKey: myTeamsKey });
+      const previous = queryClient.getQueryData(myTeamsKey);
+      patchMembership(team, true);
+      return { previous };
+    },
+    onError: (error, team, context) => {
+      // A 409 means the membership already existed, so the optimistic state was
+      // right after all. Keep it and say so.
+      if (error && error.response && error.response.status === 409) {
+        toast.success('Already a member');
+        return;
+      }
+      if (context && context.previous !== undefined) {
+        queryClient.setQueryData(myTeamsKey, context.previous);
+      }
+      toast.error('Join failed: ' + toMessage(error));
+    },
+    onSuccess: () => toast.success('Successfully joined'),
+    onSettled: invalidateTeams,
+  });
+
+  const leaveTeam = useMutation({
+    mutationFn: (teamId) => unwrap(teamService.leave(teamId)),
+    onMutate: async (teamId) => {
+      await queryClient.cancelQueries({ queryKey: myTeamsKey });
+      const previous = queryClient.getQueryData(myTeamsKey);
+      patchMembership({ id: teamId }, false);
+      return { previous };
+    },
+    onError: (error, _teamId, context) => {
+      if (context && context.previous !== undefined) {
+        queryClient.setQueryData(myTeamsKey, context.previous);
+      }
+      const status = error && error.response && error.response.status;
+      const reason = status === 403 ? 'Team leader cannot leave' : toMessage(error);
+      toast.error('Leave failed: ' + reason);
+    },
+    onSuccess: () => toast.success('Left successfully'),
+    onSettled: invalidateTeams,
+  });
+
+  const createTeam = useMutation({
+    mutationFn: ({ name, description }) =>
+      unwrap(teamService.create({ name, description })),
+    onSuccess: () => {
+      toast.success('Team created!');
+      setDialogOpen(false);
+      setPage(1);
+      invalidateTeams();
+    },
+    onError: (error) => toast.error(toMessage(error)),
+  });
+
+  const deleteTeam = useMutation({
+    mutationFn: (teamId) => unwrap(teamService.delete(teamId)),
+    onSuccess: () => {
+      toast.success('Team deleted');
+      invalidateTeams();
+    },
+    onError: (error) => {
+      const status = error && error.response && error.response.status;
+      if (status === 403) toast.error('You are not authorized to delete this team.');
+      else if (status === 404) toast.error('Team not found. It may have already been deleted.');
+      else toast.error(toMessage(error));
+    },
+  });
 
   if (!userData) return null;
-
-  const handleUpdateMyTeams = () => {
-    fetchMyTeams(userData, setMyTeams);
-    fetchTeams({ page, keyword, sortBy, order }, setTeams, setPages);
-  };
-
-  // Adapter — teamApi.joinTeam/leaveTeam call (setMsg, setSuccess, setOpen)
-  // separately. We collect the latest msg/severity and fire one toast on open.
-  const makeStatusAdapter = () => {
-    const state = { msg: '', ok: true };
-    return {
-      setMsg: (msg) => {
-        state.msg = msg;
-      },
-      setOk: (ok) => {
-        state.ok = ok;
-      },
-      fire: () => {
-        if (state.ok) toast.success(state.msg);
-        else toast.error(state.msg);
-      },
-    };
-  };
 
   return (
     <Card className="mx-auto w-full max-w-3xl">
@@ -106,10 +180,7 @@ function ParticipantTeam() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              setViewDialogOpen(true);
-              fetchMyTeams(userData, setMyTeams);
-            }}
+            onClick={() => setViewDialogOpen(true)}
           >
             <FolderKanban className="h-4 w-4" />
             View My Teams
@@ -132,34 +203,14 @@ function ParticipantTeam() {
           setKeyword={setKeyword}
           setSortBy={setSortBy}
           setOrder={setOrder}
-          onJoin={(team) => {
-            const a = makeStatusAdapter();
-            joinTeam(team, userData, setJoinedTeams, a.setMsg, a.setOk, a.fire);
-          }}
-          onLeave={(id) => {
-            const a = makeStatusAdapter();
-            leaveTeam(id, userData, setJoinedTeams, a.setMsg, a.setOk, a.fire);
-          }}
+          onJoin={(team) => joinTeam.mutate(team)}
+          onLeave={(id) => leaveTeam.mutate(id)}
         />
 
         <TeamCreateDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
-          onCreate={(name, desc) =>
-            createTeam(name, desc, userData, {
-              onSuccess: () => {
-                toast.success('Team created!');
-                setDialogOpen(false);
-                fetchJoinedTeams(userData, setJoinedTeams);
-                fetchTeams(
-                  { page: 1, keyword, sortBy, order },
-                  setTeams,
-                  setPages
-                );
-              },
-              onError: (msg) => toast.error(msg),
-            })
-          }
+          onCreate={(name, description) => createTeam.mutate({ name, description })}
         />
 
         <MyTeamsDialog
@@ -167,26 +218,8 @@ function ParticipantTeam() {
           myTeams={myTeams}
           userData={userData}
           onClose={() => setViewDialogOpen(false)}
-          onUpdate={handleUpdateMyTeams}
-          onDelete={(id) =>
-            deleteTeam(id, userData, {
-              onSuccess: () => {
-                toast.success('Team deleted');
-                setMyTeams((prev) => prev.filter((t) => t.id !== id));
-                setJoinedTeams((prev) => {
-                  const copy = new Set(prev);
-                  copy.delete(id);
-                  return copy;
-                });
-                fetchTeams(
-                  { page, keyword, sortBy, order },
-                  setTeams,
-                  setPages
-                );
-              },
-              onError: (msg) => toast.error(msg),
-            })
-          }
+          onUpdate={invalidateTeams}
+          onDelete={(id) => deleteTeam.mutate(id)}
         />
       </CardContent>
     </Card>
