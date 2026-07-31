@@ -15,7 +15,7 @@ import { ExternalLink } from 'lucide-react';
 import { judgeService } from '../services/judgeService';
 import { competitionService } from '../services/competitionService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap } from '../api/queryFn';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -34,7 +34,11 @@ function Rating() {
 
   const listParams = { page: 1, size: 100 };
 
-  const { data: competitions = [] } = useQuery({
+  const {
+    data: competitions = [],
+    isPending,
+    error,
+  } = useQuery({
     queryKey: [...queryKeys.judges.all, 'myCompetitions', listParams],
     queryFn: () => unwrap(judgeService.getMyCompetitions(listParams)),
     select: (payload) => (payload && payload.data) || [],
@@ -76,7 +80,21 @@ function Rating() {
                   </tr>
                 </thead>
                 <tbody>
-                  {competitions.map((comp, index) => (
+                  {isPending && (
+                    <tr>
+                      <td colSpan={99} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                        Loading your competitions...
+                      </td>
+                    </tr>
+                  )}
+                  {!isPending && error && (
+                    <tr>
+                      <td colSpan={99} className="px-3 py-8 text-center text-sm text-destructive" role="alert">
+                        {toMessage(error)}
+                      </td>
+                    </tr>
+                  )}
+                  {!isPending && !error && competitions.map((comp, index) => (
                     <tr key={comp.id} className="border-b last:border-b-0 hover:bg-muted/20">
                       <td className="px-4 py-3">{index + 1}</td>
                       <td className="px-4 py-3">
@@ -105,7 +123,7 @@ function Rating() {
                       </td>
                     </tr>
                   ))}
-                  {competitions.length === 0 && (
+                  {!isPending && !error && competitions.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                         No competitions assigned.

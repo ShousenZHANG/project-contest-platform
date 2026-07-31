@@ -25,10 +25,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import { competitionService } from "../services/competitionService";
 import { queryKeys, staleTime } from "../api/queryKeys";
 import { unwrap, toMessage } from "../api/queryFn";
+import PageSkeleton from "@/shared/components/PageSkeleton";
+import EmptyState from "@/shared/components/EmptyState";
 import { toast } from "sonner";
 
 function Contest() {
@@ -57,7 +59,11 @@ function Contest() {
 
   // Shares its cache entry with the participant contest list, which reads the
   // same endpoint with the same filters.
-  const { data: contests = [], error: listError } = useQuery({
+  const {
+    data: contests = [],
+    isPending,
+    error: listError,
+  } = useQuery({
     queryKey: queryKeys.competitions.list(listParams),
     queryFn: () => unwrap(competitionService.list(listParams)),
     select: (payload) => (payload && payload.data) || [],
@@ -208,7 +214,22 @@ function Contest() {
 
           {/* Contest grid/table */}
           <div>
-            {isListView ? (
+            {isPending ? (
+              <PageSkeleton rows={6} />
+            ) : listError ? (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {toMessage(listError)}
+              </div>
+            ) : filteredContests.length === 0 ? (
+              <EmptyState
+                icon={Trophy}
+                title="No contests match these filters"
+                description="Try clearing the search box or widening the category and status filters."
+              />
+            ) : isListView ? (
               <ChangeContestTable
                 contests={filteredContests.map((item) => ({
                   id: item.id,

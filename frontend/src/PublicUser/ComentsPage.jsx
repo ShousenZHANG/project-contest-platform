@@ -20,6 +20,7 @@ import { unwrap, toMessage } from "../api/queryFn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/shared/components/EmptyState";
+import PageSkeleton from "@/shared/components/PageSkeleton";
 import AuthTokenManager from '@/auth/authTokenManager';
 
 
@@ -39,6 +40,7 @@ function CommentsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isPending,
   } = useInfiniteQuery({
     queryKey: [...queryKeys.comments.all, "infinite", submissionId],
     queryFn: ({ pageParam }) =>
@@ -95,7 +97,9 @@ function CommentsPage() {
             Comments
           </h1>
 
-          {comments.length === 0 ? (
+          {isPending ? (
+            <PageSkeleton rows={4} />
+          ) : comments.length === 0 ? (
             <EmptyState
               icon={MessageSquare}
               title="No comments yet."

@@ -10,10 +10,12 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
 import { competitionService } from '../../services/competitionService';
 import { queryKeys, staleTime } from '../../api/queryKeys';
-import { unwrap } from '../../api/queryFn';
+import { unwrap, toMessage } from '../../api/queryFn';
+import PageSkeleton from '@/shared/components/PageSkeleton';
+import EmptyState from '@/shared/components/EmptyState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -48,7 +50,11 @@ function Contest() {
     ...(selectedStatus && { status: selectedStatus }),
   };
 
-  const { data: contests = [] } = useQuery({
+  const {
+    data: contests = [],
+    isPending,
+    error,
+  } = useQuery({
     queryKey: queryKeys.competitions.list(listParams),
     queryFn: () => unwrap(competitionService.list(listParams)),
     select: (payload) => (payload && payload.data) || [],
@@ -223,7 +229,22 @@ function Contest() {
 
         {/* Display area */}
         <div className="flex-1">
-          {isListView ? (
+          {isPending ? (
+            <PageSkeleton rows={6} />
+          ) : error ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {toMessage(error)}
+            </div>
+          ) : filteredContests.length === 0 ? (
+            <EmptyState
+              icon={Trophy}
+              title="No contests match these filters"
+              description="Try clearing the search box or widening the category and status filters."
+            />
+          ) : isListView ? (
             <ChangeContestTable
               contests={filteredContests.map((item) => ({
                 id: item.id,
