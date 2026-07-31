@@ -9,11 +9,14 @@
  * Developer: Zhaoyi Yang
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '@/api/apiClient';
+import { submissionService } from '@/services/registrationService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 import ViewVote from '../ViewVote';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,30 +33,21 @@ function ViewSubmission() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
 
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
+  const approvedParams = { competitionId };
 
-  useEffect(() => {
-    const fetchSubmissions = async () => {
-      try {
-        const res = await apiClient.get(
-          `/submissions/public/approved?competitionId=${competitionId}`
-        );
-        setSubmissions(res.data.data || []);
-      } catch (error) {
-        const msg =
-          error.response?.data ||
-          error.message ||
-          'Network error fetching submissions';
-        setErrorMessage(typeof msg === 'string' ? msg : 'Network error');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const {
+    data: submissions = [],
+    isPending: loading,
+    error: listError,
+  } = useQuery({
+    queryKey: [...queryKeys.submissions.all, 'approved', approvedParams],
+    queryFn: () => unwrap(submissionService.getApproved(approvedParams)),
+    select: (payload) => (payload && payload.data) || [],
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.short,
+  });
 
-    fetchSubmissions();
-  }, [competitionId]);
+  const errorMessage = listError ? toMessage(listError) : '';
 
   useEffect(() => {
     if (errorMessage) toast.error(errorMessage);

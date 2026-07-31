@@ -8,6 +8,7 @@
  * Developer: Zhaoyi Yang (migrated)
  */
 import React, { useState, useEffect } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Search,
   FileText,
@@ -20,11 +21,13 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from '../services/serviceUtils';
 import { useLocation, useNavigate } from "react-router-dom";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import apiClient from "../api/apiClient";
+import { submissionService } from "../services/registrationService";
+import { voteService } from "../services/interactionService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap, toMessage } from "../api/queryFn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -33,10 +36,8 @@ function WorkList() {
   const location = useLocation();
   const navigate = useNavigate();
   const [competitionId, setCompetitionId] = useState("");
-  const [works, setWorks] = useState([]);
-  const [filteredWorks, setFilteredWorks] = useState([]);
   const [searchInput, setSearchInput] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [appliedSearch, setAppliedSearch] = useState("");
 
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
@@ -46,60 +47,57 @@ function WorkList() {
     }
   }, [location.search]);
 
-  useEffect(() => {
-    async function fetchWorks() {
-      if (!competitionId) return;
-      setLoading(true);
-      try {
-        const res = await apiClient.get(`/submissions/public/approved`, {
-          params: { competitionId },
-        });
-        const items = res.data.data || [];
-        const mappedWorks = await Promise.all(
-          items.map(async (item, idx) => {
-            let voteCount = 0;
-            try {
-              const voteRes = await apiClient.get(`/interactions/votes/count`, {
-                params: { submissionId: item.id },
-              });
-              voteCount = parseInt(voteRes.data, 10) || 0;
-            } catch {
-              // vote count fetch failed — default to 0
-            }
-            return {
-              id: item.id || String(idx),
-              title: item.title || `Work ${idx}`,
-              description: item.description || "No description.",
-              fileType: item.fileType || "",
-              fileUrl: item.fileUrl || "",
-              voteCount,
-            };
-          })
-        );
-        setWorks(mappedWorks);
-        setFilteredWorks(mappedWorks);
-      } catch (err) {
-        toast.error(extractErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchWorks();
-  }, [competitionId]);
+  const approvedParams = { competitionId };
 
-  const handleSearchClick = () => {
-    const term = searchInput.trim().toLowerCase();
-    if (!term) {
-      setFilteredWorks(works);
-    } else {
-      const filtered = works.filter(
+  const {
+    data: items = [],
+    isPending: itemsPending,
+    error: listError,
+  } = useQuery({
+    queryKey: [...queryKeys.submissions.all, "approved", approvedParams],
+    queryFn: () => unwrap(submissionService.getApproved(approvedParams)),
+    select: (payload) => (payload && payload.data) || [],
+    enabled: Boolean(competitionId),
+    staleTime: staleTime.short,
+  });
+
+  // Vote counts share their cache key with ViewVote, so a tally already read
+  // elsewhere on the page does not get fetched twice.
+  const voteQueries = useQueries({
+    queries: items.map((item) => ({
+      queryKey: queryKeys.votes.count(item.id),
+      queryFn: () => unwrap(voteService.getCount(item.id)),
+      staleTime: staleTime.live,
+    })),
+  });
+
+  const works = items.map((item, idx) => ({
+    id: item.id || String(idx),
+    title: item.title || `Work ${idx}`,
+    description: item.description || "No description.",
+    fileType: item.fileType || "",
+    fileUrl: item.fileUrl || "",
+    voteCount: parseInt(voteQueries[idx] && voteQueries[idx].data, 10) || 0,
+  }));
+
+  const loading = itemsPending || voteQueries.some((q) => q.isPending);
+
+  useEffect(() => {
+    if (listError) toast.error(toMessage(listError));
+  }, [listError]);
+
+  // Search is derived from state already on hand, so it is computed during
+  // render rather than mirrored into a second piece of state.
+  const term = appliedSearch.trim().toLowerCase();
+  const filteredWorks = term
+    ? works.filter(
         (w) =>
           w.title.toLowerCase().includes(term) ||
           w.description.toLowerCase().includes(term)
-      );
-      setFilteredWorks(filtered);
-    }
-  };
+      )
+    : works;
+
+  const handleSearchClick = () => setAppliedSearch(searchInput);
 
   const handleSearchKeyDown = (e) => {
     if (e.key === "Enter") {
