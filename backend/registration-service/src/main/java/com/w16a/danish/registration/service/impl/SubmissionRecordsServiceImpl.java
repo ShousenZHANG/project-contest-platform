@@ -4,7 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.registration.config.SubmissionNotifier;
+import com.w16a.danish.registration.notify.SubmissionNotifier;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.mq.SubmissionReviewedMessage;
 import com.w16a.danish.registration.domain.mq.SubmissionUploadedMessage;

@@ -3,7 +3,7 @@ package com.w16a.danish.registration.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.registration.config.RegistrationNotifier;
+import com.w16a.danish.registration.notify.RegistrationNotifier;
 import com.w16a.danish.registration.domain.mq.ParticipantRemovedMessage;
 import com.w16a.danish.registration.domain.mq.RegisterSuccessMessage;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;

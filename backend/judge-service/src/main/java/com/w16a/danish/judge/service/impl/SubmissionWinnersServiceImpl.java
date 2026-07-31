@@ -2,7 +2,7 @@ package com.w16a.danish.judge.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.judge.config.AwardNotifier;
+import com.w16a.danish.judge.notify.AwardNotifier;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;

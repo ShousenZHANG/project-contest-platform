@@ -1,10 +1,11 @@
-package com.w16a.danish.judge.config;
+package com.w16a.danish.judge.notify;
 
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
+import com.w16a.danish.judge.config.JudgeRabbitMQConfig;
 
 /**
  * MQ sender for notifying award winners.

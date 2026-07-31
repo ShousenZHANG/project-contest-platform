@@ -3,7 +3,7 @@ package com.w16a.danish.registration.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.registration.config.SubmissionNotifier;
+import com.w16a.danish.registration.notify.SubmissionNotifier;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;

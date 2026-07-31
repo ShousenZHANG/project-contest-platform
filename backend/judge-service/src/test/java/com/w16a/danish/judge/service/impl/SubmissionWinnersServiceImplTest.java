@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.judge.config.AwardNotifier;
+import com.w16a.danish.judge.notify.AwardNotifier;
 import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.w16a.danish.judge.domain.vo.SubmissionInfoVO;

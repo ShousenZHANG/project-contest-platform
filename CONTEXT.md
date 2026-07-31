@@ -121,6 +121,31 @@ directly; the gateway decides what a missing entity means.
 
 ---
 
+## Events
+
+Every notification the platform emits. All are fire-and-forget over RabbitMQ; a failed publish
+never fails the request that triggered it. Publishers live in each service's `notify/` package —
+not `config/`, which holds the exchange and routing-key declarations they read from.
+
+| Emitted by | Event | Message | Triggered when |
+|---|---|---|---|
+| competition-service | `sendJudgeAssigned` | `JudgeAssignedMessage` | An Organizer assigns a Judge |
+| competition-service | `sendJudgeRemoved` | `JudgeRemovedMessage` | An Organizer removes a Judge |
+| registration-service | `sendRegisterSuccess` | `RegisterSuccessMessage` | A Participant or Team registers |
+| registration-service | `sendParticipantRemoved` | `ParticipantRemovedMessage` | An Organizer removes a Participant |
+| registration-service | `sendSubmissionUploaded` | `SubmissionUploadedMessage` | A Submission is uploaded or replaced |
+| registration-service | `sendSubmissionReviewed` | `SubmissionReviewedMessage` | An Organizer approves or rejects a Submission |
+| judge-service | `sendAwardWinner` | `AwardWinnerMessage` | Auto-award selects a Winner |
+
+user-service consumes these and sends the email. Nothing else subscribes.
+
+The four notifier classes are deliberately **not** merged into one. Two of them sit in
+registration-service and could be, but registration events and submission events are different
+domain concepts — merging would group by mechanism instead of by domain, against every other
+boundary in this file.
+
+---
+
 ## Conventions
 
 **Response envelope.** Most endpoints return `ApiResponse<T>` (`{ success, data, error }`) from

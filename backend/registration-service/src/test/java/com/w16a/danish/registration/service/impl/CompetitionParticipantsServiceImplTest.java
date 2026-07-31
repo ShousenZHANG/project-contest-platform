@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.registration.config.RegistrationNotifier;
+import com.w16a.danish.registration.notify.RegistrationNotifier;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.CompetitionTeams;

@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.competition.config.CompetitionNotifier;
+import com.w16a.danish.competition.notify.CompetitionNotifier;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;

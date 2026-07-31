@@ -1,4 +1,4 @@
-package com.w16a.danish.registration.config;
+package com.w16a.danish.registration.notify;
 
 import com.w16a.danish.registration.domain.mq.RegisterSuccessMessage;
 import com.w16a.danish.registration.domain.mq.ParticipantRemovedMessage;
@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
+import com.w16a.danish.registration.config.RabbitMQConfig;
 
 /**
  *
