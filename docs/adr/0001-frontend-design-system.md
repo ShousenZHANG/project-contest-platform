@@ -121,13 +121,34 @@ partly done, and the audit found this left over:
 - Dead `@mui` `manualChunks` branch in `vite.config.js` — **removed**.
 - Render-blocking Font Awesome + Material Icons CDN stylesheets in `index.html`
   with zero usages left — **removed**.
-- Decision 8 (motion system) is effectively unimplemented: `framer-motion` is
-  imported by exactly one file, and `prefers-reduced-motion` is honoured in one
-  place. **Still open.**
+- Decision 8 (motion system) — **closed**, see below.
 - Decision 11 (WCAG AA) has not been audited. **Still open.**
 - `@tanstack/react-query` is installed and `QueryClientProvider` is mounted, but
   there are zero `useQuery`/`useMutation` call sites; 38 components fetch inside
-  `useEffect`. Tracked separately as the data-layer pass. **Still open.**
+  `useEffect`. — **closed** by ADR-0002.
+
+### Decision 8, as built
+
+The three durations are CSS variables (`--motion-page`, `--motion-card`,
+`--motion-modal`, plus `--motion-ease`) in `index.css`, and the motions that use
+them are semantic classes in `@layer components`. Call sites name the intent —
+`motion-page`, `motion-card`, `motion-dialog`, `motion-sheet`, `motion-popover` —
+and never restate a number, so retuning the feel is one edit.
+
+Two things were found while implementing it:
+
+- **The modal animations were fictional.** dialog, sheet, dropdown and tooltip
+  all carried shadcn's `animate-in`, `zoom-in-95` and `slide-in-from-*` classes,
+  but `tailwindcss-animate` — the plugin that defines them — was never installed.
+  Every modal in the product opened with no animation while the markup claimed
+  otherwise. The keyframes are now written directly, driven off Radix's
+  `data-[state]`, which is also why no plugin was added for it.
+- **framer-motion ignores the reduced-motion CSS reset**, because it animates
+  inline styles from JavaScript. `<MotionConfig reducedMotion="user">` at the app
+  root fixes that for the hero and anything added later.
+
+The hero keeps framer-motion: its staggered entrance is orchestration, which is
+what the library is actually good at. Nothing else needs it.
 
 ### Migration safety
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
+import PageTransition from './PageTransition';
 
 /**
  * PublicLayout — minimal wrapper for unauthenticated routes (no sidebar).
@@ -8,7 +9,9 @@ import { Outlet } from 'react-router-dom';
 export default function PublicLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Outlet />
+      <PageTransition>
+        <Outlet />
+      </PageTransition>
     </div>
   );
 }

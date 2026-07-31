@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AppShell } from './AppShell';
+import PageTransition from './PageTransition';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -16,7 +17,9 @@ export default function AuthenticatedShell() {
   const { user } = useAuth();
   return (
     <AppShell role={user?.role} userEmail={user?.email}>
-      <Outlet />
+      <PageTransition>
+        <Outlet />
+      </PageTransition>
     </AppShell>
   );
 }

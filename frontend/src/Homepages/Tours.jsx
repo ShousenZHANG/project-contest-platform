@@ -45,7 +45,7 @@ function Tours() {
           {tours.map((tour) => (
             <Card
               key={tour.title}
-              className="overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg"
+              className="overflow-hidden motion-card"
             >
               <div className="aspect-square overflow-hidden bg-muted">
                 <img

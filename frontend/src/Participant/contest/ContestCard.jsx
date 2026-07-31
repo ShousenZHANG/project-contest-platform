@@ -239,7 +239,7 @@ function ContestCard({ contest, onLoginRequest }) {
     <>
       <Card
         onClick={() => navigate(`/contest-detail/${contest.id}`)}
-        className="group max-w-sm cursor-pointer overflow-hidden transition-all hover:-translate-y-1 hover:shadow-md"
+        className="group max-w-sm cursor-pointer overflow-hidden motion-card"
       >
         <div className="h-48 w-full overflow-hidden bg-muted">
           <img

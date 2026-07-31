@@ -178,6 +178,11 @@ existed.
 **staleTime tiers** — `live` (vote counts), `short` (lists), `medium` (detail pages), `long`
 (profiles). Pick by how fast the data actually goes stale.
 
+**Motion classes** — `motion-page` (route fade), `motion-card` (hover lift), `motion-dialog`,
+`motion-sheet`, `motion-popover`. Durations live in `--motion-*` tokens in `src/index.css`; a
+component that writes its own `duration-*` has left the system. Reduced motion is handled once,
+globally, so no component checks for it.
+
 ---
 
 ## Decisions on record

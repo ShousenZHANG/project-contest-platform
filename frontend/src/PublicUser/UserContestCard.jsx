@@ -30,7 +30,7 @@ function ContestCard({ contest, onCardClick }) {
   return (
     <Card
       onClick={handleCardClick}
-      className="group max-w-sm overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-xl border-border/60"
+      className="group max-w-sm overflow-hidden cursor-pointer motion-card border-border/60"
     >
       <div className="relative h-48 w-full overflow-hidden bg-muted">
         {contest.image ? (

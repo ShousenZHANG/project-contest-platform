@@ -55,6 +55,14 @@
     /* Geometry */
     --radius: 0.5rem;
 
+    /* Motion — the three durations ADR-0001 names, defined once.
+       Call sites use .motion-page / .motion-card / .motion-modal and never
+       restate a number, so retuning the feel is an edit here. */
+    --motion-page: 150ms;
+    --motion-card: 200ms;
+    --motion-modal: 180ms;
+    --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
     /* Layout */
     --sidebar-width: 240px;
     --sidebar-width-collapsed: 64px;
@@ -135,7 +143,11 @@
     top: 8px;
   }
 
-  /* Respect reduced motion */
+  /* Respect reduced motion.
+     This block is in @layer base deliberately: for !important declarations the
+     cascade reverses layer order, so base wins over anything a component or
+     utility can say. Every motion below therefore collapses to instant here,
+     and none of them need to repeat the media query. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -144,6 +156,143 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Motion system — ADR-0001 decision 8
+
+   Three motions, each defined once. They exist as CSS rather than per-component
+   animation props because the durations were previously nowhere: transitions
+   were hand-written per call site with six different durations, and one card
+   list lifted 4px in 200ms while the next lifted 4px in whatever `transition-all`
+   defaulted to.
+
+   Reduced motion is handled by the base-layer block above, not here.
+───────────────────────────────────────────────────────────────────────────── */
+
+@layer components {
+  @keyframes motion-page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Route content fading in. Applied once by PageTransition, not per page. */
+  .motion-page {
+    animation: motion-page-enter var(--motion-page) var(--motion-ease) both;
+  }
+
+  /* Hover lift for a card that navigates somewhere.
+     Transitions exactly the two properties that change — the `transition-all`
+     this replaces also animated layout properties, which is what made hover
+     feel heavy on long grids. The lift and the shadow live here so every card
+     in the product agrees on what "interactive" feels like. */
+  .motion-card {
+    transition:
+      transform var(--motion-card) var(--motion-ease),
+      box-shadow var(--motion-card) var(--motion-ease);
+  }
+
+  .motion-card:hover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 1px 2px hsl(222 47% 11% / 0.06),
+      0 12px 28px -10px hsl(222 47% 11% / 0.18);
+  }
+
+  .dark .motion-card:hover {
+    box-shadow:
+      0 1px 2px hsl(0 0% 0% / 0.4),
+      0 16px 34px -10px hsl(0 0% 0% / 0.55);
+  }
+
+  /* ── Radix surfaces ──────────────────────────────────────────────────────
+     These are what shadcn's `animate-in` / `zoom-in-95` / `slide-in-from-*`
+     utilities would have provided. The plugin that defines them —
+     tailwindcss-animate — was never installed here, so those class names sat in
+     dialog, sheet, dropdown and tooltip resolving to nothing: every modal in the
+     product opened instantly while claiming otherwise. Radix drives the
+     open/closed state; these rules say what that looks like. */
+
+  @keyframes motion-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes motion-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .motion-overlay[data-state='open'] {
+    animation: motion-fade-in var(--motion-modal) var(--motion-ease);
+  }
+  .motion-overlay[data-state='closed'] {
+    animation: motion-fade-out var(--motion-modal) var(--motion-ease);
+  }
+
+  /* A dialog is centred by Tailwind v4's `-translate-x-1/2 -translate-y-1/2`,
+     which sets the independent `translate` property rather than `transform`.
+     The two compose, so these keyframes must animate scale alone — repeating the
+     centering here would apply it twice and make the dialog fly in from the
+     top-left instead of scaling in place. */
+  @keyframes motion-dialog-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes motion-dialog-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.96); }
+  }
+
+  .motion-dialog[data-state='open'] {
+    animation: motion-dialog-in var(--motion-modal) var(--motion-ease);
+  }
+  .motion-dialog[data-state='closed'] {
+    animation: motion-dialog-out var(--motion-modal) var(--motion-ease);
+  }
+
+  /* A sheet slides in from the edge it is pinned to. The side variant sets
+     --sheet-from-x/y, which keeps these keyframes side-agnostic. */
+  @keyframes motion-sheet-in {
+    from { transform: translate(var(--sheet-from-x, 0), var(--sheet-from-y, 0)); }
+    to { transform: none; }
+  }
+  @keyframes motion-sheet-out {
+    from { transform: none; }
+    to { transform: translate(var(--sheet-from-x, 0), var(--sheet-from-y, 0)); }
+  }
+
+  .motion-sheet[data-state='open'] {
+    animation: motion-sheet-in var(--motion-modal) var(--motion-ease);
+  }
+  .motion-sheet[data-state='closed'] {
+    animation: motion-sheet-out var(--motion-modal) var(--motion-ease);
+  }
+
+  /* Popovers scale from their own anchor, so no centering translate to carry.
+     Radix reports a tooltip's open state as delayed-open or instant-open. */
+  @keyframes motion-popover-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes motion-popover-out {
+    from { opacity: 1; transform: none; }
+    to { opacity: 0; transform: scale(0.96); }
+  }
+
+  .motion-popover[data-state='open'],
+  .motion-popover[data-state='delayed-open'],
+  .motion-popover[data-state='instant-open'] {
+    animation: motion-popover-in var(--motion-modal) var(--motion-ease);
+  }
+  .motion-popover[data-state='closed'] {
+    animation: motion-popover-out var(--motion-modal) var(--motion-ease);
   }
 }
 

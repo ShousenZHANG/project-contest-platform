@@ -83,7 +83,7 @@ function ContestCard({ contest, onCardClick }) {
   return (
     <Card
       onClick={handleCardClick}
-      className="group flex flex-col overflow-hidden cursor-pointer border-border/60 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
+      className="group flex flex-col overflow-hidden cursor-pointer border-border/60 motion-card"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
         {contest.image ? (

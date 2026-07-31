@@ -78,7 +78,7 @@ function TeamListPage() {
                       },
                     })
                   }
-                  className="group cursor-pointer border-border/60 transition-all hover:-translate-y-1 hover:shadow-lg"
+                  className="group cursor-pointer border-border/60 motion-card"
                 >
                   <CardContent className="flex items-center gap-3 p-5">
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-primary/15 to-primary/5 text-primary">
