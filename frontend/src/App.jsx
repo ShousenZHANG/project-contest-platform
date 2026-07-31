@@ -52,6 +52,7 @@ const HowToUse = lazy(() => import('./PublicUser/HowToUse'));
 const WorkList = lazy(() => import('./PublicUser/WorkList'));
 const LoginForm = lazy(() => import('./Homepages/Login'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const PublicuserComents = lazy(() => import('./PublicUser/ComentsPage'));
 const TeamListPage = lazy(() => import('./PublicUser/TeamListPage'));
 const TeamPublicDetail = lazy(() => import('./PublicUser/TeamPublicDetail'));
@@ -93,6 +94,13 @@ function App() {
                 <Route path="/publicusercoments/:submissionId" element={<PublicuserComents />} />
                 <Route path="/public-teams/:contestId" element={<TeamListPage />} />
                 <Route path="/public-team-detail/:competitionId/:teamId" element={<TeamPublicDetail />} />
+
+                {/*
+                  Catch-all. It lives inside PublicLayout so an unknown URL
+                  still gets the navbar and footer, and it is last so it only
+                  matches once every other route has failed.
+                */}
+                <Route path="*" element={<NotFound />} />
               </Route>
 
               {/* Participant routes (authenticated shell) */}
