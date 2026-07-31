@@ -52,7 +52,7 @@ function ParticipantTeam() {
   const myTeamsKey = queryKeys.teams.myJoined(MY_TEAMS_PARAMS);
   const signedIn = Boolean(userData && userData.userId);
 
-  const { data: listPage } = useQuery({
+  const { data: listPage, isPending: teamsPending, error: teamsError } = useQuery({
     queryKey: listKey,
     queryFn: () => unwrap(teamService.getAll(listParams)),
     enabled: signedIn,
@@ -191,6 +191,16 @@ function ParticipantTeam() {
           Browse and join public teams below
         </p>
 
+        {teamsPending && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Loading public teams...
+          </p>
+        )}
+        {!teamsPending && teamsError && (
+          <p role="alert" className="py-6 text-center text-sm text-destructive">
+            {toMessage(teamsError)}
+          </p>
+        )}
         <TeamList
           teams={teams}
           joinedTeams={joinedTeams}

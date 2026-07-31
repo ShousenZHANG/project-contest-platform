@@ -55,7 +55,7 @@ function OrganizerAddJudge() {
   const judgesParams = { page, size: 10 };
   const judgesKey = [...queryKeys.competitions.judges(competitionId), judgesParams];
 
-  const { data: judgesPage } = useQuery({
+  const { data: judgesPage, isPending: judgesPending } = useQuery({
     queryKey: judgesKey,
     queryFn: () => unwrap(competitionService.getJudges(competitionId, judgesParams)),
     enabled,
@@ -169,7 +169,13 @@ function OrganizerAddJudge() {
             </tr>
           </thead>
           <tbody>
-            {judges.length === 0 ? (
+            {judgesPending ? (
+              <tr>
+                <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
+                  Loading judges...
+                </td>
+              </tr>
+            ) : judges.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
                   No judges assigned yet.

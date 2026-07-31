@@ -35,7 +35,7 @@ import {
 } from 'recharts';
 import { dashboardService } from '../services/judgeService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap } from '../api/queryFn';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Card, CardContent } from '../components/ui/card';
 import {
   Tooltip,
@@ -152,7 +152,7 @@ function MetricCard({ id, title, value, tooltip = [] }) {
 function AdminDashboard() {
   useDocumentTitle('Platform Dashboard');
   const colors = useMemo(() => getChartColors(), []);
-  const { data: overview = null, isPending: loading } = useQuery({
+  const { data: overview = null, isPending: loading, error } = useQuery({
     queryKey: queryKeys.dashboard.admin(),
     queryFn: () => unwrap(dashboardService.getPlatformOverview()),
     // Platform-wide totals; a few minutes stale is fine and keeps tab switches
@@ -264,6 +264,19 @@ function AdminDashboard() {
       hasParticipantTrend: participantTrendArr.length > 0,
     };
   }, [overview]);
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {toMessage(error)}
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -44,7 +44,7 @@ function Project() {
 
   const listParams = { page, size: PAGE_SIZE };
 
-  const { data: registrationPage } = useQuery({
+  const { data: registrationPage, isPending: registrationsPending } = useQuery({
     queryKey: queryKeys.registrations.mine(listParams),
     queryFn: () => unwrap(registrationService.getMyRegistrations(listParams)),
     enabled: Boolean(userData) && viewMode === 'personal',
@@ -252,7 +252,14 @@ function Project() {
                           </td>
                         </tr>
                       ))}
-                      {registrationData.length === 0 && (
+                      {registrationsPending && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            Loading your registrations...
+                          </td>
+                        </tr>
+                      )}
+                      {!registrationsPending && registrationData.length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                             No registrations yet.

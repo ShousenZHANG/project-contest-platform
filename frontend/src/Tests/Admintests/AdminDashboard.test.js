@@ -86,11 +86,13 @@ describe("AdminDashboard", () => {
     expect(screen.getByText(/Approval Rate/i)).toBeInTheDocument();
   });
 
-  it("shows (No data) if overview fetch fails", async () => {
+  it("reports a failed overview fetch instead of showing it as empty", async () => {
     apiClient.get.mockRejectedValue(new Error("Network error"));
 
     renderWithProviders(<AdminDashboard />);
 
-    await screen.findByText(/No data available/i);
+    // This used to render "No data available", which is what an empty but
+    // healthy platform looks like. A dead aggregation query now says so.
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Network error/i);
   });
 });

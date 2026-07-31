@@ -13,7 +13,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ChevronLeft, ChevronRight, Scale } from 'lucide-react';
 import { judgeService } from '../services/judgeService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap } from '../api/queryFn';
+import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
@@ -41,7 +41,7 @@ function JudgeSubmissions() {
     sortOrder: 'desc',
   };
 
-  const { data: listPage, isPending: loading } = useQuery({
+  const { data: listPage, isPending: loading, error } = useQuery({
     queryKey: queryKeys.judges.assignedSubmissions(competitionId, listParams),
     queryFn: () => unwrap(judgeService.getPendingSubmissions(listParams)),
     enabled: Boolean(competitionId),
@@ -84,6 +84,13 @@ function JudgeSubmissions() {
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {toMessage(error)}
           </div>
         ) : (
           <Card>
