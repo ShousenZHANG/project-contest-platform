@@ -5,7 +5,7 @@ import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.InteractionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
@@ -34,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements IDashboardService {
 
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
     private final SubmissionServiceClient registrationServiceClient;
     private final InteractionServiceClient interactionServiceClient;
     private final ICompetitionJudgesService competitionJudgesService;
@@ -42,11 +42,7 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     public CompetitionDashboardVO getCompetitionStatistics(String competitionId, String userId) {
-        var competitionResp = competitionServiceClient.getCompetitionById(competitionId);
-        var competition = competitionResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
-        }
+        var competition = competitionGateway.require(competitionId);
 
         CompetitionDashboardVO dashboard = new CompetitionDashboardVO();
         dashboard.setCompetitionName(competition.getName());
@@ -139,7 +135,7 @@ public class DashboardServiceImpl implements IDashboardService {
     public PlatformDashboardVO getPlatformDashboard() {
         PlatformDashboardVO dashboard = new PlatformDashboardVO();
 
-        var competitions = Optional.ofNullable(competitionServiceClient.listAllCompetitions().getBody())
+        var competitions = Optional.of(competitionGateway.listAll())
                 .orElse(Collections.emptyList());
 
         if (competitions.isEmpty()) {

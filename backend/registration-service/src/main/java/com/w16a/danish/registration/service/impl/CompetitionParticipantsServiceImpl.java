@@ -17,7 +17,7 @@ import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.registration.feign.CompetitionServiceClient;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.CompetitionParticipantsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
@@ -49,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionParticipantsMapper, CompetitionParticipants> implements ICompetitionParticipantsService {
 
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
     private final ICompetitionOrganizersService competitionOrganizersService;
     private final UserServiceClient userServiceClient;
     private final ISubmissionRecordsService submissionService;
@@ -64,12 +64,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
         CompetitionResponseVO competition;
         try {
-            ResponseEntity<CompetitionResponseVO> response = competitionServiceClient.getCompetitionById(competitionId);
-            competition = response.getBody();
-
-            if (competition == null) {
-                throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
-            }
+            competition = competitionGateway.require(competitionId);
 
             if (!CompetitionStatus.isRegistrable(competition.getStatus())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Registration is only allowed for UPCOMING or ONGOING competitions");
@@ -181,8 +176,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
                 .collect(Collectors.toMap(CompetitionParticipants::getCompetitionId, CompetitionParticipants::getCreatedAt));
         List<String> competitionIds = new ArrayList<>(registeredAtMap.keySet());
 
-        ResponseEntity<List<CompetitionResponseVO>> response = competitionServiceClient.getCompetitionsByIds(competitionIds);
-        List<CompetitionResponseVO> competitions = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+        List<CompetitionResponseVO> competitions = competitionGateway.findAll(competitionIds);
 
         Map<String, Boolean> hasSubmittedMap = submissionService.getSubmissionStatus(userId, competitionIds);
         Map<String, BigDecimal> scoreMap = submissionService.getSubmissionScores(userId, competitionIds);
@@ -361,11 +355,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.NOT_FOUND, "Organizer info not found");
         }
 
-        ResponseEntity<CompetitionResponseVO> compResp = competitionServiceClient.getCompetitionById(competitionId);
-        CompetitionResponseVO competition = compResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition info not found");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         ParticipantRemovedMessage message = new ParticipantRemovedMessage();
         message.setUserName(participant.getName());
@@ -390,12 +380,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
         CompetitionResponseVO competition;
         try {
-            ResponseEntity<CompetitionResponseVO> response = competitionServiceClient.getCompetitionById(competitionId);
-            competition = response.getBody();
-
-            if (competition == null) {
-                throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-            }
+            competition = competitionGateway.require(competitionId);
 
             if (!CompetitionStatus.isRegistrable(competition.getStatus())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition is not open for registration.");
@@ -586,9 +571,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
                 .distinct()
                 .toList();
 
-        List<CompetitionResponseVO> competitions = Optional.ofNullable(
-                competitionServiceClient.getCompetitionsByIds(competitionIds).getBody()
-        ).orElse(Collections.emptyList());
+        List<CompetitionResponseVO> competitions = competitionGateway.findAll(competitionIds);
 
         Map<String, Boolean> submissionMap = submissionService.getSubmissionStatusByTeam(List.of(teamId), competitionIds);
         Map<String, BigDecimal> scoreMap = submissionService.getSubmissionScoresByTeam(List.of(teamId), competitionIds);
@@ -687,11 +670,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.NOT_FOUND, "Operator (organizer) info not found.");
         }
 
-        ResponseEntity<CompetitionResponseVO> compResp = competitionServiceClient.getCompetitionById(competitionId);
-        CompetitionResponseVO competition = compResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition info not found.");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         ParticipantRemovedMessage message = new ParticipantRemovedMessage();
         message.setUserName(creator.getName());
@@ -712,11 +691,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     public RegistrationStatisticsVO getRegistrationStatistics(String competitionId) {
-        ResponseEntity<CompetitionResponseVO> competitionResp = competitionServiceClient.getCompetitionById(competitionId);
-        CompetitionResponseVO competition = competitionResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         int individualCount = Math.toIntExact(this.lambdaQuery()
                 .eq(CompetitionParticipants::getCompetitionId, competitionId)
@@ -737,11 +712,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
     @Override
     public Map<String, Map<String, Integer>> getParticipantTrend(String competitionId) {
-        ResponseEntity<CompetitionResponseVO> competitionResp = competitionServiceClient.getCompetitionById(competitionId);
-        CompetitionResponseVO competition = competitionResp.getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         List<CompetitionParticipants> individualRegistrations = this.lambdaQuery()
                 .eq(CompetitionParticipants::getCompetitionId, competitionId)

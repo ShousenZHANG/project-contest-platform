@@ -14,7 +14,7 @@ import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.registration.feign.CompetitionServiceClient;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.feign.FileServiceClient;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.http.HttpStatus;
 
 class SubmissionRecordsServiceImplTest {
 
@@ -49,7 +50,7 @@ class SubmissionRecordsServiceImplTest {
     private SubmissionAnalyticsServiceImpl analyticsService;
 
     @Mock private SubmissionRecordsMapper submissionRecordsMapper;
-    @Mock private CompetitionServiceClient competitionServiceClient;
+    @Mock private CompetitionGateway competitionGateway;
     @Mock private FileServiceClient fileServiceClient;
     @Mock private SubmissionNotifier submissionNotifier;
     @Mock private UserServiceClient userServiceClient;
@@ -95,12 +96,12 @@ class SubmissionRecordsServiceImplTest {
         when(submissionQuery.list()).thenReturn(Collections.emptyList());
         when(submissionQuery.one()).thenReturn(null);
 
-        // Setup analyticsService baseMapper and competitionServiceClient
+        // Setup analyticsService baseMapper and competitionGateway
         ReflectionTestUtils.setField(analyticsService, "baseMapper", submissionRecordsMapper);
 
-        Field analyticsCompField = SubmissionAnalyticsServiceImpl.class.getDeclaredField("competitionServiceClient");
+        Field analyticsCompField = SubmissionAnalyticsServiceImpl.class.getDeclaredField("competitionGateway");
         analyticsCompField.setAccessible(true);
-        analyticsCompField.set(analyticsService, competitionServiceClient);
+        analyticsCompField.set(analyticsService, competitionGateway);
     }
 
     @Test
@@ -114,7 +115,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
 
@@ -155,7 +156,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().minusDays(1)); // 已经结束
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
@@ -175,7 +176,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok(null));
 
@@ -194,7 +195,8 @@ class SubmissionRecordsServiceImplTest {
         String competitionId = "comp-1";
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(null));
+        when(competitionGateway.require(competitionId))
+                .thenThrow(new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
 
         // Act & Assert
         assertThatThrownBy(() -> submissionService.submitWork(
@@ -214,7 +216,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
         when(userServiceClient.getUserBriefById(userId)).thenReturn(ResponseEntity.ok(null));
@@ -239,7 +241,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
 
@@ -268,7 +270,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
 
         SubmissionRecords existingRecord = new SubmissionRecords();
@@ -302,8 +304,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         // Mock file upload: returns blank space (invalid)
         when(fileServiceClient.uploadSubmission(file))
@@ -327,7 +328,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId)).thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
         when(userServiceClient.getUserBriefById(userId)).thenThrow(new RuntimeException("Feign Client error"));
@@ -356,8 +357,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         // Mock file upload throwing a RuntimeException
         when(fileServiceClient.uploadSubmission(file))
@@ -388,8 +388,7 @@ class SubmissionRecordsServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
-        when(competitionServiceClient.getCompetitionById(competitionId))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         // Mock file upload returns a valid URL
         when(fileServiceClient.uploadSubmission(file))
@@ -653,8 +652,7 @@ class SubmissionRecordsServiceImplTest {
         // 3) stub fetching competition info
         CompetitionResponseVO comp = new CompetitionResponseVO();
         comp.setName("Comp");
-        when(competitionServiceClient.getCompetitionById("c1"))
-                .thenReturn(ResponseEntity.ok(comp));
+        when(competitionGateway.require("c1")).thenReturn(comp);
 
         // 4) stub reviewer info
         UserBriefVO reviewer = new UserBriefVO();
@@ -779,7 +777,8 @@ class SubmissionRecordsServiceImplTest {
     @Test
     @DisplayName("❌ getSubmissionTrend not found competition")
     void testGetSubmissionTrend_CompNotFound() {
-        when(competitionServiceClient.getCompetitionById("c1")).thenReturn(ResponseEntity.ok(null));
+        when(competitionGateway.require("c1"))
+                .thenThrow(new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
         assertThatThrownBy(() ->
                 analyticsService.getSubmissionTrend("c1")
         ).isInstanceOf(BusinessException.class)
@@ -790,8 +789,7 @@ class SubmissionRecordsServiceImplTest {
     @DisplayName("✅ getSubmissionTrend success")
     void testGetSubmissionTrend_Success() {
         // 1) Stub that the competition exists
-        when(competitionServiceClient.getCompetitionById("c1"))
-                .thenReturn(ResponseEntity.ok(new CompetitionResponseVO()));
+        when(competitionGateway.require("c1")).thenReturn(new CompetitionResponseVO());
 
         // 2) Prepare a dummy SubmissionRecord
         SubmissionRecords r = new SubmissionRecords().setCreatedAt(LocalDateTime.now());

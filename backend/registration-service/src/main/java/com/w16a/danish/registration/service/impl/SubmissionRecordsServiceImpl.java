@@ -17,7 +17,7 @@ import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.registration.feign.CompetitionServiceClient;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.feign.FileServiceClient;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
@@ -54,7 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsMapper, SubmissionRecords> implements ISubmissionRecordsService {
 
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
     private final FileServiceClient fileServiceClient;
     private final SubmissionNotifier submissionNotifier;
     private final UserServiceClient userServiceClient;
@@ -136,12 +136,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
         CompetitionResponseVO competition;
         try {
-            ResponseEntity<CompetitionResponseVO> response = competitionServiceClient.getCompetitionById(competitionId);
-            competition = response.getBody();
-
-            if (competition == null) {
-                throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
-            }
+            competition = competitionGateway.require(competitionId);
 
             if (!CompetitionStatus.isRegistrable(competition.getStatus())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Cannot submit work to this competition");
@@ -356,9 +351,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update submission review status");
         }
 
-        CompetitionResponseVO competition = Optional.ofNullable(
-                competitionServiceClient.getCompetitionById(submission.getCompetitionId()).getBody()
-        ).orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
+        CompetitionResponseVO competition = competitionGateway.require(submission.getCompetitionId());
 
         UserBriefVO reviewer = Optional.ofNullable(
                 userServiceClient.getUserBriefById(reviewerId).getBody()
@@ -491,9 +484,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not a member of this team.");
         }
 
-        CompetitionResponseVO competition = Optional.ofNullable(
-                competitionServiceClient.getCompetitionById(competitionId).getBody()
-        ).orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Competition not found."));
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         if (!CompetitionStatus.isSubmittable(competition.getStatus())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition is not open for submissions.");

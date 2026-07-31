@@ -13,7 +13,7 @@ import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionWinnersMapper;
@@ -47,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersMapper, SubmissionWinners> implements ISubmissionWinnersService {
 
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
     private final SubmissionServiceClient submissionServiceClient;
     private final ISubmissionJudgeScoresService submissionJudgeScoresService;
     private final ISubmissionJudgesService submissionJudgesService;
@@ -65,7 +65,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
             int size) {
 
         boolean isOrganizerOrAdmin = ctx.isAdmin() ||
-                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, ctx.userId()).getBody());
+                competitionGateway.isOrganiser(competitionId, ctx.userId());
         if (!isOrganizerOrAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can view scored submissions.");
         }
@@ -157,7 +157,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
     @Transactional
     public void autoAward(RequestContext ctx, String competitionId) {
         boolean isOrganizerOrAdmin = ctx.isAdmin() ||
-                Boolean.TRUE.equals(competitionServiceClient.isUserOrganizer(competitionId, ctx.userId()).getBody());
+                competitionGateway.isOrganiser(competitionId, ctx.userId());
         if (!isOrganizerOrAdmin) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only organizers or admins can auto-award submissions.");
         }
@@ -262,7 +262,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
         // winner records are committed — otherwise a rollback would leave the competition
         // marked AWARDED and emails sent for winners that were never persisted.
         runAfterCommit(() -> {
-            competitionServiceClient.updateCompetitionStatus(competitionId, CompetitionStatus.AWARDED.name());
+            competitionGateway.updateStatus(competitionId, CompetitionStatus.AWARDED.name());
             submissions.forEach(submission -> {
                 boolean hasAnyAward = winners.stream()
                         .anyMatch(w -> w.getSubmissionId().equals(submission.getId()));
@@ -380,7 +380,7 @@ public class SubmissionWinnersServiceImpl extends ServiceImpl<SubmissionWinnersM
     }
 
     private void sendAwardNotification(SubmissionInfoVO submission, String competitionId, List<SubmissionWinners> winners) {
-        CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
+        CompetitionResponseVO competition = competitionGateway.find(competitionId).orElse(null);
         if (competition == null) {
             return;
         }

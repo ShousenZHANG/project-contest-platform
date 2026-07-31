@@ -14,7 +14,7 @@ import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
@@ -51,7 +51,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
     private final ICompetitionJudgesService competitionJudgesService;
     private final ISubmissionJudgeScoresService submissionJudgeScoresService;
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
     private final SubmissionServiceClient submissionServiceClient;
 
     @Override
@@ -73,10 +73,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
             throw new BusinessException(HttpStatus.BAD_REQUEST, "You have already judged this submission.");
         }
 
-        CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(judgeDTO.getCompetitionId()).getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(judgeDTO.getCompetitionId());
 
         boolean isCompetitionEnded =
                 (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now())) ||
@@ -132,10 +129,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
             return false;
         }
 
-        CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         return CompetitionStatus.COMPLETED.equals(competition.getStatus())
                 || (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now()));
@@ -146,10 +140,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
             RequestContext ctx, String competitionId, String keyword, String sortOrder, int page, int size) {
 
         // Step 1: Verify competition status (must be completed or ended)
-        CompetitionResponseVO competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-        }
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
         boolean isCompleted = CompetitionStatus.COMPLETED.equals(competition.getStatus());
         boolean isEnded = competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now());
@@ -331,12 +322,10 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                     .build();
         }
 
-        // Step 2: Fetch competition details via Feign client
-        List<CompetitionResponseVO> competitions = competitionServiceClient
-                .getCompetitionsByIds(competitionIds)
-                .getBody();
+        // Step 2: Fetch competition details
+        List<CompetitionResponseVO> competitions = competitionGateway.findAll(competitionIds);
 
-        if (competitions == null || competitions.isEmpty()) {
+        if (competitions.isEmpty()) {
             return PageResponse.<CompetitionResponseVO>builder()
                     .data(List.of())
                     .page(page)

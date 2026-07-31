@@ -14,7 +14,7 @@ import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
@@ -47,7 +47,7 @@ class SubmissionJudgesServiceImplTest {
 
     @Mock private ICompetitionJudgesService competitionJudgesService;
     @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
-    @Mock private CompetitionServiceClient competitionServiceClient;
+    @Mock private CompetitionGateway competitionGateway;
     @Mock private SubmissionServiceClient submissionServiceClient;
     @Mock private SubmissionJudgesMapper submissionJudgesMapper;
 
@@ -79,8 +79,7 @@ class SubmissionJudgesServiceImplTest {
         when(judgedQuery.exists()).thenReturn(false);
 
         // Mock competition info
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(mockCompetitionCompleted()));
+        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
 
         // Mock saving judge record
         when(submissionJudgesService.save(any())).thenReturn(true);
@@ -113,8 +112,7 @@ class SubmissionJudgesServiceImplTest {
         when(query.eq(any(), any())).thenReturn(query);
         when(query.exists()).thenReturn(true);
 
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(mockCompetitionCompleted()));
+        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
 
         assertThat(submissionJudgesService.isUserAssignedAsJudge("user-1", "comp-1")).isTrue();
     }
@@ -141,8 +139,7 @@ class SubmissionJudgesServiceImplTest {
     @Test
     @DisplayName("✅ Should list pending submissions for judging successfully")
     void testListPendingSubmissionsForJudging_Success() {
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(mockCompetitionCompleted()));
+        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
 
         when(submissionServiceClient.listApprovedSubmissionsPublic(any(), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(ResponseEntity.ok(mockPageSubmissions()));
@@ -170,8 +167,7 @@ class SubmissionJudgesServiceImplTest {
         when(query.select(any(SFunction.class))).thenReturn(query);
         when(query.list()).thenReturn(List.of(new CompetitionJudges().setCompetitionId("comp-1")));
 
-        when(competitionServiceClient.getCompetitionsByIds(anyList()))
-                .thenReturn(ResponseEntity.ok(List.of(mockCompetitionCompleted())));
+        when(competitionGateway.findAll(anyList())).thenReturn(List.of(mockCompetitionCompleted()));
 
         PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
                 ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10
@@ -231,8 +227,7 @@ class SubmissionJudgesServiceImplTest {
     @Test
     @DisplayName("✅ Should handle empty approved submissions")
     void testListPendingSubmissionsForJudging_EmptyApprovedSubmissions() {
-        when(competitionServiceClient.getCompetitionById(any()))
-                .thenReturn(ResponseEntity.ok(mockCompetitionCompleted()));
+        when(competitionGateway.require(any())).thenReturn(mockCompetitionCompleted());
 
         when(submissionServiceClient.listApprovedSubmissionsPublic(any(), anyInt(), anyInt(), any(), any(), any()))
                 .thenReturn(ResponseEntity.ok(PageResponse.<SubmissionInfoVO>builder()
@@ -256,8 +251,7 @@ class SubmissionJudgesServiceImplTest {
         when(query.select(any(SFunction.class))).thenReturn(query);
         when(query.list()).thenReturn(Collections.emptyList());
 
-        when(competitionServiceClient.getCompetitionsByIds(anyList()))
-                .thenReturn(ResponseEntity.ok(Collections.emptyList()));
+        when(competitionGateway.findAll(anyList())).thenReturn(Collections.emptyList());
 
         PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
                 ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10

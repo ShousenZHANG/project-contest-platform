@@ -5,7 +5,7 @@ import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.InteractionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
@@ -25,6 +25,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import org.springframework.http.HttpStatus;
 
 /**
  * Unit tests for {@link DashboardServiceImpl}.
@@ -34,7 +35,7 @@ class DashboardServiceImplTest {
     @InjectMocks
     private DashboardServiceImpl dashboardService;
 
-    @Mock private CompetitionServiceClient competitionServiceClient;
+    @Mock private CompetitionGateway competitionGateway;
     @Mock private SubmissionServiceClient registrationServiceClient;
     @Mock private InteractionServiceClient interactionServiceClient;
     @Mock private ICompetitionJudgesService competitionJudgesService;
@@ -53,8 +54,7 @@ class DashboardServiceImplTest {
         competition.setName("BigBrain Contest");
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setParticipationType(ParticipationType.INDIVIDUAL);
-        when(competitionServiceClient.getCompetitionById(any()))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(any())).thenReturn(competition);
 
         // Arrange - Mock registration statistics
         RegistrationStatisticsVO registrationStats = new RegistrationStatisticsVO();
@@ -128,8 +128,7 @@ class DashboardServiceImplTest {
         competition.setParticipationType(ParticipationType.TEAM);
         competition.setStatus(CompetitionStatus.ONGOING);
 
-        when(competitionServiceClient.getCompetitionById(any()))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require(any())).thenReturn(competition);
 
         when(userServiceClient.getJoinedTeamIdsByUser(any()))
                 .thenReturn(ResponseEntity.ok(List.of("team-1")));
@@ -187,8 +186,8 @@ class DashboardServiceImplTest {
     @Test
     @DisplayName("❌ Should throw BusinessException if competition not found")
     void testGetCompetitionStatistics_NotFound() {
-        when(competitionServiceClient.getCompetitionById(any()))
-                .thenReturn(ResponseEntity.ok(null));
+        when(competitionGateway.require(any()))
+                .thenThrow(new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
 
         assertThatThrownBy(() -> dashboardService.getCompetitionStatistics("competitionId", "userId"))
                 .isInstanceOf(BusinessException.class)
@@ -207,8 +206,7 @@ class DashboardServiceImplTest {
         comp2.setParticipationType(ParticipationType.TEAM);
         comp2.setStatus(CompetitionStatus.COMPLETED);
 
-        when(competitionServiceClient.listAllCompetitions())
-                .thenReturn(ResponseEntity.ok(List.of(comp1, comp2)));
+        when(competitionGateway.listAll()).thenReturn(List.of(comp1, comp2));
 
         // Arrange: Mock platform participant statistics
         PlatformParticipantStatisticsVO participantStats = new PlatformParticipantStatisticsVO();

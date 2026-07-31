@@ -11,7 +11,7 @@ import com.w16a.danish.judge.domain.vo.SubmissionInfoVO;
 import com.w16a.danish.judge.domain.po.SubmissionWinners;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
-import com.w16a.danish.judge.feign.CompetitionServiceClient;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionWinnersMapper;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
@@ -43,7 +43,7 @@ class SubmissionWinnersServiceImplTest {
     @InjectMocks
     private SubmissionWinnersServiceImpl winnersService;
 
-    @Mock private CompetitionServiceClient competitionServiceClient;
+    @Mock private CompetitionGateway competitionGateway;
     @Mock private com.w16a.danish.judge.feign.SubmissionServiceClient submissionServiceClient;
     @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
     @Mock private ISubmissionJudgesService submissionJudgesService;
@@ -65,8 +65,7 @@ class SubmissionWinnersServiceImplTest {
     @DisplayName("✅ Should list scored submissions successfully")
     void testListScoredSubmissionsSuccess() {
         // Arrange - Mock permission check
-        when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
-                .thenReturn(ResponseEntity.ok(true));
+        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(true);
 
         // Arrange - Mock scored submissions via Feign
         SubmissionInfoVO scoredSubmission = new SubmissionInfoVO();
@@ -104,8 +103,7 @@ class SubmissionWinnersServiceImplTest {
     @Test
     @DisplayName("❌ Should throw forbidden when listing scored submissions by non-organizer")
     void testListScoredSubmissionsForbidden() {
-        when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
-                .thenReturn(ResponseEntity.ok(false));
+        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(false);
 
         assertThatThrownBy(() -> winnersService.listScoredSubmissions(
                 ctx("userId", "PARTICIPANT"), "comp-id", null, "totalScore", "desc", 1, 10))
@@ -117,8 +115,7 @@ class SubmissionWinnersServiceImplTest {
     @DisplayName("✅ Should auto award successfully")
     void testAutoAwardSuccess() {
         // Mock permission: organizer or admin
-        when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
-                .thenReturn(ResponseEntity.ok(true));
+        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(true);
 
         // Mock getScoredSubmissions via Feign
         SubmissionInfoVO scoredSub = new SubmissionInfoVO();
@@ -136,14 +133,17 @@ class SubmissionWinnersServiceImplTest {
         doReturn(true).when(winnersService).saveBatch(anyList());
 
         // Mock competition status update
-        when(competitionServiceClient.updateCompetitionStatus(anyString(), anyString()))
-                .thenReturn(ResponseEntity.ok(new CompetitionResponseVO()));
+        doNothing().when(competitionGateway).updateStatus(anyString(), anyString());
+
+        // The award notification reads the competition through find(), where a
+        // missing one is a normal skip rather than a 404.
+        when(competitionGateway.find(anyString()))
+                .thenReturn(java.util.Optional.of(new CompetitionResponseVO()));
 
         // Mock getCompetitionById to avoid NPE
         CompetitionResponseVO mockCompetition = new CompetitionResponseVO();
         mockCompetition.setName("Mocked Competition");
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(mockCompetition));
+        when(competitionGateway.require(anyString())).thenReturn(mockCompetition);
 
         // Mock userServiceClient.getUserBriefById to avoid NPE
         var mockUser = new com.w16a.danish.common.domain.vo.UserBriefVO();
@@ -161,15 +161,14 @@ class SubmissionWinnersServiceImplTest {
 
         // Assert: Verify critical interactions
         verify(winnersService, times(1)).saveBatch(anyList());
-        verify(competitionServiceClient, times(1)).updateCompetitionStatus(anyString(), anyString());
+        verify(competitionGateway, times(1)).updateStatus(anyString(), anyString());
         verify(awardNotifier, atLeastOnce()).sendAwardWinner(any());
     }
 
     @Test
     @DisplayName("❌ Should throw forbidden when auto awarding by non-organizer")
     void testAutoAwardForbidden() {
-        when(competitionServiceClient.isUserOrganizer(anyString(), anyString()))
-                .thenReturn(ResponseEntity.ok(false));
+        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(false);
 
         assertThatThrownBy(() -> winnersService.autoAward(ctx("userId", "PARTICIPANT"), "comp-id"))
                 .isInstanceOf(RuntimeException.class)
@@ -218,8 +217,7 @@ class SubmissionWinnersServiceImplTest {
         submission.setUserId("user-1");
 
         // Mock: getCompetitionById returns ResponseEntity.ok(null)
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(null));
+        when(competitionGateway.require(anyString())).thenReturn(null);
 
         // Reflectively call private sendAwardNotification() method
         Method method = SubmissionWinnersServiceImpl.class.getDeclaredMethod(
@@ -249,9 +247,8 @@ class SubmissionWinnersServiceImplTest {
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setName("Mocked Competition");
 
-        // Mock competitionServiceClient.getCompetitionById returns a valid competition
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(competition));
+        // Mock competitionGateway.getCompetitionById returns a valid competition
+        when(competitionGateway.require(anyString())).thenReturn(competition);
 
         // Mock userServiceClient.getUserBriefById returns empty (simulate no recipient found)
         when(userServiceClient.getUserBriefById(anyString()))

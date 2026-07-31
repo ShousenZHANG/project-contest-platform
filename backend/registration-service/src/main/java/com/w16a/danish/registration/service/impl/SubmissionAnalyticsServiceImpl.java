@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.w16a.danish.registration.domain.vo.*;
-import com.w16a.danish.registration.feign.CompetitionServiceClient;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
 import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,7 @@ public class SubmissionAnalyticsServiceImpl
         extends ServiceImpl<SubmissionRecordsMapper, SubmissionRecords>
         implements ISubmissionAnalyticsService {
 
-    private final CompetitionServiceClient competitionServiceClient;
+    private final CompetitionGateway competitionGateway;
 
     @Override
     public SubmissionStatisticsVO getSubmissionStatistics(String competitionId) {
@@ -73,10 +73,7 @@ public class SubmissionAnalyticsServiceImpl
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition ID must not be blank.");
         }
 
-        var competition = competitionServiceClient.getCompetitionById(competitionId).getBody();
-        if (competition == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found.");
-        }
+        var competition = competitionGateway.require(competitionId);
 
         List<SubmissionRecords> submissions = this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)

@@ -15,7 +15,7 @@ import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.domain.enums.ParticipationType;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.registration.feign.CompetitionServiceClient;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.feign.UserServiceClient;
 import com.w16a.danish.registration.mapper.CompetitionParticipantsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
@@ -43,7 +43,7 @@ class CompetitionParticipantsServiceImplTest {
 
     private CompetitionParticipantsServiceImpl service;
     private CompetitionParticipantsMapper participantsMapper;
-    private CompetitionServiceClient competitionServiceClient;
+    private CompetitionGateway competitionGateway;
     private ICompetitionOrganizersService competitionOrganizersService;
     private UserServiceClient userServiceClient;
     private ISubmissionRecordsService submissionService;
@@ -61,7 +61,7 @@ class CompetitionParticipantsServiceImplTest {
     @BeforeEach
     void setUp() throws Exception {
         // 1) mock collaborators
-        competitionServiceClient      = mock(CompetitionServiceClient.class);
+        competitionGateway            = mock(CompetitionGateway.class);
         competitionOrganizersService = mock(ICompetitionOrganizersService.class);
         userServiceClient            = mock(UserServiceClient.class);
         submissionService            = mock(ISubmissionRecordsService.class);
@@ -73,7 +73,7 @@ class CompetitionParticipantsServiceImplTest {
 
         // 3) instantiate an anonymous subclass that ONLY overrides lambdaQuery()
         CompetitionParticipantsServiceImpl real = new CompetitionParticipantsServiceImpl(
-                competitionServiceClient,
+                competitionGateway,
                 competitionOrganizersService,
                 userServiceClient,
                 submissionService,
@@ -96,8 +96,7 @@ class CompetitionParticipantsServiceImplTest {
         // stub competition-service
         CompetitionResponseVO competition = new CompetitionResponseVO();
         competition.setStatus(CompetitionStatus.UPCOMING);
-        when(competitionServiceClient.getCompetitionById("comp-1"))
-                .thenReturn(ResponseEntity.ok(competition));
+        when(competitionGateway.require("comp-1")).thenReturn(competition);
 
         // stub user-service
         UserBriefVO user = new UserBriefVO();
@@ -164,8 +163,7 @@ class CompetitionParticipantsServiceImplTest {
                 .thenReturn(Collections.emptyMap());
         when(submissionService.getSubmissionScores(anyString(), anyList()))
                 .thenReturn(Collections.emptyMap());
-        when(competitionServiceClient.getCompetitionsByIds(anyList()))
-                .thenReturn(ResponseEntity.ok(Collections.emptyList()));
+        when(competitionGateway.findAll(anyList())).thenReturn(Collections.emptyList());
 
         assertThatCode(() -> service.getMyCompetitionsWithSearch(
                 ctx("user-1","PARTICIPANT"),1,10,null,null,null))
@@ -199,8 +197,7 @@ class CompetitionParticipantsServiceImplTest {
         // stub user lookups
         when(userServiceClient.getUserBriefById(anyString()))
                 .thenReturn(ResponseEntity.ok(new UserBriefVO()));
-        when(competitionServiceClient.getCompetitionById(anyString()))
-                .thenReturn(ResponseEntity.ok(new CompetitionResponseVO()));
+        when(competitionGateway.require(anyString())).thenReturn(new CompetitionResponseVO());
 
         assertThatCode(() -> service.cancelByOrganizer(
                 "comp-1","user-2", ctx("org-1","ORGANIZER")))
@@ -219,8 +216,7 @@ class CompetitionParticipantsServiceImplTest {
         CompetitionResponseVO comp = new CompetitionResponseVO();
         comp.setStatus(CompetitionStatus.UPCOMING);
         comp.setParticipationType(ParticipationType.TEAM);
-        when(competitionServiceClient.getCompetitionById("comp-1"))
-                .thenReturn(ResponseEntity.ok(comp));
+        when(competitionGateway.require("comp-1")).thenReturn(comp);
 
         // 3) no existing team registration
         @SuppressWarnings("unchecked")
@@ -340,8 +336,7 @@ class CompetitionParticipantsServiceImplTest {
         comp.setStartDate(LocalDateTime.now().minusDays(1));
         comp.setEndDate(LocalDateTime.now().plusDays(1));
         comp.setIsPublic(true);
-        when(competitionServiceClient.getCompetitionsByIds(List.of("comp-1")))
-                .thenReturn(ResponseEntity.ok(List.of(comp)));
+        when(competitionGateway.findAll(List.of("comp-1"))).thenReturn(List.of(comp));
 
         // 3) Stub submissionService maps
         when(submissionService.getSubmissionStatusByTeam(
@@ -437,8 +432,7 @@ class CompetitionParticipantsServiceImplTest {
     void testGetParticipantTrend_Success() {
         // 1) Stub competition lookup
         CompetitionResponseVO compVo = new CompetitionResponseVO();
-        doReturn(ResponseEntity.ok(compVo))
-                .when(competitionServiceClient).getCompetitionById("comp-1");
+        doReturn(compVo).when(competitionGateway).require("comp-1");
 
         // 2) Stub individual registrations query
         CompetitionParticipants ip1 = new CompetitionParticipants()
@@ -472,8 +466,7 @@ class CompetitionParticipantsServiceImplTest {
     void testGetRegistrationStatistics_Success() {
         // 1) Stub competition lookup
         CompetitionResponseVO comp = new CompetitionResponseVO();
-        when(competitionServiceClient.getCompetitionById(eq("comp-1")))
-                .thenReturn(ResponseEntity.ok(comp));
+        when(competitionGateway.require(eq("comp-1"))).thenReturn(comp);
 
         // 2) Stub service.lambdaQuery() for individual participants
         @SuppressWarnings("unchecked")
@@ -614,8 +607,7 @@ class CompetitionParticipantsServiceImplTest {
         voB.setStartDate(LocalDateTime.now().minusDays(4));
         voB.setEndDate(LocalDateTime.now().minusDays(2));
 
-        when(competitionServiceClient.getCompetitionsByIds(List.of("A", "B")))
-                .thenReturn(ResponseEntity.ok(List.of(voA, voB)));
+        when(competitionGateway.findAll(List.of("A", "B"))).thenReturn(List.of(voA, voB));
 
         // 3) Stub empty submission maps
         when(submissionService.getSubmissionStatus("user-1", List.of("A", "B")))
