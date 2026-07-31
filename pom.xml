@@ -154,6 +154,14 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <!--
+              Pinned to 2.x: springdoc 3 targets Spring Boot 4 and drags in its
+              autoconfiguration, which collides with the Boot 3 one already on
+              the classpath (jsonComponentModule gets defined by both
+              org.springframework.boot.jackson.autoconfigure and
+              org.springframework.boot.autoconfigure.jackson). Moving to
+              springdoc 3 means migrating to Spring Boot 4 first.
+            -->
             <version>2.8.5</version>
         </dependency>
 
