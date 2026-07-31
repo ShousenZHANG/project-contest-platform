@@ -73,3 +73,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        # The specs stub every network call with page.route, so no backend and
+        # no service containers are needed — this exercises real routing, real
+        # React Query and real rendering in a real browser, which is what jsdom
+        # cannot do.
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

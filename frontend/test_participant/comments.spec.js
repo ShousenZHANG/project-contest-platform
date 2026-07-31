@@ -9,7 +9,7 @@ test.describe('Comments Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
     // Mock 用户信息接口
@@ -20,7 +20,7 @@ test.describe('Comments Page', () => {
         body: JSON.stringify({
           userId: 'mock-user-id',
           email: 'mock@example.com',
-          role: 'participant',
+          role: 'Participant',
         }),
       });
     });
@@ -40,7 +40,10 @@ test.describe('Comments Page', () => {
               replies: [],
             },
           ],
-          pages: 1,
+          total: 12,
+          page: 1,
+          size: 5,
+          pages: 3,
         }),
       });
     });
@@ -56,6 +59,9 @@ test.describe('Comments Page', () => {
 
 
   test('pagination control visible', async ({ page }) => {
-    await expect(page.locator('.MuiPagination-root')).toBeVisible();
+    const pager = page.getByRole('navigation', { name: 'Comment pagination' });
+    await expect(pager).toBeVisible();
+    await expect(pager.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    await expect(pager.getByRole('button', { name: 'Next' })).toBeEnabled();
   });
 });

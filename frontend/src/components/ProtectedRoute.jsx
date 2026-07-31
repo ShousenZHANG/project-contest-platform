@@ -28,7 +28,13 @@ function ProtectedRoute({ children, roles }) {
   }
 
   if (roles && roles.length > 0) {
-    if (!user || !roles.includes(user.role)) {
+    // Compared case-insensitively on purpose. The database stores TitleCase
+    // ("Participant"), the OAuth paths pass uppercase, and every backend role
+    // check uses equalsIgnoreCase. An exact match here would bounce the user to
+    // the homepage with no error shown, which is close to impossible to debug
+    // from the outside.
+    const allowed = roles.some((r) => r.toLowerCase() === String(user?.role ?? '').toLowerCase());
+    if (!allowed) {
       return <Navigate to="/" replace />;
     }
   }

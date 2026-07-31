@@ -41,12 +41,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "jest",
-    "test:jest": "jest"
+    "test:jest": "jest",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@babel/plugin-syntax-import-meta": "^7.10.4",
     "@babel/preset-env": "^7.26.9",
     "@babel/preset-react": "^7.26.3",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

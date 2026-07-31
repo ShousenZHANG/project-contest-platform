@@ -9,7 +9,7 @@ test.describe('Profile Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
     await page.route('http://localhost:8080/users/profile', async (route, request) => {
@@ -43,7 +43,7 @@ test.describe('Profile Page', () => {
     await page.goto('http://localhost:3000/profile/mockuser@example.com', { waitUntil: 'networkidle' });
 
 
-    await expect(page.locator('button.save-button')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
   });
 
 
@@ -53,16 +53,16 @@ test.describe('Profile Page', () => {
     await page.fill('input[name="password"]', 'NewPassword123');
     await page.fill('textarea[name="description"]', 'I love frontend development.');
 
-    await page.click('button.save-button', { force: true });
+    await page.getByRole('button', { name: 'Save' }).click();
 
-
-    const alert = page.locator('div[role="alert"]');
-    await expect(alert).toHaveText(/profile updated successfully/i, { timeout: 20000 });
+    // Sonner renders success toasts as a live region, not role="alert".
+    await expect(page.getByText(/profile updated successfully/i)).toBeVisible({ timeout: 20000 });
   });
 
   test('should delete account successfully', async ({ page }) => {
-    await page.click('button.delete-button', { force: true });
-    const confirmDialog = page.getByRole('dialog', { name: /delete account/i });
+    await page.getByRole('button', { name: 'Delete Account' }).click();
+    const confirmDialog = page.getByRole('dialog');
     await expect(confirmDialog).toBeVisible();
+    await expect(confirmDialog.getByText('Delete Account')).toBeVisible();
   });
 });

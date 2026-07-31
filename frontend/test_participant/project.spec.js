@@ -7,7 +7,7 @@ test.describe('Project Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
     await page.route('**/users/profile', async (route) => {
@@ -16,7 +16,7 @@ test.describe('Project Page', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           userId: 'mock-user-id',
-          role: 'participant',
+          role: 'Participant',
           name: 'Mock User',
           email: 'mock@example.com'
         }),
@@ -38,10 +38,10 @@ test.describe('Project Page', () => {
               hasSubmitted: false
             }
           ],
-          total: 1,
+          total: 25,
           page: 1,
           size: 10,
-          pages: 1
+          pages: 3
         }),
       });
     });
@@ -63,7 +63,9 @@ test.describe('Project Page', () => {
 
 
   test('pagination control', async ({ page }) => {
-    await expect(page.locator('.MuiPagination-root')).toBeVisible();
+    await expect(page.getByText('Page 1 of 3')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Next page' })).toBeEnabled();
   });
 
 

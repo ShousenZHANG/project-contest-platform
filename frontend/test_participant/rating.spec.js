@@ -7,7 +7,7 @@ test.describe('Rating Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
     await page.route('**/judges/my-competitions**', async (route) => {
@@ -65,7 +65,7 @@ test.describe('Rating Page', () => {
     await page.getByRole('button', { name: 'Mock Competition 1' }).click();
 
    
-    const dialog = page.locator('.MuiDialog-container');
+    const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
    

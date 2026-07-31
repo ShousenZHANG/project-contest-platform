@@ -278,6 +278,7 @@ function Project() {
                 size="sm"
                 variant="outline"
                 disabled={pagination.page <= 1}
+                aria-label="Previous page"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -289,6 +290,7 @@ function Project() {
                 size="sm"
                 variant="outline"
                 disabled={pagination.page >= pagination.pages}
+                aria-label="Next page"
                 onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
               >
                 <ChevronRight className="h-4 w-4" />

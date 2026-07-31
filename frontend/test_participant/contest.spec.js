@@ -9,7 +9,7 @@ test.describe('Contest Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
     // 2. Mock competitions/list 接口
@@ -51,21 +51,23 @@ test.describe('Contest Page', () => {
 
   // 测试打开筛选面板
   test('should filter contests', async ({ page }) => {
-    await page.click('button:has(svg[data-testid="FilterAltIcon"])');
-    await expect(page.locator('.participant-filter-sidebar')).toHaveClass(/visible/);
+    await page.getByRole('button', { name: 'Toggle filter' }).click();
+    await expect(page.getByRole('heading', { name: 'Filters' })).toBeVisible();
   });
 
   // 测试切换到列表视图
   test('should toggle list view', async ({ page }) => {
-    await page.click('button:has(svg[data-testid="ViewListIcon"])');
+    await page.getByRole('button', { name: 'Toggle list view' }).click();
     await expect(page.locator('table')).toBeVisible({ timeout: 10000 });
   });
 
   // 测试搜索框输入并点击搜索
   test('should search contests', async ({ page }) => {
-    await page.fill('input[type="text"]', 'Mock Contest 1');
-    await page.click('button:has(svg[data-testid="SearchIcon"])');
-    await expect(page.locator('input[type="text"]')).toHaveValue('Mock Contest 1');
+    const search = page.getByPlaceholder('Search...');
+    await search.fill('Mock Contest 1');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(search).toHaveValue('Mock Contest 1');
+    await expect(page.getByText('Mock Contest 1')).toBeVisible();
   });
 
 

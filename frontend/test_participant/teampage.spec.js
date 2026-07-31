@@ -8,7 +8,7 @@ test.describe('Team Management Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'participant');
+      localStorage.setItem('role', 'Participant');
     });
 
   
@@ -18,7 +18,7 @@ test.describe('Team Management Page', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           userId: 'mock-user-id',
-          role: 'participant',
+          role: 'Participant',
           name: 'Mock User',
           email: 'mockuser@example.com'
         }),
