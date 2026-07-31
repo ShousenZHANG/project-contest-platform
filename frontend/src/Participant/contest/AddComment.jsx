@@ -11,34 +11,38 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import apiClient from '@/api/apiClient';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { commentService } from '@/services/interactionService';
+import { queryKeys } from '@/api/queryKeys';
+import { unwrap } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 function AddComment({ submissionId, onCommentPosted }) {
   const [newComment, setNewComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const queryClient = useQueryClient();
 
-  const handlePostComment = async () => {
+  const postComment = useMutation({
+    mutationFn: (content) => unwrap(commentService.create({ submissionId, content })),
+    onSuccess: () => {
+      setNewComment('');
+      // Invalidate as well as calling back: any thread view mounted elsewhere
+      // refreshes even if the parent does nothing with onCommentPosted.
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments.all });
+      onCommentPosted?.();
+      toast.success('Comment added successfully!');
+    },
+    onError: () => toast.error('Failed to add comment.'),
+  });
+
+  const submitting = postComment.isPending;
+
+  const handlePostComment = () => {
     if (!newComment.trim()) {
       toast.error('Comment cannot be empty.');
       return;
     }
-
-    setSubmitting(true);
-    try {
-      await apiClient.post('/interactions/comments', {
-        submissionId,
-        content: newComment,
-      });
-      setNewComment('');
-      onCommentPosted?.();
-      toast.success('Comment added successfully!');
-    } catch {
-      toast.error('Failed to add comment.');
-    } finally {
-      setSubmitting(false);
-    }
+    postComment.mutate(newComment);
   };
 
   return (

@@ -26,7 +26,8 @@ import {
   KeyRound,
 } from 'lucide-react';
 
-import apiClient from '../api/apiClient';
+import { userService } from '../services/userService';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -82,7 +83,7 @@ function ResetPassword() {
 
     setIsSubmitting(true);
     try {
-      await apiClient.post('/users/reset-password', { token, newPassword });
+      await unwrap(userService.resetPassword({ token, newPassword }));
       toast.success('Password has been reset successfully!');
       setDone(true);
       setTimeout(() => navigate('/'), REDIRECT_DELAY_MS);

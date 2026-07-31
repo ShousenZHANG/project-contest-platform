@@ -10,8 +10,11 @@
  */
 
 import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import apiClient from '@/api/apiClient';
+import { registrationService } from '@/services/registrationService';
+import { queryKeys } from '@/api/queryKeys';
+import { unwrap } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -40,36 +43,49 @@ function ChangeContestList({ contest, onClick }) {
     onClick?.(e);
   };
 
-  const handleJoinClick = async (e) => {
-    e.stopPropagation();
-    const token = AuthTokenManager.getToken();
-    if (!token) {
-      toast.warning('Please log in first!');
-      return;
-    }
+  const queryClient = useQueryClient();
 
-    try {
-      await apiClient.post(`/registrations/${contest.id}`);
+  const invalidateRegistrations = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+
+  const register = useMutation({
+    mutationFn: () => unwrap(registrationService.register(contest.id)),
+    onSuccess: () => {
       toast.success('Registration successful!');
-    } catch (error) {
+      invalidateRegistrations();
+    },
+    onError: (error) => {
       const errData = error.response?.data;
+      // The backend reports an existing registration as an error; offer to
+      // cancel it rather than showing a failure the user cannot act on.
       if (errData?.error === 'You have already registered for this competition') {
         setOpenDialog(true);
       } else {
         toast.error('Registration failed due to network or server error.');
       }
+    },
+  });
+
+  const cancelRegistration = useMutation({
+    mutationFn: () => unwrap(registrationService.cancel(contest.id)),
+    onSuccess: () => {
+      toast.success('Registration cancelled successfully!');
+      invalidateRegistrations();
+    },
+    onError: () => toast.error('Cancellation failed due to network or server error.'),
+    onSettled: () => setOpenDialog(false),
+  });
+
+  const handleJoinClick = (e) => {
+    e.stopPropagation();
+    if (!AuthTokenManager.getToken()) {
+      toast.warning('Please log in first!');
+      return;
     }
+    register.mutate();
   };
 
-  const handleCancelRegistration = async () => {
-    try {
-      await apiClient.delete(`/registrations/${contest.id}`);
-      toast.success('Registration cancelled successfully!');
-      setOpenDialog(false);
-    } catch {
-      toast.error('Cancellation failed due to network or server error.');
-    }
-  };
+  const handleCancelRegistration = () => cancelRegistration.mutate();
 
   if (!contest) return null;
 

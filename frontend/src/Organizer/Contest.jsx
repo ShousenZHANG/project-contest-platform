@@ -5,10 +5,13 @@
  */
 
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../api/apiClient';
+import { competitionService } from '../services/competitionService';
+import { queryKeys } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -66,6 +69,7 @@ function OrganizerContest() {
   const [newCriteria, setNewCriteria] = useState('');
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { email } = useParams();
 
   const handleChange = (e) => {
@@ -137,8 +141,9 @@ function OrganizerContest() {
         imageUrls: [],
         introVideoUrl: '',
       };
-      await apiClient.post('/competitions', payload);
+      await unwrap(competitionService.create(payload));
       toast.success('Contest created successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all });
       navigate(`/OrganizerContestList/${email}`);
     } catch (error) {
       toast.error(

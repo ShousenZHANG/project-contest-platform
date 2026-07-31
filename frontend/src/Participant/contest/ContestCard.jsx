@@ -8,10 +8,14 @@
  */
 
 import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Flag, Eye, Tag, Play, Clock, Lock, Loader2 } from 'lucide-react';
-import apiClient from '../../api/apiClient';
+import { teamService } from '../../services/teamService';
+import { registrationService, submissionService } from '../../services/registrationService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap } from '../../api/queryFn';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardFooter } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -33,28 +37,44 @@ function ContestCard({ contest, onLoginRequest }) {
   const [createdTeams, setCreatedTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  const invalidateRegistrations = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+
+  // Read through the cache: the status of a team the participant just looked
+  // at does not need a second round trip.
   const checkTeamStatus = async (teamId) => {
     try {
-      const res = await apiClient.get(
-        `/registrations/teams/${contest.id}/${teamId}/status`
-      );
-      return res.data === true || res.data === 'true';
-    } catch (err) {
+      const status = await queryClient.fetchQuery({
+        queryKey: [
+          ...queryKeys.registrations.all,
+          'teamStatus',
+          contest.id,
+          teamId,
+        ],
+        queryFn: () => unwrap(registrationService.getTeamStatus(contest.id, teamId)),
+        staleTime: staleTime.live,
+      });
+      return status === true || status === 'true';
+    } catch {
       return false;
     }
   };
 
   const fetchCreatedTeams = async () => {
-    const userId = AuthTokenManager.getUserId();
+    const params = { userId: AuthTokenManager.getUserId(), page: 1, size: 100 };
     setTeamsLoading(true);
     try {
-      const res = await apiClient.get(
-        `/teams/public/created?userId=${userId}&page=1&size=100`
-      );
-      const teams = res.data.data || [];
+      const payload = await queryClient.fetchQuery({
+        queryKey: queryKeys.teams.created(params),
+        queryFn: () => unwrap(teamService.getCreatedTeams(params)),
+        staleTime: staleTime.medium,
+      });
+      const teams = (payload && payload.data) || [];
       setCreatedTeams(teams);
       return teams;
-    } catch (err) {
+    } catch {
       toast.error('Failed to load your teams.');
     } finally {
       setTeamsLoading(false);
@@ -62,25 +82,53 @@ function ContestCard({ contest, onLoginRequest }) {
     return [];
   };
 
-  const registerTeam = async (teamId) => {
-    try {
-      await apiClient.post(`/registrations/teams/${contest.id}/${teamId}`);
+  const registerTeamMutation = useMutation({
+    mutationFn: (teamId) =>
+      unwrap(registrationService.registerTeam(contest.id, teamId)),
+    onSuccess: () => {
       toast.success('Team registered successfully!');
-    } catch (err) {
-      toast.error('Team registration failed.');
-    }
-  };
+      invalidateRegistrations();
+    },
+    onError: () => toast.error('Team registration failed.'),
+  });
 
-  const cancelTeamRegistration = async (teamId) => {
-    try {
-      await apiClient.delete(`/registrations/teams/${contest.id}/${teamId}`);
+  const cancelTeamMutation = useMutation({
+    mutationFn: (teamId) => unwrap(registrationService.cancelTeam(contest.id, teamId)),
+    onSuccess: () => {
       toast.success('Team registration cancelled!');
-    } catch (err) {
-      toast.error('Team cancellation failed.');
-    } finally {
-      setOpenTeamDialog(false);
-    }
-  };
+      invalidateRegistrations();
+    },
+    onError: () => toast.error('Team cancellation failed.'),
+    onSettled: () => setOpenTeamDialog(false),
+  });
+
+  const registerIndividual = useMutation({
+    mutationFn: () => unwrap(registrationService.register(contest.id)),
+    onSuccess: () => {
+      toast.success('Registration successful!');
+      invalidateRegistrations();
+    },
+    onError: (err) => {
+      const data = err.response?.data;
+      const text = typeof data === 'string' ? data : JSON.stringify(data || '');
+      if (text.includes('already registered')) setOpenRegDialog(true);
+      else toast.error('Registration failed.');
+    },
+  });
+
+  const cancelIndividual = useMutation({
+    mutationFn: () => unwrap(registrationService.cancel(contest.id)),
+    onSuccess: () => {
+      toast.success('Cancelled successfully!');
+      invalidateRegistrations();
+    },
+    onError: () => toast.error('Cancellation failed.'),
+    onSettled: () => setOpenRegDialog(false),
+  });
+
+  const registerTeam = (teamId) => registerTeamMutation.mutateAsync(teamId).catch(() => {});
+  const cancelTeamRegistration = (teamId) =>
+    cancelTeamMutation.mutateAsync(teamId).catch(() => {});
 
   const handleJoinClick = async (e) => {
     e.stopPropagation();
@@ -103,28 +151,10 @@ function ContestCard({ contest, onLoginRequest }) {
       return;
     }
 
-    try {
-      await apiClient.post(`/registrations/${contest.id}`);
-      toast.success('Registration successful!');
-    } catch (err) {
-      const text =
-        typeof err.response?.data === 'string'
-          ? err.response.data
-          : JSON.stringify(err.response?.data || '');
-      if (text.includes('already registered')) setOpenRegDialog(true);
-      else toast.error('Registration failed.');
-    }
+    registerIndividual.mutate();
   };
 
-  const handleCancelRegistration = async () => {
-    try {
-      await apiClient.delete(`/registrations/${contest.id}`);
-      toast.success('Cancelled successfully!');
-      setOpenRegDialog(false);
-    } catch (err) {
-      toast.error('Cancellation failed.');
-    }
-  };
+  const handleCancelRegistration = () => cancelIndividual.mutate();
 
   const handleViewSubmission = async (e) => {
     e.stopPropagation();
@@ -135,10 +165,13 @@ function ContestCard({ contest, onLoginRequest }) {
     }
 
     try {
-      const res = await apiClient.get(
-        `/submissions/public/approved?competitionId=${contest.id}`
-      );
-      const submissions = res.data.data || [];
+      const approvedParams = { competitionId: contest.id };
+      const payload = await queryClient.fetchQuery({
+        queryKey: [...queryKeys.submissions.all, 'approved', approvedParams],
+        queryFn: () => unwrap(submissionService.getApproved(approvedParams)),
+        staleTime: staleTime.short,
+      });
+      const submissions = (payload && payload.data) || [];
       if (submissions.length === 0) {
         toast.info('No approved submissions yet.');
         return;

@@ -12,28 +12,35 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '@/api/apiClient';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { commentService } from '@/services/interactionService';
+import { queryKeys } from '@/api/queryKeys';
+import { unwrap } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import AuthTokenManager from '@/auth/authTokenManager';
 
 
 function DeleteComment({ commentId, onDeleted }) {
-  const handleDelete = async () => {
-    const currentUserId = AuthTokenManager.getUserId();
-    const token = AuthTokenManager.getToken();
+  const queryClient = useQueryClient();
 
-    if (!currentUserId || !token) {
+  const deleteComment = useMutation({
+    mutationFn: () => unwrap(commentService.delete(commentId)),
+    onSuccess: () => {
+      toast.success('Comment deleted successfully!');
+      // Only the comment id is in scope here, so the whole comment domain is
+      // invalidated rather than one thread.
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments.all });
+      onDeleted?.();
+    },
+    onError: () => toast.error('Failed to delete comment.'),
+  });
+
+  const handleDelete = () => {
+    if (!AuthTokenManager.getUserId() || !AuthTokenManager.getToken()) {
       toast.error('Please log in.');
       return;
     }
-
-    try {
-      await apiClient.delete(`/interactions/comments/${commentId}`);
-      toast.success('Comment deleted successfully!');
-      onDeleted?.();
-    } catch {
-      toast.error('Failed to delete comment.');
-    }
+    deleteComment.mutate();
   };
 
   return (
