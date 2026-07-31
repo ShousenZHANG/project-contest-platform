@@ -11,6 +11,8 @@ local environment.
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-178%20unit%20%2B%2035%20e2e-brightgreen)
+![WCAG](https://img.shields.io/badge/WCAG-2.1%20AA%20enforced-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Contents
@@ -23,7 +25,9 @@ local environment.
 - [Frontend Architecture](#frontend-architecture)
 - [Backend Contracts](#backend-contracts)
 - [Security](#security)
+- [Accessibility](#accessibility)
 - [Observability](#observability)
+- [Testing](#testing)
 - [CI/CD](#cicd)
 - [Quality Gates](#quality-gates)
 - [Project Structure](#project-structure)
@@ -106,7 +110,7 @@ docker-compose up --build -d
 ```
 
 First startup can take several minutes because Docker builds the backend service
-images and initializes MySQL, Nacos, RabbitMQ, MinIO, and Jenkins volumes.
+images and initializes the MySQL, Nacos, RabbitMQ, and MinIO volumes.
 
 ### 3. Open the Application
 
@@ -119,7 +123,15 @@ images and initializes MySQL, Nacos, RabbitMQ, MinIO, and Jenkins volumes.
 | Nacos | http://localhost:8848/nacos | Nacos console |
 | MinIO | http://localhost:9001 | Local default `minio` / `minio123` |
 | Zipkin | http://localhost:9411 | Distributed tracing UI |
-| Jenkins | http://localhost:8888 | Optional CI server |
+
+Jenkins is **not** part of the default stack. It sits behind a Compose profile so
+`docker-compose up` brings up only the platform:
+
+```bash
+docker compose --profile ci up -d jenkins
+```
+
+It then serves on http://localhost:8888.
 
 ### 4. Stop the Stack
 
@@ -162,10 +174,21 @@ and `rabbitmq` to local hosts or provide equivalent environment overrides.
 ```bash
 cd frontend
 npm install
-npm run dev
-npm test
-npm run build
+npm run dev            # Vite dev server on :3000
+npm test               # Jest unit and component tests
+npm run build          # production build
 ```
+
+End-to-end tests need a browser binary once per machine:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+`test:e2e` starts the dev server itself (`webServer` in `playwright.config.ts`)
+and reuses one that is already running. The specs stub every network call with
+`page.route`, so **no backend and no Docker stack are required**.
 
 The frontend defaults to `http://localhost:8080` through `VITE_API_BASE_URL`.
 During Vite development, `/api/*` is also proxied to the gateway and stripped to
@@ -244,6 +267,36 @@ Key conventions:
 - `src/services/serviceUtils.js` normalizes Axios responses, standard
   `ApiResponse<T>` envelopes, and historical raw payloads.
 
+### Data layer
+
+Server state lives in TanStack Query, not in `useEffect` (ADR-0002):
+
+- `src/api/queryKeys.js` is the only source of cache keys, and it also exports the
+  `staleTime` tiers — `live`, `short`, `medium`, `long`. Two spellings of one key
+  are two cache entries that drift apart silently.
+- `src/api/queryFn.js` adapts the backend's four response shapes behind a single
+  `unwrap()`, so components never see an envelope.
+- `src/services/` is the only place a URL literal belongs, and every path there is
+  checked against a real controller by a test (see [Testing](#testing)).
+- Votes, comments, registration and team joins are optimistic writes with
+  rollback.
+
+### Motion
+
+Three durations, defined once as CSS variables in `src/index.css` and consumed by
+semantic classes (ADR-0001 decision 8):
+
+| Class | Token | What it does |
+|-------|-------|--------------|
+| `motion-page` | `--motion-page` 150ms | Route content fading in, applied once per layout |
+| `motion-card` | `--motion-card` 200ms | Hover lift for a card that navigates |
+| `motion-dialog` / `motion-sheet` / `motion-popover` | `--motion-modal` 180ms | Radix surfaces, driven off `data-[state]` |
+
+A component that writes its own `duration-*` has left the system.
+`prefers-reduced-motion` is honoured once, globally, so no component checks for
+it; `<MotionConfig reducedMotion="user">` covers framer-motion, which animates
+from JavaScript and cannot see the CSS reset.
+
 ## Backend Contracts
 
 Backend modules use DTO/VO/PO layering and the service-interface pattern:
@@ -296,12 +349,66 @@ Identity is enforced at the edge and validated in depth:
 > rotate default credentials, and keep backend service ports unmapped to the host
 > (only the gateway `:8080` is exposed).
 
+## Accessibility
+
+WCAG 2.1 AA is enforced by tests, not asserted in prose. `frontend/e2e/a11y.spec.js`
+runs axe-core over every public route, an authenticated route and an open dialog,
+in **both light and dark mode**, and fails on any violation. The keyboard
+behaviour axe cannot judge is asserted directly: the skip link is first in the tab
+order, focus stays inside an open dialog, and whatever the keyboard reaches has a
+visible ring.
+
+Two rules follow from that and are easy to break by accident:
+
+- **Every colour token clears 4.5:1** both as a fill under its `-foreground` and
+  as text on the background, in both modes. Changing one means re-measuring it.
+- **A new token needs its `-foreground` twin bridged in `@theme`**, or the
+  utility silently resolves to nothing and text falls back to the body colour.
+
 ## Observability
 
 - **Health & readiness** via Spring Boot Actuator (`/actuator/health`); details
   are shown only to authorized callers.
 - **Metrics** exported in Prometheus format (`/actuator/prometheus`).
 - **Distributed tracing** via Micrometer Tracing → Zipkin (`http://localhost:9411`).
+
+## Testing
+
+Three layers, each testing something the layer below cannot reach.
+
+| Layer | Tool | Count | Runs against |
+|-------|------|------:|--------------|
+| Backend unit & slice | JUnit 5, Mockito, AssertJ, WireMock, H2 | — | No containers; H2 stands in for MySQL, WireMock for Feign targets |
+| Frontend unit & component | Jest, Testing Library | 178 in 35 suites | jsdom, with a fresh `QueryClient` per test |
+| End-to-end | Playwright (Chromium) | 35 in 7 specs | A real browser and the real dev server; network stubbed via `page.route` |
+
+The E2E suite is 20 participant-flow tests plus 15 accessibility tests. Because it
+stubs the network rather than calling a live backend, it exercises routing, React
+Query, rendering and real user interaction without needing the Docker stack.
+
+### Contract tests
+
+Two tests exist to stop a specific class of bug that has bitten this repo before:
+**a name that resolves to nothing**.
+
+- `src/Tests/serviceRoutes.test.js` parses the Java controllers and fails the
+  build if any URL in `src/services/` has no endpoint behind it. A service module
+  once shipped with three methods pointing at routes that had never existed.
+- `src/Tests/motionSystem.test.jsx` asserts the Radix primitives carry motion
+  classes this project actually defines. They previously carried
+  `tailwindcss-animate` class names for a plugin that was never installed, so
+  every modal opened with no animation while the markup claimed otherwise.
+
+### Commands
+
+```bash
+./mvnw test                       # backend, all modules
+./mvnw verify                     # backend + JaCoCo coverage gates
+cd frontend && npm test           # frontend unit and component
+cd frontend && npm run test:e2e   # end-to-end + accessibility
+```
+
+On Windows use `.\mvnw.cmd` instead of `./mvnw`.
 
 ## CI/CD
 
@@ -314,11 +421,12 @@ Runs on every push to `master` and every pull request, as two parallel jobs:
 | Job | Steps |
 |-----|-------|
 | Backend (Java 23) | `./mvnw -B verify` — unit tests, JaCoCo coverage, coverage gate. Uploads the aggregate report as a build artifact. |
-| Frontend (Node 20) | `npm ci`, `npm test`, `npm run build`. |
+| Frontend (Node 20) | `npm ci`, `npm test`, `npm run build`, then `npx playwright install --with-deps chromium` and `npm run test:e2e`. Uploads the Playwright report on failure. |
 
-The backend suite is self-contained — H2 stands in for MySQL and WireMock for
-the Feign targets — so no service containers are started. Both jobs cache their
-dependencies, and a new push cancels the in-flight run for the same branch.
+Neither job starts a service container. The backend suite is self-contained (H2
+for MySQL, WireMock for the Feign targets) and the E2E specs stub the network, so
+the whole gate runs on the two runners alone. Both jobs cache their dependencies,
+and a new push cancels the in-flight run for the same branch.
 
 ### Continuous delivery — `Jenkinsfile`
 
@@ -344,51 +452,54 @@ workflow actions themselves.
 ### Coverage floors
 
 `./mvnw verify` fails the build if a module drops below its coverage floor.
-The floors are anti-regression baselines measured on 2026-07-27 and rounded
-down, declared per module as `jacoco.line.min` / `jacoco.branch.min`:
+Floors are anti-regression baselines — current coverage rounded down — declared
+per module as `jacoco.line.min` / `jacoco.branch.min`:
 
 | Module | Line | Branch | Floor (line / branch) |
 |--------|------|--------|-----------------------|
 | interaction-service | 89.6% | 63.3% | 0.87 / 0.61 |
 | file-service | 80.0% | 58.3% | 0.78 / 0.56 |
+| common-lib | 79.5% | 100.0% | 0.75 / 0.90 |
 | api-gateway | 78.2% | 47.5% | 0.76 / 0.45 |
-| judge-service | 75.6% | 48.1% | 0.73 / 0.46 |
+| judge-service | 77.5% | 48.5% | 0.73 / 0.46 |
+| registration-service | 74.8% | 63.4% | 0.72 / 0.60 |
 | competition-service | 73.5% | 47.1% | 0.71 / 0.45 |
 | user-service | 70.2% | 54.8% | 0.68 / 0.52 |
-| registration-service | 65.2% | 41.5% | 0.63 / 0.39 |
-| common-lib | 10.7% | 0.0% | 0.08 / 0.00 |
+| **Aggregate** | **75.5%** | **56.8%** | — |
 
-They are floors, not targets — raise them as coverage improves. `common-lib` is
-the outstanding gap: it has one test class covering 19 source files, and it was
-missing from the aggregate report until 2026-07-27, which made the headline
-number look better than it was.
+They are floors, not targets — raise them as coverage improves.
+
+Coverage is spent where a mistake is expensive rather than spread evenly.
+`common-lib` is at 100% branch because every service inherits it: the exception
+handler that decides what seven APIs report, the identity every controller
+authorises against, the enum that gates registration and submission.
+`registration-service` was the priority after that — it owns the platform's most
+consequential writes, and its guards' *failing* branches were the untested half,
+which meant a guard could be deleted without turning the suite red.
 
 ### Local checks
 
 Run these before committing changes:
 
 ```bash
-# Backend
-./mvnw test
-
-# Frontend
-cd frontend
-npm test -- --runInBand --silent --detectOpenHandles
-npm run build
+./mvnw verify
 ```
-
-On Windows, use `.\mvnw.cmd test` instead of `./mvnw test`.
-
-Repository hygiene checks:
 
 ```bash
-git diff --check
-git status --short
-git ls-files | Select-String -Pattern '(^|/)\\.DS_Store$|^frontend/(coverage-summary|playwright-report|test-results)/'
+cd frontend && npm test && npm run build && npm run test:e2e
 ```
 
-Generated outputs under `frontend/coverage-summary/`,
-`frontend/playwright-report/`, and `frontend/test-results/` must stay untracked.
+On Windows, use `.\mvnw.cmd verify` instead of `./mvnw verify`.
+
+Repository hygiene:
+
+```bash
+git diff --check && git status --short
+```
+
+Generated output must stay untracked — `frontend/coverage-summary/`,
+`frontend/playwright-report/`, `frontend/test-results/`, `frontend/build/`, and
+`.DS_Store`.
 
 ## Project Structure
 
@@ -406,20 +517,26 @@ project-contest-platform/
 |   `-- coverage-report/
 |-- frontend/
 |   |-- src/
-|   |   |-- api/
-|   |   |-- auth/
-|   |   |-- components/
+|   |   |-- api/            # apiClient, queryKeys, queryFn
+|   |   |-- auth/           # authTokenManager — the only localStorage boundary
+|   |   |-- components/ui/  # Radix/shadcn primitives
 |   |   |-- context/
-|   |   |-- layouts/
+|   |   |-- layouts/        # AppShell, PublicLayout, PageTransition
+|   |   |-- providers/      # QueryProvider, ThemeProvider
 |   |   |-- routes/
-|   |   |-- services/
-|   |   |-- shared/
+|   |   |-- services/       # the only place a URL literal belongs
+|   |   |-- shared/         # reusable domain UI and hooks
+|   |   |-- Tests/          # Jest suites
 |   |   |-- Admin/
 |   |   |-- Organizer/
 |   |   |-- Participant/
 |   |   |-- PublicUser/
 |   |   `-- Homepages/
+|   |-- e2e/
+|   |   |-- a11y.spec.js    # axe-core, light + dark, plus keyboard paths
+|   |   `-- participant/    # participant flow specs
 |   |-- Dockerfile
+|   |-- playwright.config.ts
 |   |-- package.json
 |   `-- vite.config.js
 |-- docs/
@@ -429,6 +546,7 @@ project-contest-platform/
 |-- mysql-init/
 |-- docker-compose.yml
 |-- pom.xml
+|-- CONTEXT.md
 |-- AGENTS.md
 `-- CLAUDE.md
 ```
@@ -481,14 +599,21 @@ If the frontend loads but API calls fail, verify that:
 
 ## Documentation
 
-Read these files when changing architecture or agent workflows:
+Read these before changing architecture, naming, or agent workflows:
 
-- `AGENTS.md` - repository instructions for Codex agents.
-- `CLAUDE.md` - repository instructions for Claude agents.
-- `docs/CODEMAPS/architecture.md` - system architecture and inter-service flow.
-- `docs/CODEMAPS/frontend.md` - frontend routing, shell, and UI rules.
-- `docs/CODEMAPS/dependencies.md` - runtime and dependency map.
-- `docs/adr/` - architecture decision records.
+- `CONTEXT.md` — the domain glossary. Actors, the core entities, the naming traps
+  (`achieve` is a permanent misspelling of "archive"; `SubmissionRecords` is the
+  table, **Submission** is the domain term), service boundaries, and the full
+  catalogue of the seven RabbitMQ events.
+- `docs/adr/` — decisions that should not be re-litigated:
+  - **ADR-0001** — the shadcn/ui + Tailwind design system and the twelve choices behind it, including the motion system and the WCAG AA audit.
+  - **ADR-0002** — data fetching on React Query, the query-key contract, and the optimistic-write policy.
+  - **ADR-0003** — the cross-service gateway seam, and why a fallback reports an outage instead of faking absence.
+- `docs/CODEMAPS/architecture.md` — system architecture and inter-service flow.
+- `docs/CODEMAPS/frontend.md` — frontend routing, shell, and UI rules.
+- `docs/CODEMAPS/dependencies.md` — runtime and dependency map.
+- `AGENTS.md` — repository instructions for Codex agents.
+- `CLAUDE.md` — repository instructions for Claude agents.
 
 ## License
 
