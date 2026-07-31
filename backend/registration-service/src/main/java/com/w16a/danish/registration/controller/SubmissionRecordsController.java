@@ -474,6 +474,14 @@ public class SubmissionRecordsController {
     }
 
     @Operation(hidden = true)
+    @GetMapping("/internal/team-submissions")
+    public ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("teamIds") List<String> teamIds) {
+        return ResponseEntity.ok(submissionService.getTeamSubmissionsBasic(competitionId, teamIds));
+    }
+
+    @Operation(hidden = true)
     @GetMapping("/internal/scored")
     public ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(
             @RequestParam("competitionId") String competitionId) {

@@ -100,6 +100,12 @@ public class SubmissionServiceClientFallback implements SubmissionServiceClient 
     }
 
     @Override
+    public ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(String competitionId, List<String> teamIds) {
+        log.warn("[Fallback] registration-service unavailable — getTeamSubmissionsBasic");
+        return ResponseEntity.ok(List.of());
+    }
+
+    @Override
     public ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(String competitionId) {
         log.warn("[Fallback] registration-service unavailable — getScoredSubmissions");
         return ResponseEntity.ok(Collections.emptyList());

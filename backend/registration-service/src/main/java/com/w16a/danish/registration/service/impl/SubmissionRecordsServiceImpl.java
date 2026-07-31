@@ -754,6 +754,20 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         return record == null ? null : toSubmissionInfoVO(record);
     }
 
+    @Override
+    public List<SubmissionInfoVO> getTeamSubmissionsBasic(String competitionId, List<String> teamIds) {
+        if (competitionId == null || teamIds == null || teamIds.isEmpty()) {
+            return List.of();
+        }
+        return this.lambdaQuery()
+                .eq(SubmissionRecords::getCompetitionId, competitionId)
+                .in(SubmissionRecords::getTeamId, teamIds)
+                .list()
+                .stream()
+                .map(this::toSubmissionInfoVO)
+                .toList();
+    }
+
     private SubmissionInfoVO toSubmissionInfoVO(SubmissionRecords r) {
         SubmissionInfoVO vo = new SubmissionInfoVO();
         vo.setId(r.getId());

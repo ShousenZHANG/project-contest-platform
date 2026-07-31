@@ -116,4 +116,16 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
      */
     SubmissionInfoVO getTeamSubmissionBasic(String competitionId, String teamId);
 
+    /**
+     * Submissions for several teams in one competition.
+     *
+     * <p>Exists so callers asking "did any of this user's teams submit?" can ask once instead of
+     * once per team. Teams with no submission are simply absent from the result.
+     *
+     * @param competitionId competition to look in
+     * @param teamIds teams to check
+     * @return the submissions that exist, in no particular order
+     */
+    List<SubmissionInfoVO> getTeamSubmissionsBasic(String competitionId, List<String> teamIds);
+
 }

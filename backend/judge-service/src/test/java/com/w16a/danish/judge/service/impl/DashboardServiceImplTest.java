@@ -137,8 +137,9 @@ class DashboardServiceImplTest {
         teamSubmission.setTotalScore(BigDecimal.valueOf(92));
         teamSubmission.setReviewStatus("APPROVED");
 
-        when(registrationServiceClient.getTeamSubmissionBasic(any(), any()))
-                .thenReturn(ResponseEntity.ok(teamSubmission));
+        // One batch read for every team, rather than one call per team.
+        when(registrationServiceClient.getTeamSubmissionsBasic(any(), any()))
+                .thenReturn(ResponseEntity.ok(List.of(teamSubmission)));
 
         // 🛠 Mock registration stats
         RegistrationStatisticsVO registrationStats = new RegistrationStatisticsVO();

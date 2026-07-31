@@ -147,6 +147,15 @@ public interface SubmissionServiceClient {
     );
 
     /**
+     * Basic submission info for several teams at once.
+     */
+    @GetMapping("/submissions/internal/team-submissions")
+    ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(
+            @RequestParam("competitionId") String competitionId,
+            @RequestParam("teamIds") List<String> teamIds
+    );
+
+    /**
      * Get all scored submissions (totalScore IS NOT NULL) for a competition.
      */
     @GetMapping("/submissions/internal/scored")

@@ -112,14 +112,18 @@ public class DashboardServiceImpl implements IDashboardService {
                 List<String> teamIds = teamIdsResp.getBody();
 
                 if (CollUtil.isNotEmpty(teamIds)) {
-                    for (String teamId : teamIds) {
-                        var teamSubmission = registrationServiceClient.getTeamSubmissionBasic(competitionId, teamId).getBody();
-                        if (teamSubmission != null) {
-                            hasSubmitted = true;
-                            dashboard.setMyTotalScore(teamSubmission.getTotalScore());
-                            dashboard.setMyReviewStatus(teamSubmission.getReviewStatus());
-                            break;
-                        }
+                    // One read for every team the user belongs to. This used to be a
+                    // remote call per team, issued serially, so the dashboard got slower
+                    // the more teams someone joined.
+                    var teamSubmissions = Optional.ofNullable(
+                            registrationServiceClient.getTeamSubmissionsBasic(competitionId, teamIds).getBody()
+                    ).orElse(List.of());
+
+                    var teamSubmission = teamSubmissions.stream().findFirst().orElse(null);
+                    if (teamSubmission != null) {
+                        hasSubmitted = true;
+                        dashboard.setMyTotalScore(teamSubmission.getTotalScore());
+                        dashboard.setMyReviewStatus(teamSubmission.getReviewStatus());
                     }
                 }
             }
