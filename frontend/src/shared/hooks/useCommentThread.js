@@ -5,7 +5,7 @@ import { commentService } from '../../services/interactionService';
 import { queryKeys, staleTime } from '../../api/queryKeys';
 import { unwrap, toMessage } from '../../api/queryFn';
 
-const PAGE_SIZE = 5;
+const DEFAULT_PAGE_SIZE = 5;
 
 /**
  * Encapsulates all comment data-fetching and mutation for a given submissionId.
@@ -16,12 +16,14 @@ const PAGE_SIZE = 5;
  * confusing than a brief spinner.
  *
  * @param {string} submissionId
+ * @param {{ pageSize?: number }} [options]
  */
-export function useCommentThread(submissionId) {
+export function useCommentThread(submissionId, options = {}) {
+  const { pageSize = DEFAULT_PAGE_SIZE } = options;
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const params = { page, size: PAGE_SIZE, sortBy: 'createdAt', order: 'desc' };
+  const params = { page, size: pageSize, sortBy: 'createdAt', order: 'desc' };
   const listKey = queryKeys.comments.bySubmission(submissionId, params);
 
   const {

@@ -8,10 +8,10 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import apiClient from '@/api/apiClient';
+import { useCommentThread } from '@/shared/hooks/useCommentThread';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -27,29 +27,18 @@ import AuthTokenManager from '@/auth/authTokenManager';
 
 
 function ProjectComment({ submissionId }) {
-  const [comments, setComments] = useState([]);
-  const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!submissionId) return;
-    setCommentsLoading(true);
-    apiClient
-      .get('/interactions/comments/list', {
-        params: {
-          submissionId,
-          page: 1,
-          size: 10,
-          sortBy: 'createdAt',
-          order: 'desc',
-        },
-      })
-      .then((res) => setComments(res.data.data || []))
-      .catch(() => setComments([]))
-      .finally(() => setCommentsLoading(false));
-  }, [submissionId]);
+  // The shared thread hook already caches the list, posts optimistically and
+  // invalidates afterwards. The hand-rolled version here never refetched after
+  // a post, so a new comment only appeared once the component remounted.
+  const {
+    comments,
+    loading: commentsLoading,
+    postComment,
+  } = useCommentThread(submissionId, { pageSize: 10 });
 
   const handleAddComment = async () => {
     const userId = AuthTokenManager.getUserId();
@@ -67,10 +56,7 @@ function ProjectComment({ submissionId }) {
 
     setSubmitting(true);
     try {
-      await apiClient.post('/interactions/comments', {
-        submissionId,
-        content: newComment,
-      });
+      await postComment(newComment);
       toast.success('Comment posted successfully!');
       setNewComment('');
       setCommentsOpen(true);

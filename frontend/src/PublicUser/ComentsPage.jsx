@@ -7,13 +7,16 @@
  * Role: Public User
  * Developer: Beiqi Dai (migrated)
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import Navbar from "../Homepages/Navbar";
 import Footer from "../Homepages/Footer";
-import apiClient from "../api/apiClient";
+import { commentService } from "../services/interactionService";
+import { queryKeys, staleTime } from "../api/queryKeys";
+import { unwrap, toMessage } from "../api/queryFn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/shared/components/EmptyState";
@@ -24,51 +27,48 @@ function CommentsPage() {
   const { submissionId } = useParams();
   const navigate = useNavigate();
 
-  const [comments, setComments] = useState([]);
   const [expandedReplies, setExpandedReplies] = useState({});
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const currentUserId = AuthTokenManager.getUserId();
 
-  const fetchComments = useCallback(
-    async (pageToFetch = 1, reset = false) => {
-      try {
-        const res = await apiClient.get(`/interactions/comments/list`, {
-          params: {
-            submissionId,
-            page: pageToFetch,
-            size: 10,
-            sortBy: "createdAt",
-            order: "desc",
-          },
-        });
-        const fetchedComments = res.data.data || [];
-        const pages = res.data.pages || 1;
-
-        setTotalPages(pages);
-
-        if (reset) {
-          setComments(fetchedComments);
-          setPage(1);
-        } else {
-          setComments((prev) => [...prev, ...fetchedComments]);
-          setPage(pageToFetch);
-        }
-      } catch (error) {
-        toast.error("Failed to fetch comments.");
-      }
+  // Load-more, not pagination: useInfiniteQuery keeps every page that has been
+  // fetched so far, which is what the old append-into-state loop was doing by
+  // hand — except this survives navigating away and back.
+  const {
+    data,
+    error: listError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: [...queryKeys.comments.all, "infinite", submissionId],
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        commentService.getBySubmission(submissionId, {
+          page: pageParam,
+          size: 10,
+          sortBy: "createdAt",
+          order: "desc",
+        })
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const totalPages = (lastPage && lastPage.pages) || 1;
+      return allPages.length < totalPages ? allPages.length + 1 : undefined;
     },
-    [submissionId]
-  );
+    enabled: Boolean(submissionId),
+    staleTime: staleTime.short,
+  });
+
+  const comments = (data ? data.pages : []).flatMap((p) => (p && p.data) || []);
+  const page = data ? data.pages.length : 1;
+  const totalPages = data && data.pages[0] ? data.pages[0].pages || 1 : 1;
 
   useEffect(() => {
-    if (submissionId) {
-      fetchComments(1, true);
-    }
-  }, [submissionId, fetchComments]);
+    if (listError) toast.error(toMessage(listError));
+  }, [listError]);
 
   const handleLoadMore = () => {
-    fetchComments(page + 1, false);
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   };
 
   const toggleExpandedReplies = (commentId) => {
