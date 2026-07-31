@@ -6,13 +6,10 @@
  * Allows account deletion. Email and role are read-only.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { userService } from '../services/userService';
-import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap, toMessage } from '../api/queryFn';
+import { useProfileEditor } from '@/shared/hooks/useProfileEditor';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -48,98 +45,32 @@ const profileSchema = z.object({
 
 function OrganizerProfile() {
   useDocumentTitle('My Profile');
-  const [errors, setErrors] = useState({});
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    description: '',
-    role: AuthTokenManager.getRole() || '',
-  });
-
-  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [tempAvatar, setTempAvatar] = useState(null);
-  const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  const queryClient = useQueryClient();
+  const {
+    formData,
+    handleChange,
+    avatarUrl,
+    avatarDialogOpen,
+    openAvatarDialog,
+    closeAvatarDialog: handleAvatarDialogClose,
+    tempAvatar,
+    tempAvatarUrl,
+    handleAvatarChange,
+    saveAvatar: handleAvatarSave,
+    uploading,
+    saveProfile,
+    saving: submitting,
+    deleteAccount,
+  } = useProfileEditor();
 
-  const { data: profile } = useQuery({
-    queryKey: queryKeys.users.profile(),
-    queryFn: () => unwrap(userService.getProfile()),
-    staleTime: staleTime.long,
-  });
-
-  // Seed the controlled form the first time the profile arrives, and only then:
-  // without the guard a background refetch would overwrite whatever the
-  // organizer was in the middle of typing.
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (!profile || seeded.current) return;
-    seeded.current = true;
-    setFormData({
-      name: profile.name || '',
-      email: profile.email || '',
-      password: '',
-      description: profile.description || '',
-      role: AuthTokenManager.getRole() || '',
-    });
-    setAvatarUrl(profile.avatarUrl);
-  }, [profile]);
-
-  const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
+  const handleDeleteAccount = () => {
+    setDeleteDialogOpen(false);
+    deleteAccount();
   };
 
-  const updateProfile = useMutation({
-    mutationFn: (data) => unwrap(userService.updateProfile(data)),
-    onSuccess: () => {
-      toast.success('Profile updated successfully');
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
-    },
-    onError: (error) => toast.error(toMessage(error)),
-  });
-
-  const uploadAvatar = useMutation({
-    mutationFn: (file) => {
-      const body = new FormData();
-      body.append('file', file);
-      return unwrap(userService.uploadAvatar(body));
-    },
-    onSuccess: (data) => {
-      if (!data?.avatarUrl) {
-        toast.error('Error uploading avatar');
-        return;
-      }
-      setAvatarUrl(data.avatarUrl);
-      toast.success('Avatar updated');
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
-      handleAvatarDialogClose();
-    },
-    onError: (error) => toast.error(toMessage(error)),
-  });
-
-  const deleteAccount = useMutation({
-    mutationFn: () => unwrap(userService.deleteUser(AuthTokenManager.getUserId())),
-    onSuccess: () => {
-      toast.success('Your account has been deleted.');
-      AuthTokenManager.clearSession();
-      window.location.href = '/';
-    },
-    onError: (error) => toast.error(toMessage(error)),
-    onSettled: () => setDeleteDialogOpen(false),
-  });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const result = profileSchema.safeParse(formData);
     if (!result.success) {
@@ -151,34 +82,11 @@ function OrganizerProfile() {
     }
     setErrors({});
 
-    const { role, ...profileData } = formData;
-    updateProfile.mutate({ ...profileData, avatarUrl });
+    saveProfile();
   };
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-      setTempAvatar(file);
-      setTempAvatarUrl(URL.createObjectURL(file));
-    }
-  };
 
-  // The old implementation reloaded the whole page to show the new avatar.
-  // Invalidating the profile query does the same job, and the dialog stays open
-  // until the upload lands so its disabled state means something.
-  const handleAvatarSave = () => {
-    if (!tempAvatar) return;
-    uploadAvatar.mutate(tempAvatar);
-  };
 
-  const handleDeleteAccount = () => deleteAccount.mutate();
-
-  useEffect(() => {
-    return () => {
-      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    };
-  }, [tempAvatarUrl]);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
@@ -186,7 +94,7 @@ function OrganizerProfile() {
         <CardHeader className="flex flex-row items-center gap-4">
           <button
             type="button"
-            onClick={() => setAvatarDialogOpen(true)}
+            onClick={() => openAvatarDialog()}
             className="rounded-full ring-offset-background transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Change avatar"
           >

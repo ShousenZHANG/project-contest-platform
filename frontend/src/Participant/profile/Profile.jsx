@@ -7,13 +7,10 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { userService } from '../../services/userService';
-import { queryKeys, staleTime } from '../../api/queryKeys';
-import { unwrap, toMessage } from '../../api/queryFn';
+import { useProfileEditor } from '@/shared/hooks/useProfileEditor';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -41,101 +38,31 @@ const PASSWORD_REGEX = /^(?=.*[A-Z]).{8,}$/;
 
 function Profile() {
   useDocumentTitle('My Profile');
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    description: '',
-    role: AuthTokenManager.getRole() || '',
-  });
-
-  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [tempAvatar, setTempAvatar] = useState(null);
-  const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const queryClient = useQueryClient();
+  const {
+    formData,
+    handleChange,
+    avatarUrl,
+    avatarDialogOpen,
+    openAvatarDialog,
+    closeAvatarDialog: handleAvatarDialogClose,
+    tempAvatar,
+    tempAvatarUrl,
+    handleAvatarChange,
+    saveAvatar: handleAvatarSave,
+    uploading,
+    saveProfile,
+    saving: submitting,
+    deleteAccount,
+  } = useProfileEditor();
 
-  const { data: profile } = useQuery({
-    queryKey: queryKeys.users.profile(),
-    queryFn: () => unwrap(userService.getProfile()),
-    staleTime: staleTime.long,
-  });
-
-  // Seed the controlled form the first time the profile arrives, and only then.
-  // A background refetch must not overwrite edits in progress.
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (!profile || seeded.current) return;
-    seeded.current = true;
-    setFormData({
-      name: profile.name || '',
-      email: profile.email || '',
-      password: '',
-      description: profile.description || '',
-      role: AuthTokenManager.getRole() || '',
-    });
-    setAvatarUrl(profile.avatarUrl);
-  }, [profile]);
-
-  const handleAvatarDialogClose = () => {
-    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    setTempAvatar(null);
-    setTempAvatarUrl('');
-    setAvatarDialogOpen(false);
+  const handleDeleteAccount = () => {
+    setDeleteDialogOpen(false);
+    deleteAccount();
   };
 
-  const updateProfile = useMutation({
-    mutationFn: (data) => unwrap(userService.updateProfile(data)),
-    onSuccess: () => {
-      toast.success('Profile updated successfully!');
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
-    },
-    onError: (error) => toast.error(toMessage(error)),
-  });
-
-  const uploadAvatar = useMutation({
-    mutationFn: (file) => {
-      const body = new FormData();
-      body.append('file', file);
-      return unwrap(userService.uploadAvatar(body));
-    },
-    onSuccess: (data) => {
-      if (!data?.avatarUrl) {
-        toast.error('Error uploading avatar.');
-        return;
-      }
-      setAvatarUrl(data.avatarUrl);
-      toast.success('Avatar updated');
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.profile() });
-      handleAvatarDialogClose();
-    },
-    onError: (error) => toast.error(toMessage(error)),
-  });
-
-  const deleteAccount = useMutation({
-    mutationFn: () => unwrap(userService.deleteUser(AuthTokenManager.getUserId())),
-    onSuccess: () => {
-      toast.success('Your account has been deleted.');
-      AuthTokenManager.clearSession();
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1200);
-    },
-    onError: (error) => toast.error(toMessage(error)),
-    onSettled: () => setDeleteDialogOpen(false),
-  });
-
-  const submitting = updateProfile.isPending;
-  const uploading = uploadAvatar.isPending;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({ ...prevData, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (formData.password && !PASSWORD_REGEX.test(formData.password)) {
@@ -145,48 +72,11 @@ function Profile() {
       return;
     }
 
-    const { role, ...profileData } = formData;
-    updateProfile.mutate({ ...profileData, avatarUrl });
+    saveProfile();
   };
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
 
-    const newFileName = file.name.replace(/[^\w.-]/g, '_');
-    const encodedFileName = encodeURIComponent(newFileName);
-    const renamedFile = new File([file], encodedFileName, { type: file.type });
 
-    if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-
-    if (!renamedFile.type.startsWith('image/')) {
-      toast.warning('Please select a valid image file.');
-      return;
-    }
-
-    if (renamedFile.size > 5 * 1024 * 1024) {
-      toast.warning('File size exceeds the 5MB limit. Please select a smaller image.');
-      return;
-    }
-
-    setTempAvatar(renamedFile);
-    setTempAvatarUrl(URL.createObjectURL(renamedFile));
-  };
-
-  // The old implementation reloaded the page to show the new avatar.
-  // Invalidating the profile query does the same job without discarding it.
-  const handleAvatarSave = () => {
-    if (!tempAvatar) return;
-    uploadAvatar.mutate(tempAvatar);
-  };
-
-  const handleDeleteAccount = () => deleteAccount.mutate();
-
-  useEffect(() => {
-    return () => {
-      if (tempAvatarUrl) URL.revokeObjectURL(tempAvatarUrl);
-    };
-  }, [tempAvatarUrl]);
 
   const initials = (formData.name || formData.email || 'U').slice(0, 2).toUpperCase();
 
@@ -201,7 +91,7 @@ function Profile() {
           <div className="mb-6 flex items-center gap-4">
             <button
               type="button"
-              onClick={() => setAvatarDialogOpen(true)}
+              onClick={() => openAvatarDialog()}
               className="group relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Avatar className="h-24 w-24 border-2 border-background shadow-md">
@@ -285,7 +175,7 @@ function Profile() {
         </CardContent>
       </Card>
 
-      <Dialog open={avatarDialogOpen} onOpenChange={(open) => (!open ? handleAvatarDialogClose() : setAvatarDialogOpen(true))}>
+      <Dialog open={avatarDialogOpen} onOpenChange={(open) => (!open ? handleAvatarDialogClose() : openAvatarDialog())}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload Avatar</DialogTitle>
