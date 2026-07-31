@@ -44,6 +44,10 @@ export const registrationService = {
   getRegisteredTeams: (competitionId, params) =>
     apiClient.get(`/registrations/public/${competitionId}/teams`, { params }),
 
+  /** Every competition a team is registered for. */
+  getTeamCompetitions: (teamId, params) =>
+    apiClient.get(`/registrations/teams/${teamId}/competitions`, { params }),
+
   /** Organizer removing a whole team from a competition. */
   removeTeam: (competitionId, teamId) =>
     apiClient.delete(`/registrations/teams/${competitionId}/team/${teamId}/by-organizer`),

@@ -7,11 +7,16 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
-import apiClient from '../../api/apiClient';
+import { userService } from '../../services/userService';
+import { competitionService } from '../../services/competitionService';
+import { registrationService, submissionService } from '../../services/registrationService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap } from '../../api/queryFn';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -19,80 +24,69 @@ import { SubmitDialog } from './Submitbottom';
 import TeamRegistrations from '../team/TeamRegistrations';
 
 function Project() {
-  const [userData, setUserData] = useState(null);
-  const [registrationData, setRegistrationData] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, size: 10, pages: 0 });
+  const [page, setPage] = useState(1);
   const [allowedTypes, setAllowedTypes] = useState([]);
   const [viewMode, setViewMode] = useState('personal');
+  const PAGE_SIZE = 10;
 
   const [openSubmitDialog, setOpenSubmitDialog] = useState(false);
   const [selectedCompetitionId, setSelectedCompetitionId] = useState(null);
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiClient.get('/users/profile');
-        setUserData(res.data);
-      } catch (error) {
-        // Failed to fetch user data
-      }
-    })();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const fetchRegistrations = useCallback(
-    async (currentPage = 1) => {
-      try {
-        const res = await apiClient.get('/registrations/my', {
-          params: { page: currentPage, size: pagination.size },
-        });
-        const data = res.data;
-        setRegistrationData(Array.isArray(data.data) ? data.data : []);
-        setPagination((prev) => ({
-          ...prev,
-          total: data.total ?? 0,
-          page: data.page ?? 1,
-          pages: data.pages ?? 0,
-        }));
-      } catch (error) {
-        setRegistrationData([]);
-      }
-    },
-    [pagination.size]
-  );
+  const { data: userData = null } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
 
-  useEffect(() => {
-    if (!userData) return;
-    if (viewMode === 'personal') {
-      fetchRegistrations(pagination.page);
-    }
-  }, [userData, pagination.page, viewMode, fetchRegistrations]);
+  const listParams = { page, size: PAGE_SIZE };
 
-  useEffect(() => {
-    if (viewMode !== 'personal' || !userData || registrationData.length === 0) return;
-    registrationData
-      .filter((item) => item.hasSubmitted && !item.fileName)
-      .forEach(async (item) => {
-        try {
-          const res = await apiClient.get(`/submissions/${item.competitionId}`);
-          const submissionData = res.data;
-          setRegistrationData((prev) =>
-            prev.map((reg) =>
-              reg.competitionId === item.competitionId
-                ? {
-                    ...reg,
-                    fileName: submissionData.fileName,
-                    reviewStatus: submissionData.reviewStatus,
-                  }
-                : reg
-            )
-          );
-        } catch (err) {
-          // Error fetching submission details
-        }
-      });
-  }, [registrationData, userData, viewMode]);
+  const { data: registrationPage } = useQuery({
+    queryKey: queryKeys.registrations.mine(listParams),
+    queryFn: () => unwrap(registrationService.getMyRegistrations(listParams)),
+    enabled: Boolean(userData) && viewMode === 'personal',
+    staleTime: staleTime.short,
+  });
+
+  const registrations = Array.isArray(registrationPage && registrationPage.data)
+    ? registrationPage.data
+    : [];
+
+  const pagination = {
+    total: (registrationPage && registrationPage.total) || 0,
+    page: (registrationPage && registrationPage.page) || 1,
+    size: PAGE_SIZE,
+    pages: (registrationPage && registrationPage.pages) || 0,
+  };
+
+  // Rows that say a submission exists but carry no file name need a second
+  // read to fill it in. This used to be an effect that wrote back into the same
+  // state it depended on, which is a re-render loop waiting to happen.
+  const needsDetail = registrations.filter((r) => r.hasSubmitted && !r.fileName);
+
+  const detailQueries = useQueries({
+    queries: needsDetail.map((r) => ({
+      queryKey: queryKeys.submissions.detail(r.competitionId),
+      queryFn: () => unwrap(submissionService.getMine(r.competitionId)),
+      staleTime: staleTime.medium,
+    })),
+  });
+
+  const detailByCompetition = {};
+  needsDetail.forEach((r, i) => {
+    const detail = detailQueries[i] && detailQueries[i].data;
+    if (detail) detailByCompetition[r.competitionId] = detail;
+  });
+
+  const registrationData = registrations.map((r) => {
+    const detail = detailByCompetition[r.competitionId];
+    return detail
+      ? { ...r, fileName: detail.fileName, reviewStatus: detail.reviewStatus }
+      : r;
+  });
 
   const handleOpenSubmitDialog = (competitionId) => {
     setSelectedCompetitionId(competitionId);
@@ -112,8 +106,13 @@ function Project() {
     }
 
     try {
-      const detailRes = await apiClient.get(`/competitions/${selectedCompetitionId}`);
-      const competitionDetail = detailRes.data;
+      // fetchQuery reuses the cached competition when the detail page or a
+      // sibling view has already read it.
+      const competitionDetail = await queryClient.fetchQuery({
+        queryKey: queryKeys.competitions.detail(selectedCompetitionId),
+        queryFn: () => unwrap(competitionService.getById(selectedCompetitionId)),
+        staleTime: staleTime.medium,
+      });
       const allowedSubmissionTypes = competitionDetail.allowedSubmissionTypes || [];
       setAllowedTypes(allowedSubmissionTypes);
 
@@ -145,18 +144,11 @@ function Project() {
       formData.append('description', description);
       formData.append('file', file);
 
-      await apiClient.post('/submissions/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await unwrap(submissionService.upload(formData));
 
       toast.success('Submission uploaded!');
-      setRegistrationData((prev) =>
-        prev.map((item) =>
-          item.competitionId === selectedCompetitionId
-            ? { ...item, hasSubmitted: true, fileName: file.name }
-            : item
-        )
-      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
     } catch (error) {
       toast.error('Upload failed. Please try again.');
     } finally {
@@ -279,7 +271,7 @@ function Project() {
                 size="sm"
                 variant="outline"
                 disabled={pagination.page <= 1}
-                onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -290,7 +282,7 @@ function Project() {
                 size="sm"
                 variant="outline"
                 disabled={pagination.page >= pagination.pages}
-                onClick={() => setPagination((prev) => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

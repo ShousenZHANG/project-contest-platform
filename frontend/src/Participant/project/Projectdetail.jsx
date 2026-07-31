@@ -7,11 +7,15 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../../api/apiClient';
+import { userService } from '../../services/userService';
+import { submissionService } from '../../services/registrationService';
+import { queryKeys, staleTime } from '../../api/queryKeys';
+import { unwrap, toMessage } from '../../api/queryFn';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -27,10 +31,6 @@ import {
 } from '../../components/ui/dialog';
 
 function ProjectDetail() {
-  const [submission, setSubmission] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [userData, setUserData] = useState(null);
 
   const [editMode, setEditMode] = useState(false);
   const [updatedTitle, setUpdatedTitle] = useState('');
@@ -41,48 +41,47 @@ function ProjectDetail() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const res = await apiClient.get('/users/profile');
-        setUserData(res.data);
-      } catch (err) {
-        // Failed to fetch user data
-      }
-    };
-    fetchUserData();
-  }, []);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!userData || !competitionId) return;
+  const { data: userData = null } = useQuery({
+    queryKey: queryKeys.users.profile(),
+    queryFn: () => unwrap(userService.getProfile()),
+    staleTime: staleTime.long,
+  });
 
-    const fetchSubmissionDetail = async () => {
-      try {
-        const res = await apiClient.get(`/submissions/${competitionId}`);
-        setSubmission(res.data);
-        setLoading(false);
-      } catch (err) {
-        setError(err.response?.data || err.message || 'Error fetching submission details');
-        setLoading(false);
-      }
-    };
-    fetchSubmissionDetail();
-  }, [userData, competitionId]);
+  const detailKey = queryKeys.submissions.detail(competitionId);
 
-  const handleDeleteSubmission = async () => {
+  const {
+    data: submission = null,
+    isPending: loading,
+    error: detailError,
+  } = useQuery({
+    queryKey: detailKey,
+    queryFn: () => unwrap(submissionService.getMine(competitionId)),
+    enabled: Boolean(userData && competitionId),
+    staleTime: staleTime.medium,
+  });
+
+  const error = detailError ? toMessage(detailError) : null;
+
+  const deleteSubmission = useMutation({
+    mutationFn: (submissionId) => unwrap(submissionService.delete(submissionId)),
+    onSuccess: () => {
+      toast.success('Submission deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+      setTimeout(() => navigate(-1), 1200);
+    },
+    onError: () => toast.error('Failed to delete submission'),
+    onSettled: () => setConfirmDelete(false),
+  });
+
+  const handleDeleteSubmission = () => {
     if (!submission || !submission.id) {
       toast.error('No submission to delete.');
       return;
     }
-    try {
-      await apiClient.delete(`/submissions/${submission.id}`);
-      toast.success('Submission deleted successfully!');
-      setConfirmDelete(false);
-      setTimeout(() => navigate(-1), 1200);
-    } catch (err) {
-      toast.error('Failed to delete submission');
-      setConfirmDelete(false);
-    }
+    deleteSubmission.mutate(submission.id);
   };
 
   const handleEditSubmission = () => {
@@ -99,27 +98,30 @@ function ProjectDetail() {
     setEditMode(false);
   };
 
-  const handleSaveEdit = async () => {
+  const saveEdit = useMutation({
+    mutationFn: (formData) => unwrap(submissionService.upload(formData)),
+    onSuccess: (updated) => {
+      // Seed the cache with what the server just returned, so the page shows
+      // the new file without waiting for a refetch.
+      queryClient.setQueryData(detailKey, updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+      toast.success('Submission updated successfully!');
+      setEditMode(false);
+    },
+    onError: (err) => toast.error('Update failed: ' + toMessage(err)),
+  });
+
+  const handleSaveEdit = () => {
     if (!updatedFile) {
       toast.warning('Please select a file to upload!');
       return;
     }
-    try {
-      const formData = new FormData();
-      formData.append('competitionId', competitionId);
-      formData.append('title', updatedTitle);
-      formData.append('description', updatedDescription);
-      formData.append('file', updatedFile);
-
-      const res = await apiClient.post('/submissions/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setSubmission(res.data);
-      toast.success('Submission updated successfully!');
-      setEditMode(false);
-    } catch (err) {
-      toast.error('Update failed: ' + (err.response?.data || err.message));
-    }
+    const formData = new FormData();
+    formData.append('competitionId', competitionId);
+    formData.append('title', updatedTitle);
+    formData.append('description', updatedDescription);
+    formData.append('file', updatedFile);
+    saveEdit.mutate(formData);
   };
 
   if (loading) {

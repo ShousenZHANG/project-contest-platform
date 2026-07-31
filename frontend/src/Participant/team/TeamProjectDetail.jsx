@@ -8,7 +8,8 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -20,7 +21,10 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '@/api/apiClient';
+import { teamService } from '@/services/teamService';
+import { submissionService } from '@/services/registrationService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,10 +52,6 @@ function reviewBadgeVariant(status) {
 function TeamProjectDetail() {
   const { competitionId, teamId } = useParams();
   const navigate = useNavigate();
-  const [submission, setSubmission] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isCreator, setIsCreator] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [updatedTitle, setUpdatedTitle] = useState('');
   const [updatedDescription, setUpdatedDescription] = useState('');
@@ -60,77 +60,89 @@ function TeamProjectDetail() {
 
   const userId = AuthTokenManager.getUserId();
 
+  const queryClient = useQueryClient();
+
+  const submissionKey = [
+    ...queryKeys.submissions.all,
+    'teamSubmission',
+    competitionId,
+    teamId,
+  ];
+
+  const {
+    data: submission = null,
+    isPending: loading,
+    error: loadError,
+  } = useQuery({
+    queryKey: submissionKey,
+    queryFn: () => unwrap(submissionService.getTeamSubmission(competitionId, teamId)),
+    enabled: Boolean(competitionId && teamId),
+    staleTime: staleTime.medium,
+  });
+
+  const error = loadError
+    ? loadError.response && loadError.response.status === 404
+      ? 'Submission not found.'
+      : toMessage(loadError)
+    : null;
+
+  // Seed the edit fields once, so a background refetch cannot discard an edit
+  // that is part-way typed.
+  const seeded = useRef(false);
   useEffect(() => {
-    const fetchSubmission = async () => {
-      try {
-        const res = await apiClient.get(
-          `/submissions/public/teams/${competitionId}/${teamId}`
-        );
-        const data = res.data;
-        setSubmission(data);
-        setUpdatedTitle(data.title || '');
-        setUpdatedDescription(data.description || '');
-      } catch (err) {
-        if (err.response?.status === 404) setError('Submission not found.');
-        else
-          setError(
-            err.response?.data || err.message || 'Failed to load submission.'
-          );
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (seeded.current || !submission) return;
+    seeded.current = true;
+    setUpdatedTitle(submission.title || '');
+    setUpdatedDescription(submission.description || '');
+  }, [submission]);
 
-    const checkIfCreator = async () => {
-      try {
-        const res = await apiClient.get('/teams/public/created', {
-          params: { userId, page: 1, size: 100 },
-        });
-        const is = res.data.data?.some((team) => team.id === teamId);
-        setIsCreator(Boolean(is));
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to verify creator:', err);
-      }
-    };
+  const createdParams = { userId, page: 1, size: 100 };
+  const { data: isCreator = false } = useQuery({
+    queryKey: queryKeys.teams.created(createdParams),
+    queryFn: () => unwrap(teamService.getCreatedTeams(createdParams)),
+    select: (payload) =>
+      Boolean(((payload && payload.data) || []).some((team) => team.id === teamId)),
+    enabled: Boolean(userId && teamId),
+    staleTime: staleTime.medium,
+  });
 
-    fetchSubmission();
-    checkIfCreator();
-  }, [competitionId, teamId, userId]);
-
-  const handleSaveEdit = async () => {
-    try {
-      const formData = new FormData();
-      formData.append('competitionId', competitionId);
-      formData.append('teamId', teamId);
-      formData.append('title', updatedTitle);
-      formData.append('description', updatedDescription);
-      if (updatedFile) formData.append('file', updatedFile);
-
-      await apiClient.post('/submissions/teams/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
+  const saveEdit = useMutation({
+    mutationFn: (formData) => unwrap(submissionService.uploadForTeam(formData)),
+    onSuccess: () => {
       toast.success('Submission updated successfully!');
       setEditMode(false);
-    } catch (err) {
-      const msg = err.response?.data || err.message;
-      toast.error(typeof msg === 'string' ? msg : 'Update failed');
-    }
+      // The previous version never refetched, so the page kept showing the
+      // old title and file after a successful save.
+      queryClient.invalidateQueries({ queryKey: submissionKey });
+    },
+    onError: (err) => toast.error(toMessage(err)),
+  });
+
+  const handleSaveEdit = () => {
+    const formData = new FormData();
+    formData.append('competitionId', competitionId);
+    formData.append('teamId', teamId);
+    formData.append('title', updatedTitle);
+    formData.append('description', updatedDescription);
+    if (updatedFile) formData.append('file', updatedFile);
+    saveEdit.mutate(formData);
   };
 
-  const handleDelete = async () => {
-    setConfirmDelete(false);
-    if (!submission?.submissionId) return;
-    try {
-      await apiClient.delete(
-        `/submissions/teams/${submission.submissionId}`
-      );
+  const deleteSubmission = useMutation({
+    mutationFn: (submissionId) =>
+      unwrap(submissionService.deleteTeamSubmission(submissionId)),
+    onSuccess: () => {
       toast.success('Submission deleted.');
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
       setTimeout(() => navigate(-1), 1200);
-    } catch (err) {
-      const msg = err.response?.data || err.message;
-      toast.error(typeof msg === 'string' ? msg : 'Delete failed');
+    },
+    onError: (err) => toast.error(toMessage(err)),
+  });
+
+  const handleDelete = () => {
+    setConfirmDelete(false);
+    if (submission && submission.submissionId) {
+      deleteSubmission.mutate(submission.submissionId);
     }
   };
 

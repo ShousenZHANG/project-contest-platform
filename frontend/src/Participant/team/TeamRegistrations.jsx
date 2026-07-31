@@ -10,7 +10,8 @@
  * Developer: Beiqi Dai
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -18,7 +19,10 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '@/api/apiClient';
+import { teamService } from '@/services/teamService';
+import { registrationService, submissionService } from '@/services/registrationService';
+import { queryKeys, staleTime } from '@/api/queryKeys';
+import { unwrap, toMessage } from '@/api/queryFn';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SubmitDialog } from '../project/Submitbottom';
@@ -34,14 +38,12 @@ function reviewBadgeVariant(status) {
 }
 
 function TeamRegistrations({ userData }) {
-  const [registrations, setRegistrations] = useState([]);
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
     size: 10,
     pages: 0,
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [openTeamDialog, setOpenTeamDialog] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState({
@@ -52,92 +54,78 @@ function TeamRegistrations({ userData }) {
 
   const navigate = useNavigate();
 
-  const fetchAllTeamRegistrations = useCallback(
-    async (page = 1) => {
-      setLoading(true);
-      setError('');
-      try {
-        const teamsRes = await apiClient.get('/teams/my-joined', {
-          params: { page, size: pagination.size },
-        });
-        const teamsData = teamsRes.data;
-        const teamsList = Array.isArray(teamsData.data) ? teamsData.data : [];
+  const queryClient = useQueryClient();
+  const PAGE_SIZE = pagination.size;
 
-        const regs = [];
-        for (const team of teamsList) {
-          try {
-            const compRes = await apiClient.get(
-              `/registrations/teams/${team.id}/competitions`,
-              { params: { page: 1, size: 100 } }
-            );
-            const compData = compRes.data;
-            const compList = Array.isArray(compData.data) ? compData.data : [];
-            compList.forEach((c) => {
-              regs.push({
-                competitionId: c.competitionId || c.id,
-                competitionName: c.competitionName || c.name || '',
-                teamId: team.id,
-                teamName: team.name,
-                hasSubmitted: c.hasSubmitted,
-                fileName: c.fileName || '',
-                reviewStatus: c.reviewStatus || '',
-              });
-            });
-          } catch {
-            // skip teams where competition fetch fails
-          }
-        }
+  const teamsParams = { page: pagination.page, size: PAGE_SIZE };
 
-        setRegistrations(regs);
-        setPagination({
-          total: teamsData.total || regs.length,
-          page: teamsData.page || page,
-          size: teamsData.size || pagination.size,
-          pages: teamsData.pages || 1,
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[TeamRegistrations] error:', err);
-        setError(
-          err.response?.data?.error ||
-            err.message ||
-            'Failed to load team registrations.'
-        );
-        setRegistrations([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [pagination.size]
-  );
+  const { data: teamsPage, isPending: teamsPending } = useQuery({
+    queryKey: queryKeys.teams.myJoined(teamsParams),
+    queryFn: () => unwrap(teamService.getMyJoined(teamsParams)),
+    enabled: Boolean(userData),
+    staleTime: staleTime.short,
+  });
 
-  useEffect(() => {
-    if (!userData) return;
-    fetchAllTeamRegistrations(pagination.page);
-  }, [userData, pagination.page, fetchAllTeamRegistrations]);
+  const teamsList = Array.isArray(teamsPage && teamsPage.data) ? teamsPage.data : [];
 
-  useEffect(() => {
-    if (loading || error) return;
-    registrations.forEach(async (reg) => {
-      if (reg.hasSubmitted && !reg.fileName) {
-        try {
-          const res = await apiClient.get(
-            `/submissions/public/teams/${reg.competitionId}/${reg.teamId}`
-          );
-          const sub = res.data;
-          setRegistrations((prev) =>
-            prev.map((r) =>
-              r.teamId === reg.teamId && r.competitionId === reg.competitionId
-                ? { ...r, fileName: sub.fileName, reviewStatus: sub.reviewStatus }
-                : r
-            )
-          );
-        } catch {
-          // 404s ignored for enrichment
-        }
-      }
-    });
-  }, [registrations, loading, error]);
+  // One query per team instead of a sequential for-loop, so ten teams cost one
+  // round trip rather than ten in a row, and each is cached on its own key.
+  const competitionQueries = useQueries({
+    queries: teamsList.map((team) => ({
+      queryKey: [...queryKeys.registrations.all, 'teamCompetitions', team.id],
+      queryFn: () =>
+        unwrap(registrationService.getTeamCompetitions(team.id, { page: 1, size: 100 })),
+      staleTime: staleTime.short,
+    })),
+  });
+
+  const baseRegistrations = teamsList.flatMap((team, i) => {
+    const payload = competitionQueries[i] && competitionQueries[i].data;
+    const list = Array.isArray(payload && payload.data) ? payload.data : [];
+    return list.map((c) => ({
+      competitionId: c.competitionId || c.id,
+      competitionName: c.competitionName || c.name || '',
+      teamId: team.id,
+      teamName: team.name,
+      hasSubmitted: c.hasSubmitted,
+      fileName: c.fileName || '',
+      reviewStatus: c.reviewStatus || '',
+    }));
+  });
+
+  // Rows that claim a submission but carry no file name need a second read.
+  // This was an effect writing back into the state it depended on.
+  const needsDetail = baseRegistrations.filter((r) => r.hasSubmitted && !r.fileName);
+
+  const detailQueries = useQueries({
+    queries: needsDetail.map((r) => ({
+      queryKey: [
+        ...queryKeys.submissions.all,
+        'teamSubmission',
+        r.competitionId,
+        r.teamId,
+      ],
+      queryFn: () =>
+        unwrap(submissionService.getTeamSubmission(r.competitionId, r.teamId)),
+      retry: false,
+      staleTime: staleTime.medium,
+    })),
+  });
+
+  const detailByRow = {};
+  needsDetail.forEach((r, i) => {
+    const detail = detailQueries[i] && detailQueries[i].data;
+    if (detail) detailByRow[`${r.teamId}:${r.competitionId}`] = detail;
+  });
+
+  const registrations = baseRegistrations.map((r) => {
+    const detail = detailByRow[`${r.teamId}:${r.competitionId}`];
+    return detail
+      ? { ...r, fileName: detail.fileName, reviewStatus: detail.reviewStatus }
+      : r;
+  });
+
+  const loading = teamsPending || competitionQueries.some((q) => q.isPending);
 
   const openSubmissionDialog = async (competitionId, teamId) => {
     const userId = userData?.userId || AuthTokenManager.getUserId();
@@ -149,11 +137,14 @@ function TeamRegistrations({ userData }) {
     }
 
     try {
-      const res = await apiClient.get('/teams/public/created', {
-        params: { userId, page: 1, size: 100 },
+      const createdParams = { userId, page: 1, size: 100 };
+      const created = await queryClient.fetchQuery({
+        queryKey: queryKeys.teams.created(createdParams),
+        queryFn: () => unwrap(teamService.getCreatedTeams(createdParams)),
+        staleTime: staleTime.medium,
       });
 
-      const isCreator = (res.data.data || []).some(
+      const isCreator = ((created && created.data) || []).some(
         (team) => team.id === teamId
       );
 
@@ -196,19 +187,15 @@ function TeamRegistrations({ userData }) {
       const formData = new FormData();
       formData.append('file', file);
 
-      await apiClient.post(
-        `/submissions/teams/upload?${params.toString()}`,
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
-      );
+      formData.append('competitionId', competitionId);
+      formData.append('teamId', teamId);
+      formData.append('title', title);
+      formData.append('description', description);
 
-      setRegistrations((prev) =>
-        prev.map((r) =>
-          r.teamId === teamId && r.competitionId === competitionId
-            ? { ...r, hasSubmitted: true, fileName: file.name }
-            : r
-        )
-      );
+      await unwrap(submissionService.uploadForTeam(formData));
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
       toast.success('Submission uploaded.');
     } catch (err) {
       // eslint-disable-next-line no-console
