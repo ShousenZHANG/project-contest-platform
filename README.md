@@ -109,10 +109,50 @@ host so OAuth callbacks resolve correctly.
 docker-compose up --build -d
 ```
 
-First startup can take several minutes because Docker builds the backend service
-images and initializes the MySQL, Nacos, RabbitMQ, and MinIO volumes.
+The first run takes several minutes: Docker builds seven Java services and the
+frontend, then initialises the MySQL, Nacos, RabbitMQ and MinIO volumes.
 
-### 3. Open the Application
+### 3. Verify It Came Up
+
+The backends declare `start_period: 60s` and only start once the infrastructure
+reports healthy, so **wait about three minutes** before judging the result.
+
+```bash
+docker-compose ps -a
+```
+
+**Use `-a`.** Without it Docker lists only running containers, so a service that
+crashed on startup is simply absent from the output — which reads as a clean
+stack rather than a broken one.
+
+A successful stack is **14 containers `Up`**, 13 of them `healthy` (the frontend
+declares no healthcheck):
+
+| Group | Containers |
+| --- | --- |
+| Infrastructure | `9900-mysql`, `9900-redis`, `9900-rabbitmq`, `9900-nacos`, `9900-minio`, `9900-zipkin` |
+| Backend | `backend-api-gateway`, `backend-user-service`, `backend-competition-service`, `backend-file-service`, `backend-registration-service`, `backend-interaction-service`, `backend-judge-service` |
+| Frontend | `frontend-web` |
+
+`health: starting` during the first couple of minutes is normal. `unhealthy` or
+`Exited` after three minutes is not — see [Operations](#operations).
+
+Then prove the whole path works, not just that processes are running:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+```bash
+curl "http://localhost:8080/competitions/list?page=1&size=2"
+```
+
+The first must return `{"status":"UP",...}`. The second is the one that matters:
+it goes through the gateway, resolves a service through Nacos, and reads MySQL,
+so a valid paginated JSON body means routing, discovery and persistence are all
+working. An empty `data` array is correct on a fresh database.
+
+### 4. Open the Application
 
 | Target | URL | Notes |
 | --- | --- | --- |
@@ -133,7 +173,7 @@ docker compose --profile ci up -d jenkins
 
 It then serves on http://localhost:8888.
 
-### 4. Stop the Stack
+### 5. Stop the Stack
 
 ```bash
 docker-compose down
@@ -577,30 +617,71 @@ browser test artifacts.
 
 ## Operations
 
-Useful Docker commands:
+### Everyday commands
 
 ```bash
-docker-compose ps
+docker-compose ps -a
+```
+
+```bash
 docker-compose logs -f backend-api-gateway
-docker-compose logs -f backend-user-service
-docker-compose logs -f frontend-web
-docker-compose restart backend-api-gateway
-docker-compose down
 ```
-
-Useful local checks:
 
 ```bash
-curl http://localhost:8080/actuator/health
-curl http://localhost:3000
+docker-compose restart backend-api-gateway
 ```
 
-If the frontend loads but API calls fail, verify that:
+### When a container will not start
 
-1. `backend-api-gateway` is healthy.
-2. Nacos is healthy and all backend services are registered.
+Start by reading the status, then the log of whatever is not `Up`:
+
+```bash
+docker ps -a --format "table {{.Names}}\t{{.Status}}"
+```
+
+```bash
+docker logs backend-api-gateway --tail 40
+```
+
+The exit code narrows it down immediately:
+
+| Status | Meaning | Where to look |
+| --- | --- | --- |
+| `Exited (127)` | A command in the container was not found — usually a shell script | Confirm `wait-for-it.sh` has LF endings, not CRLF |
+| `Exited (1)` | The application started and then failed | The log's first `ERROR`; usually configuration |
+| `unhealthy` | The process runs, but its healthcheck fails | `docker inspect <name> --format '{{range .State.Health.Log}}{{.Output}}{{end}}'` |
+| `Created`, never `Up` | Waiting on a dependency that never became healthy | Find the unhealthy dependency and fix that instead |
+
+A healthcheck failure is not the same as a broken service. To see which health
+indicator is at fault:
+
+```bash
+docker exec backend-user-service wget -q -O - http://localhost:8081/actuator/health
+```
+
+### Windows
+
+Two problems on Windows are worth knowing about, both fixed in this repo but
+easy to reintroduce:
+
+- **Line endings.** `.gitattributes` pins `*.sh` and the Dockerfiles to LF. If a
+  script is ever committed with CRLF, its shebang resolves to a binary named
+  `bash\r` and the container exits 127 before printing anything.
+- **Data volumes.** Stateful data uses Docker named volumes rather than host bind
+  mounts. A bind mount cannot represent the file modes these images need —
+  RabbitMQ in particular writes `.erlang.cookie` as mode 0400 and refuses to
+  start if it comes back read-only.
+
+### If the frontend loads but API calls fail
+
+1. `backend-api-gateway` is `healthy` — the frontend can render without it.
+2. Nacos is healthy and every backend has registered (http://localhost:8848/nacos).
 3. `JWT_SECRET` is identical for the gateway and user-service.
 4. The frontend `VITE_API_BASE_URL` points at the gateway.
+
+The fastest single check is the cross-service call from
+[step 3](#3-verify-it-came-up): if it returns JSON, routing, discovery and the
+database are all fine and the problem is in the browser or in auth.
 
 ## Documentation
 
