@@ -2,6 +2,13 @@ server:
   port: 8080
 
 spring:
+  # The gateway routes requests. It publishes and consumes nothing, but the
+  # parent POM puts spring-boot-starter-amqp on every module's classpath, so
+  # Actuator health-checked a broker at the default localhost:5672 and held the
+  # container DOWN permanently.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   application:
     name: api-gateway
   data:

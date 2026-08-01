@@ -2,6 +2,13 @@ server:
   port: 8083
 
 spring:
+  # file-service stores objects in MinIO. It has no database and no queue, but
+  # inherits mybatis-plus through common-lib and AMQP through the parent POM.
+  # Without this it failed to start: "Failed to determine a suitable driver class".
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   application:
     name: file-service
   servlet:
