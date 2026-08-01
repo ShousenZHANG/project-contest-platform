@@ -120,6 +120,12 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  health:
+    # SMTP credentials are optional (see README) — an unconfigured mailbox
+    # must not make the whole service report DOWN, and connecting to one that
+    # is not there blocked each probe for 30 seconds.
+    mail:
+      enabled: false
   endpoint:
     health:
       show-details: when_authorized

@@ -2,11 +2,16 @@ server:
   port: 8083
 
 spring:
-  # file-service stores objects in MinIO. It has no database and no queue, but
-  # inherits mybatis-plus through common-lib and AMQP through the parent POM.
-  # Without this it failed to start: "Failed to determine a suitable driver class".
+  # file-service stores objects in MinIO. It has no database, no queue and no
+  # cache, but inherits mybatis-plus through common-lib and AMQP plus Redis
+  # through the parent POM. Left alone, the DataSource failed to build ("Failed
+  # to determine a suitable driver class") and the service exited before it
+  # finished starting; Redis then fell back to localhost and blocked the health
+  # endpoint long enough for the container healthcheck to time out.
   autoconfigure:
     exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   application:

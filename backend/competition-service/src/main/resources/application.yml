@@ -2,6 +2,13 @@ server:
   port: 8082
 
 spring:
+  # None of these use Redis — the starter arrives from the parent POM. Without
+  # this the client fell back to localhost:6379, and the health endpoint blocked
+  # long enough for the container healthcheck to time out.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
   application:
     name: competition-service
   datasource:
