@@ -7,7 +7,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./.mysql-data:/var/lib/mysql
+      - mysql-data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
     restart: always
     networks:
@@ -27,7 +27,7 @@ services:
     networks:
       - my-network
     volumes:
-      - ./.redis-data:/data
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -44,7 +44,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     volumes:
-      - ./.rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - my-network
     healthcheck:
@@ -60,7 +60,7 @@ services:
     ports:
       - "8848:8848"
     volumes:
-      - ./.nacos-data:/home/nacos/data
+      - nacos-data:/home/nacos/data
     environment:
       - MODE=standalone
       - PREFER_HOST_MODE=hostname
@@ -81,7 +81,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ./.minio-data:/data
+      - minio-data:/data
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
@@ -387,8 +387,25 @@ services:
     # only runs the platform. Start it explicitly with: docker compose --profile ci up -d
     profiles: ["ci"]
 
+# Named volumes rather than ./.foo-data bind mounts.
+#
+# A bind mount hands the container a Windows or macOS filesystem, which cannot
+# represent the ownership and modes these images require. RabbitMQ was the one
+# that broke outright: Erlang writes .erlang.cookie as mode 0400, a Windows
+# checkout stored it 0444 read-only, `rm -rf` could not remove it, and every
+# later start died with "Error when reading /var/lib/rabbitmq/.erlang.cookie:
+# eacces" before the broker booted — taking all seven backend services with it,
+# since they wait on it being healthy.
+#
+# Named volumes live inside Docker's own Linux VM, so permissions behave, I/O is
+# markedly faster, and `docker compose down -v` is a complete reset.
 volumes:
   jenkins_home:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
+  nacos-data:
+  minio-data:
 
 networks:
   my-network:

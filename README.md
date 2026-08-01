@@ -139,9 +139,14 @@ It then serves on http://localhost:8888.
 docker-compose down
 ```
 
-To remove local data volumes as well, delete the ignored `.mysql-data/`,
-`.redis-data/`, `.rabbitmq-data/`, `.nacos-data/`, and `.minio-data/`
-directories after stopping the stack.
+Data lives in Docker named volumes, so a full reset is one flag:
+
+```bash
+docker-compose down -v
+```
+
+That drops the database, the broker state, and the object store together. Leave
+`-v` off to keep your data between restarts.
 
 ## Local Development
 
