@@ -132,6 +132,13 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # The gateway publishes no events, but spring-boot-starter-amqp is on its
+      # classpath via common-lib, so Actuator health-checks the broker anyway.
+      # Without these it authenticates as guest/guest, and any non-default
+      # RABBITMQ_PASSWORD leaves the container permanently unhealthy — which
+      # reads as "the gateway is broken" when nothing is actually wrong with it.
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
     networks:
       - my-network
     mem_limit: 768m

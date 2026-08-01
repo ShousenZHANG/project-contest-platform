@@ -1,2 +1,12 @@
+# Anything a Linux container has to execute must keep LF endings. A Windows
+# checkout would otherwise rewrite them to CRLF, the shebang becomes
+# "#!/usr/bin/env bash\r", and the kernel looks for a binary literally named
+# "bash\r" — every backend container then exits 127 before Spring Boot starts.
 /mvnw text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+
+# Windows batch files are the mirror image: they need CRLF.
 *.cmd text eol=crlf
+*.bat text eol=crlf

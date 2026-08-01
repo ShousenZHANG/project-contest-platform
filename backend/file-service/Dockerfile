@@ -29,7 +29,11 @@ RUN apk add --no-cache bash
 COPY --from=builder /app/backend/file-service/target/*.jar file-service.jar
 
 COPY ../../wait-for-it.sh /wait-for-it.sh
-RUN chmod +x /wait-for-it.sh
+# Strip CR before chmod: a Windows checkout can hand us a CRLF copy, and the
+# shebang then resolves to a binary named "bash" — the container exits 127
+# with no application log to explain why. .gitattributes prevents it at the
+# source; this makes a stale working tree harmless too.
+RUN sed -i 's/$//' /wait-for-it.sh && chmod +x /wait-for-it.sh
 
 RUN addgroup -S app && adduser -S app -G app
 USER app
