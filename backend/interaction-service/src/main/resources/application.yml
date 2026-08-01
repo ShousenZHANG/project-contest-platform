@@ -15,7 +15,7 @@ spring:
   application:
     name: interaction-service
   datasource:
-    url: jdbc:mysql://mysql:3306/project_contest_platform?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://mysql:3306/project_contest_platform?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
