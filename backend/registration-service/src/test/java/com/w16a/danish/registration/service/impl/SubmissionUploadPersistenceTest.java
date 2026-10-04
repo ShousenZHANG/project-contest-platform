@@ -104,6 +104,10 @@ class SubmissionUploadPersistenceTest {
             ddl.execute("CREATE TABLE competitions(id VARCHAR(36) PRIMARY KEY,status VARCHAR(16))");
             ddl.execute("INSERT INTO competitions VALUES ('c1','ONGOING')");
             ddl.execute("CREATE TABLE competition_award_runs(competition_id VARCHAR(36) PRIMARY KEY,awarded_at TIMESTAMP)");
+            ddl.execute("CREATE TABLE competition_participants(id VARCHAR(36),competition_id VARCHAR(36),user_id VARCHAR(36))");
+            ddl.execute("CREATE TABLE competition_teams(id VARCHAR(36),competition_id VARCHAR(36),team_id VARCHAR(36))");
+            ddl.execute("INSERT INTO competition_participants VALUES ('r1','c1','u1')");
+            ddl.execute("INSERT INTO competition_teams VALUES ('rt1','c1','t1')");
         }
         MybatisConfiguration configuration = new MybatisConfiguration();
         configuration.setEnvironment(new Environment("local", new JdbcTransactionFactory(), dataSource));

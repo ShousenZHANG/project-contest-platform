@@ -1,4 +1,4 @@
-<!-- Source audit: 2026-10-04. Current validation is static only. -->
+<!-- Source audit: 2026-10-04. Baseline b5f96a1 validation was static; remote CI follow-up is in the runbook. -->
 # Frontend code map
 
 This map describes the current checkout. Read [CONTEXT](../../CONTEXT.md), [ADR-0001](../adr/0001-frontend-design-system.md), [ADR-0002](../adr/0002-react-query-data-layer.md), [ADR-0004](../adr/0004-session-lifetime-boundary.md), and [the scoring lifecycle decision](../adr/0006-scoring-and-competition-lifecycle.md) before changing a role journey. Historical passing checks do not establish that later source changes pass.

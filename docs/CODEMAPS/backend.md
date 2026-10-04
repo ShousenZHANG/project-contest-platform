@@ -61,14 +61,15 @@ authorization decision racing a remote status projection.
 - [EmailDeliveryHandler](../../backend/user-service/src/main/java/com/w16a/danish/user/config/EmailDeliveryHandler.java): existing seven domain email renderers, persisted retry, SMTP ambiguity retained.
 - [SubmissionFileCleanup](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/SubmissionFileCleanup.java) and [UploadRollbackCleanup](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/UploadRollbackCleanup.java): old-file tasks and rolled-back upload cleanup.
 - [CompetitionMediaFiles](../../backend/competition-service/src/main/java/com/w16a/danish/competition/notify/CompetitionMediaFiles.java) and [AvatarFiles](../../backend/user-service/src/main/java/com/w16a/danish/user/profile/AvatarFiles.java): dedicated replacement transactions, known object references and cleanup tasks, without controller-level storage logic.
-- [SubmissionScores](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/SubmissionScores.java): current revision/schema, complete criteria and real Judge assignment validation for score projections.
+- [SubmissionScores](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/SubmissionScores.java): current revision/schema, persisted complete criteria, real Judge assignment and duplicate-source validation for displays/statistics/SQL pagination order.
 - [PublicSubmissionAccess](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/service/PublicSubmissionAccess.java): common public-approved guard before interaction reads and writes.
 - Four domain notifiers and seven shared payloads remain. [Historical type IDs](../adr/0005-notification-wire-contracts.md) stay explicit compatibility identifiers.
 
 ## Tests and limits
 
-This delivery reviewed source and contracts statically and did not execute the
-tests, application, builds or deployment described below. Test source is retained
+The optimization baseline `b5f96a1` reviewed source and contracts statically.
+Exact-commit remote CI follow-up is recorded in the [runbook](../production-readiness-2026-10-04.md);
+local tests, application, project builds and deployment remain disabled. Test source is retained
 and synchronized with changed interfaces; its assertions are not current pass evidence.
 
 Tests cover domain guard rejection, real H2/MyBatis/transaction rollback and row

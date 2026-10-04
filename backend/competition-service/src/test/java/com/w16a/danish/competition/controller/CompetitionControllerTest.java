@@ -172,13 +172,62 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should batch get competitions by IDs successfully")
     void testGetCompetitionsByIds() throws Exception {
-        when(competitionService.getCompetitionsByIds(anyList()))
-                .thenReturn(List.of(new CompetitionResponseVO()));
+        CompetitionResponseVO visible = new CompetitionResponseVO();
+        visible.setId("id1");
+        when(competitionService.getVisibleCompetitionsByIds(eq(List.of("id1", "id2")), any(RequestContext.class)))
+                .thenReturn(List.of(visible));
 
         mockMvc.perform(post("/competitions/batch/ids")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-ID", "participant-id")
+                        .header("User-Role", "PARTICIPANT")
                         .content(objectMapper.writeValueAsString(List.of("id1", "id2"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("id1"));
+        verify(competitionService).getVisibleCompetitionsByIds(eq(List.of("id1", "id2")),
+                argThat(ctx -> "participant-id".equals(ctx.userId()) && "PARTICIPANT".equals(ctx.role())));
+        verify(competitionService, never()).getCompetitionsByIds(anyList());
+    }
+
+    @Test
+    void browserBatchRequiresIdentityBeforeReadingCompetitions() throws Exception {
+        mockMvc.perform(post("/competitions/batch/ids")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(List.of("id1"))))
+                .andExpect(status().isUnauthorized());
+        verify(competitionService, never()).getVisibleCompetitionsByIds(anyList(), any());
+        verify(competitionService, never()).getCompetitionsByIds(anyList());
+    }
+
+    @Test
+    void internalBatchUsesItsSeparateServiceCredentialContract() throws Exception {
+        when(competitionService.getCompetitionsByIds(List.of("id1"))).thenReturn(List.of());
+        mockMvc.perform(post("/competitions/internal/batch/ids")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(ServiceTokenService.HEADER,
+                                tokens.issue("registration-service", "competition-service-test", "internal:write"))
+                        .content(objectMapper.writeValueAsString(List.of("id1"))))
                 .andExpect(status().isOk());
+        verify(competitionService).getCompetitionsByIds(List.of("id1"));
+        verify(competitionService, never()).getVisibleCompetitionsByIds(anyList(), any());
+    }
+
+    @Test
+    void internalBatchRejectsBrowserIdentityWrongScopeAndUnlistedCaller() throws Exception {
+        String body = objectMapper.writeValueAsString(List.of("id1"));
+        mockMvc.perform(post("/competitions/internal/batch/ids")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-ID", "admin").header("User-Role", "ADMIN").content(body))
+                .andExpect(status().isForbidden());
+        for (String credential : List.of(
+                tokens.issue("registration-service", "competition-service-test", "internal:read"),
+                tokens.issue("file-service", "competition-service-test", "internal:write"))) {
+            mockMvc.perform(post("/competitions/internal/batch/ids")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .header(ServiceTokenService.HEADER, credential).content(body))
+                    .andExpect(status().isForbidden());
+        }
+        verify(competitionService, never()).getCompetitionsByIds(anyList());
     }
 
     @Test

@@ -181,6 +181,11 @@ internal Review comments are excluded. Replacing a file resets Review/total and
 increments its revision. Unknown historical score scales require rescoring rather
 than implicit conversion.
 
+Current score displays, statistics and database sorting require complete persisted
+criteria and a valid assigned Judge at the current revision. Upload, Review and deletion
+reload the current Submission under the shared lifecycle lock, so overlapping
+file replacement cannot restore an older file, lose a revision or clean up a stale reference.
+
 | Read surface | Access and meaning |
 | --- | --- |
 | `/competitions/list`, `/competitions/{id}` | Public competitions only |
@@ -226,7 +231,8 @@ and desktop widths, light/dark themes, keyboard and reduced motion.
 Axe and contrast checks cover automated criteria, not all of WCAG.
 [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/) is the accessibility target. Manual
 assistive-technology review and production performance remain separate checks.
-See the runbook for this delivery's static review scope and the remaining release checks.
+See the runbook for the baseline static review, exact-commit remote CI results
+and remaining release checks.
 
 ## CI/CD
 

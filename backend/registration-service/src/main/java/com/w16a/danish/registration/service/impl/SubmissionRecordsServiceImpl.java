@@ -130,13 +130,10 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     @Transactional
     public void deleteSubmissionsByUserAndCompetition(String userId, String competitionId) {
-        SubmissionRecords submission = lambdaQuery()
-                .eq(SubmissionRecords::getUserId, userId)
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .one();
+        lockDeletableSubmissions(competitionId);
+        SubmissionRecords submission = baseMapper.lockOwnedSubmission(competitionId, userId, null);
 
         if (submission != null) {
-            lockDeletableSubmissions(competitionId);
             deleteFileByUrl(submission.getFileUrl());
             if (!this.removeById(submission.getId())) {
                 throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete submission");
@@ -148,9 +145,9 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Transactional
     public void deleteSubmissionsByTeamAndCompetition(String teamId, String competitionId) {
         lockDeletableSubmissions(competitionId);
-        var submissions = lambdaQuery().eq(SubmissionRecords::getTeamId, teamId)
-                .eq(SubmissionRecords::getCompetitionId, competitionId).list();
-        for (var submission : submissions) {
+        // The schema allows one Submission per registered Team and Competition.
+        var submission = baseMapper.lockOwnedSubmission(competitionId, null, teamId);
+        if (submission != null) {
             deleteFileByUrl(submission.getFileUrl());
             if (!removeById(submission.getId())) {
                 throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete the team submission.");
@@ -199,16 +196,11 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed"));
         rollbackCleanup.watch(com.w16a.danish.registration.service.SubmissionDownloads.objectName(uploadedUrl));
 
-        SubmissionRecords existing = lambdaQuery()
-                .eq(SubmissionRecords::getUserId, userId)
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .one();
-
-        SubmissionRecords submission = existing != null ? existing : new SubmissionRecords()
+        SubmissionRecords submission = new SubmissionRecords()
                 .setUserId(userId)
                 .setCompetitionId(competitionId);
         persistUploadedSubmission(submission, title, description, file, uploadedUrl,
-                existing != null ? "Failed to update submission" : "Failed to save submission");
+                "Failed to update submission", "Failed to save submission");
 
         UserBriefVO user = userServiceClient.getUserBriefById(userId).getBody();
 
@@ -276,7 +268,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> orderByCurrentScore(query, asc);
+            case "totalScore" -> orderByCurrentScore(query, competitionId, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -315,7 +307,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> orderByCurrentScore(query, asc);
+            case "totalScore" -> orderByCurrentScore(query, competitionId, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -342,6 +334,9 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     @Transactional
     public void reviewSubmission(SubmissionReviewDTO dto, RequestContext ctx) {
+        if (!ctx.isAdmin() && !ctx.isOrganizer()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to review this submission");
+        }
         String reviewerId = ctx.userId();
         SubmissionRecords submission = this.getById(dto.getSubmissionId());
         if (submission == null) {
@@ -364,6 +359,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         }
 
         lockOpenSubmissions(submission.getCompetitionId());
+        String competitionId = submission.getCompetitionId();
+        submission = baseMapper.lockSubmission(dto.getSubmissionId());
+        if (submission == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found");
+        }
+        if (!Objects.equals(competitionId, submission.getCompetitionId())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Submission competition changed; reload before reviewing");
+        }
         CompetitionResponseVO competition = competitionGateway.require(submission.getCompetitionId());
         if (competition.getStatus() != CompetitionStatus.ONGOING) {
             throw new BusinessException(HttpStatus.CONFLICT, "Review decisions are frozen when scoring opens");
@@ -442,7 +445,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not allowed to delete this submission");
         }
 
-        lockDeletableSubmissions(submission.getCompetitionId());
+        submission = reloadDeletableSubmission(submission, "Submission not found");
         deleteFileByUrl(submission.getFileUrl());
 
         boolean removed = this.removeById(submissionId);
@@ -530,19 +533,12 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file."));
         rollbackCleanup.watch(com.w16a.danish.registration.service.SubmissionDownloads.objectName(fileUrl));
 
-        SubmissionRecords existing = lambdaQuery()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .eq(SubmissionRecords::getTeamId, teamId)
-                .one();
-
-        SubmissionRecords submission = existing != null
-                ? existing.setUpdatedAt(LocalDateTime.now())
-                : new SubmissionRecords()
+        SubmissionRecords submission = new SubmissionRecords()
                         .setCompetitionId(competitionId)
                         .setTeamId(teamId)
                         .setCreatedAt(LocalDateTime.now());
         persistUploadedSubmission(submission, title, description, file, fileUrl,
-                existing != null ? "Failed to update existing team submission." : "Failed to save new team submission.");
+                "Failed to update existing team submission.", "Failed to save new team submission.");
 
         UserBriefVO user = Optional.ofNullable(userServiceClient.getUserBriefById(userId).getBody())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "User info not found."));
@@ -606,7 +602,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             }
         }
 
-        lockDeletableSubmissions(submission.getCompetitionId());
+        submission = reloadDeletableSubmission(submission, "Submission not found.");
         if (StrUtil.isNotBlank(submission.getFileUrl())) {
             deleteFileByUrl(submission.getFileUrl());
         }
@@ -648,7 +644,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> orderByCurrentScore(query, asc);
+            case "totalScore" -> orderByCurrentScore(query, competitionId, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -693,7 +689,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> orderByCurrentScore(query, asc);
+            case "totalScore" -> orderByCurrentScore(query, competitionId, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -786,10 +782,12 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         return reply.getBody();
     }
 
-    private static void orderByCurrentScore(
-            com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<SubmissionRecords> query, boolean asc) {
+    private void orderByCurrentScore(
+            com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<SubmissionRecords> query, String competitionId, boolean asc) {
+        String order = scores.currentScoreOrder(competitionId, asc, query.getWrapper().getParamNameValuePairs());
         query.getWrapper().getExpression().add(com.baomidou.mybatisplus.core.enums.SqlKeyword.ORDER_BY,
-                () -> SubmissionRecordsMapper.CURRENT_SCORE + (asc ? " ASC" : " DESC"));
+                () -> order);
+        query.orderByAsc(SubmissionRecords::getId);
     }
 
     private SubmissionInfoVO toSubmissionInfoVO(SubmissionRecords r) {
@@ -823,13 +821,26 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     }
 
     private void persistUploadedSubmission(SubmissionRecords submission, String title, String description,
-                                           MultipartFile file, String uploadedUrl, String failureMessage) {
+                                           MultipartFile file, String uploadedUrl, String updateFailure, String insertFailure) {
         lockOpenSubmissions(submission.getCompetitionId());
         var competition = competitionGateway.require(submission.getCompetitionId());
         if (competition.getEndDate() != null && !competition.getEndDate().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
             throw new BusinessException(HttpStatus.CONFLICT, "Submission deadline passed while the file was uploading");
         }
-        boolean replacing = submission.getId() != null;
+        boolean team = submission.getTeamId() != null;
+        String registration = team
+                ? baseMapper.lockTeamRegistration(submission.getCompetitionId(), submission.getTeamId())
+                : baseMapper.lockIndividualRegistration(submission.getCompetitionId(), submission.getUserId());
+        if (registration == null) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, team
+                    ? "The team must register before submitting work" : "You must register before submitting work");
+        }
+        // A current locking read follows the shared run lock; never persist a pre-lock entity.
+        SubmissionRecords current = baseMapper.lockOwnedSubmission(
+                submission.getCompetitionId(), submission.getUserId(), submission.getTeamId());
+        boolean replacing = current != null;
+        if (replacing) submission = current;
+        if (replacing) submission.setUpdatedAt(LocalDateTime.now());
         submission.setRevision((submission.getRevision() == null ? 0 : submission.getRevision()) + 1);
         String previousFileUrl = submission.getFileUrl();
         submission.setTitle(title)
@@ -848,7 +859,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         }
         boolean persisted = replacing ? this.updateById(submission) : this.save(submission);
         if (!persisted) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, failureMessage);
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, replacing ? updateFailure : insertFailure);
         }
         // Keep the original file available when the replacement cannot be written.
         if (replacing) {
@@ -877,6 +888,19 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         if (awardedAt != null || "COMPLETED".equals(status) || "AWARDED".equals(status)) {
             throw new BusinessException(HttpStatus.CONFLICT, "Completed submissions and results are retained");
         }
+    }
+    private SubmissionRecords reloadDeletableSubmission(SubmissionRecords observed, String notFoundMessage) {
+        lockDeletableSubmissions(observed.getCompetitionId());
+        SubmissionRecords current = baseMapper.lockSubmission(observed.getId());
+        if (current == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, notFoundMessage);
+        }
+        if (!Objects.equals(observed.getCompetitionId(), current.getCompetitionId()) ||
+                !Objects.equals(observed.getUserId(), current.getUserId()) ||
+                !Objects.equals(observed.getTeamId(), current.getTeamId())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Submission ownership changed; reload before deleting");
+        }
+        return current;
     }
     private void requirePublicCompetition(String competitionId) {
         if (!Boolean.TRUE.equals(competitionGateway.require(competitionId).getIsPublic())) {

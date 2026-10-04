@@ -94,6 +94,10 @@ class SubmissionRecordsServiceImplGuardsTest {
         ReflectionTestUtils.setField(real, "competitionOrganizersService", organizersService);
         var mapper = mock(SubmissionRecordsMapper.class);
         when(mapper.competitionStatus(anyString())).thenReturn("ONGOING");
+        when(mapper.lockIndividualRegistration(anyString(), anyString())).thenReturn("r1");
+        when(mapper.lockTeamRegistration(anyString(), anyString())).thenReturn("rt1");
+        when(mapper.lockOwnedSubmission(anyString(), any(), any())).thenAnswer(call -> submissionQuery.one());
+        when(mapper.lockSubmission(anyString())).thenAnswer(call -> service.getById(call.getArgument(0, String.class)));
         ReflectionTestUtils.setField(real, "baseMapper", mapper);
         var teamRegistrations = mock(com.w16a.danish.registration.service.ICompetitionTeamsService.class);
         LambdaQueryChainWrapper<com.w16a.danish.registration.domain.po.CompetitionTeams> teamQuery = mock(LambdaQueryChainWrapper.class);

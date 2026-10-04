@@ -10,7 +10,7 @@ boundaries; final inventory and static review evidence are recorded in the runbo
 The maps follow controllers, services, schema, browser routes, auth/cache,
 Docker images and CI; the dated scan keeps its original verification evidence.
 
-Final static inventory: 275 backend main Java files, 82 backend test Java files,
+Optimization baseline `b5f96a1` inventory: 275 backend main Java files, 82 backend test Java files,
 and 168 frontend source files, including 165 JS/JSX/TS/TSX files (124 production,
 41 test/helper). Java syntax and explicit project imports, frontend syntax/imports/
 HTTP route shapes, TypeScript noEmit, configuration syntax and local map links were

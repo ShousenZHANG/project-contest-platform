@@ -75,7 +75,9 @@ A Scoring criterion is a distinct label configured before the Competition starts
 A Judge scores every criterion on a **0–10 scale**. The Judge's total is the equal
 arithmetic mean, rounded once to two decimal places.
 
-A Submission's final score is the mean of its current valid Judges' totals.
+A Submission's final score divides the sum of all current valid Judges' raw
+criterion scores by the Judge count times the criterion count, then rounds once
+to two decimal places. Already rounded Judge totals are not averaged again.
 Each assigned Judge contributes once per current revision. Legacy scores without
 a known scale are not treated as current 0–10 scores; unfinished Competitions need
 rescoring. A missing score means unavailable, not zero.

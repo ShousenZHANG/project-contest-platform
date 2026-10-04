@@ -54,8 +54,15 @@ class SubmissionAnalyticsServiceImplStatsTest {
         competitionGateway = mock(CompetitionGateway.class);
 
         SubmissionRecordsMapper mapper = mock(SubmissionRecordsMapper.class);
-        when(mapper.selectCurrentScoreIds(org.mockito.ArgumentMatchers.anyList()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.selectScoreSources(org.mockito.ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> {
+                    List<String> ids = invocation.getArgument(0);
+                    return ids.stream().map(id -> new com.w16a.danish.registration.domain.po.SubmissionScoreSource()
+                            .setSubmissionId(id).setJudgeId("judge").setJudgeRecordId(id + "-record")
+                            .setConfiguredCriteria("[\"Quality\"]").setJudgeTotal(new BigDecimal("8.50"))
+                            .setDetailId(id + "-detail").setDetailSubmissionId(id).setCriterion("Quality")
+                            .setCriterionScore(new BigDecimal("8.50"))).toList();
+                });
         SubmissionAnalyticsServiceImpl real = new SubmissionAnalyticsServiceImpl(competitionGateway,
                 new com.w16a.danish.registration.service.SubmissionScores(mapper));
         ReflectionTestUtils.setField(real, "baseMapper", mapper);

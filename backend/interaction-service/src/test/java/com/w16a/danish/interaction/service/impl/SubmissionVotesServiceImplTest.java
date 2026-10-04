@@ -8,10 +8,18 @@ import com.w16a.danish.interaction.mapper.SubmissionVotesMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.springframework.http.HttpStatus;
+
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -138,5 +146,79 @@ class SubmissionVotesServiceImplTest {
         long totalVotes = submissionVotesService.countAllVotes();
 
         assertThat(totalVotes).isEqualTo(10L);
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidVoteIdentifiers")
+    void everyUserVoteEntryPointRejectsBlankIdentifiersBeforeReadingVotes(String submissionId, String userId) {
+        assertThatThrownBy(() -> submissionVotesService.vote(submissionId, userId))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> submissionVotesService.unvote(submissionId, userId))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> submissionVotesService.hasVoted(submissionId, userId))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(submissions, submissionVotesMapper);
+        verify(submissionVotesService, never()).lambdaQuery();
+        verify(submissionVotesService, never()).lambdaUpdate();
+    }
+
+    private static Stream<Arguments> invalidVoteIdentifiers() {
+        return Stream.of(Arguments.of(null, "user"), Arguments.of("", "user"), Arguments.of(" \t", "user"),
+                Arguments.of("submission", null), Arguments.of("submission", ""), Arguments.of("submission", " \t"));
+    }
+
+    @Test
+    void anInsertThatWritesNoRowDoesNotReportASuccessfulVote() {
+        when(submissionVotesService.lambdaQuery().exists()).thenReturn(false);
+        when(submissionVotesMapper.insert(any(SubmissionVotes.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> submissionVotesService.vote("submission", "user"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR));
+        verify(submissionVotesMapper).insert(any(SubmissionVotes.class));
+    }
+
+    @Test
+    void anUnsuccessfulDeleteDoesNotReportVoteRemoval() {
+        when(submissionVotesService.lambdaQuery().exists()).thenReturn(true);
+        when(submissionVotesService.lambdaUpdate().remove()).thenReturn(false);
+
+        assertThatThrownBy(() -> submissionVotesService.unvote("submission", "user"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR));
+        verify(submissionVotesService.lambdaUpdate()).remove();
+    }
+
+    @Test
+    void anUnvotedVisibleSubmissionReportsFalse() {
+        when(submissionVotesService.lambdaQuery().exists()).thenReturn(false);
+        assertThat(submissionVotesService.hasVoted("submission", "user")).isFalse();
+        verify(submissions).requireVisible("submission");
+        verifyNoInteractions(submissionVotesMapper);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" \t"})
+    void voteCountsRejectBlankScopeInsteadOfReturningGlobalStatistics(String id) {
+        assertThatThrownBy(() -> submissionVotesService.countVotes(id))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> submissionVotesService.countCompetitionVotes(id))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(submissions, submissionVotesMapper);
+        verify(submissionVotesService, never()).lambdaQuery();
+    }
+
+    @Test
+    void competitionVoteCountsStayWithinTheRequestedCompetition() {
+        when(submissionVotesMapper.countCompetitionVotes("competition-1")).thenReturn(12L);
+        assertThat(submissionVotesService.countCompetitionVotes("competition-1")).isEqualTo(12);
+        verify(submissionVotesMapper).countCompetitionVotes("competition-1");
+        verify(submissionVotesMapper, never()).countPublicVotes();
     }
 }

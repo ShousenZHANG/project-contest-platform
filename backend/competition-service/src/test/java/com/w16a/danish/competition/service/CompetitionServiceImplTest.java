@@ -1,6 +1,8 @@
 package com.w16a.danish.competition.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
@@ -21,6 +23,8 @@ import com.w16a.danish.competition.feign.FileServiceClient;
 import com.w16a.danish.competition.feign.UserServiceClient;
 import com.w16a.danish.competition.mapper.CompetitionsMapper;
 import com.w16a.danish.competition.service.impl.CompetitionsServiceImpl;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +56,14 @@ class CompetitionServiceImplTest {
     @Mock private CompetitionNotifier competitionNotifier;
     @Mock private CompetitionMediaFiles mediaFiles;
     @Mock private CompetitionsMapper competitionsMapper;
+
+    @BeforeAll
+    static void initializeEntityMetadata() {
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "CompetitionServiceImplTest");
+        assistant.setCurrentNamespace(CompetitionsMapper.class.getName());
+        TableInfoHelper.initTableInfo(assistant, Competitions.class);
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -176,13 +188,16 @@ class CompetitionServiceImplTest {
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
         when(fileServiceClient.uploadCompetitionPromo(any(MultipartFile.class)))
-                .thenReturn(ResponseEntity.ok("http://mocked.com/uploaded.mp4"));
+                .thenReturn(ResponseEntity.ok("https://files/competition-assets/uploaded.mp4"));
+        doReturn(true).when(competitionsService).updateById(any(Competitions.class));
 
         MockMultipartFile file = new MockMultipartFile("file", "video.mp4", "video/mp4", "test".getBytes());
 
         CompetitionResponseVO response = competitionsService.uploadCompetitionMedia("comp-id", ctx("userId", "ADMIN"), "VIDEO", file);
 
         assertThat(response).isNotNull();
+        assertThat(response.getIntroVideoUrl()).isEqualTo("https://files/competition-assets/uploaded.mp4");
+        verify(mediaFiles).watchUpload(response.getIntroVideoUrl());
     }
 
     @Test
@@ -360,6 +375,7 @@ class CompetitionServiceImplTest {
         competition.setImageUrls(new ArrayList<>(List.of("http://mock.com/image.jpg")));
 
         when(competitionsService.getById(anyString())).thenReturn(competition);
+        doReturn(true).when(competitionsService).updateById(any(Competitions.class));
 
         LambdaQueryChainWrapper<CompetitionOrganizers> organizerQuery = mock(LambdaQueryChainWrapper.class);
         when(competitionOrganizersService.lambdaQuery()).thenReturn(organizerQuery);
@@ -372,6 +388,8 @@ class CompetitionServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo("comp-id");
+        assertThat(response.getImageUrls()).isEmpty();
+        verify(mediaFiles).deleteAfterCommit("http://mock.com/image.jpg");
     }
 
 

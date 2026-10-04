@@ -72,6 +72,12 @@ class SubmissionRecordsServiceImplTest {
         ReflectionTestUtils.setField(submissionService, "baseMapper", submissionRecordsMapper);
         ReflectionTestUtils.setField(submissionService, "competitionTeamsService", competitionTeamsService);
         when(submissionRecordsMapper.competitionStatus(anyString())).thenReturn("ONGOING");
+        when(submissionRecordsMapper.lockIndividualRegistration(anyString(), anyString())).thenReturn("r1");
+        when(submissionRecordsMapper.lockTeamRegistration(anyString(), anyString())).thenReturn("rt1");
+        when(submissionRecordsMapper.lockOwnedSubmission(anyString(), any(), any()))
+                .thenAnswer(call -> submissionService.lambdaQuery().one());
+        when(submissionRecordsMapper.lockSubmission(anyString()))
+                .thenAnswer(call -> submissionService.getById(call.getArgument(0, String.class)));
         CompetitionResponseVO publicCompetition = new CompetitionResponseVO();
         publicCompetition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
         publicCompetition.setIsPublic(true);
@@ -917,6 +923,7 @@ class SubmissionRecordsServiceImplTest {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
         doReturn(q).when(analyticsService).lambdaQuery();
+        when(q.inSql(any(), anyString())).thenReturn(q);
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(List.of(r1, r2));
 

@@ -70,6 +70,10 @@ Lifecycle changes, upload/Review/delete/cancel, Score and awarding share the run
 row lock. Current Competition reads use locking reads when a stale MySQL snapshot
 could otherwise admit a write. Remote score projection conditionally requires
 APPROVED, matching revision and greater version.
+Upload rechecks the registration and locks the current owned Submission after
+the run/Competition locks; Review and deletion also reload the locked Submission.
+Pre-lock entities cannot overwrite a committed replacement/revision or clean up
+the wrong file after deletion.
 
 Account deletion locks the administrator role and target account before reading
 history or the last-Admin count. Team deletion locks the caller account and Team

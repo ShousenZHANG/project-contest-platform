@@ -67,9 +67,10 @@ and the [release gates](../production-readiness-2026-10-04.md).
 
 ## Pipelines and evidence
 
-The current delivery used static parsing, interface/configuration review and
-TypeScript checking only. The commands and pipelines below describe future
-verification; they were not run during this delivery.
+The optimization baseline `b5f96a1` used static parsing, interface/configuration
+review and TypeScript checking. The follow-up validates pushed commits in GitHub
+Actions; exact-commit results are in the [runbook](../production-readiness-2026-10-04.md).
+Local services, suites, project builds and deployment remain disabled.
 
 [Actions](../../.github/workflows/ci.yml) uses JDK25/Node24 and verify/Jest/tsc/build/
 zero-retry Playwright. The isolated [runtime runner](../../infra/integration/run.py)
