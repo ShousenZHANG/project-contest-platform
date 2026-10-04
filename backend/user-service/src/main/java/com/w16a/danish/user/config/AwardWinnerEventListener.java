@@ -1,6 +1,7 @@
 package com.w16a.danish.user.config;
 
-import com.w16a.danish.user.domain.mq.AwardWinnerMessage;
+import com.w16a.danish.common.messaging.message.AwardWinnerMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ public class AwardWinnerEventListener {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    @RabbitListener(queues = RabbitMQConfig.AWARD_WINNER_QUEUE)
+    @RabbitListener(queues = MessagingConstants.AWARD_WINNER_QUEUE)
     public void handleAwardWinner(AwardWinnerMessage message) {
         String subject;
         String content;

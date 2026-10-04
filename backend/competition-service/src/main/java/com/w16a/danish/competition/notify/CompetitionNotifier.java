@@ -1,12 +1,12 @@
 package com.w16a.danish.competition.notify;
 
-import com.w16a.danish.competition.domain.mq.JudgeAssignedMessage;
-import com.w16a.danish.competition.domain.mq.JudgeRemovedMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
+import com.w16a.danish.common.messaging.message.JudgeAssignedMessage;
+import com.w16a.danish.common.messaging.message.JudgeRemovedMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
-import com.w16a.danish.competition.config.CompetitionRabbitMQConfig;
 
 /**
  * This class is responsible for sending messages related to judge assignment/removal events.
@@ -26,8 +26,8 @@ public class CompetitionNotifier {
      */
     public void sendJudgeAssigned(JudgeAssignedMessage message) {
         rabbitTemplate.convertAndSend(
-                CompetitionRabbitMQConfig.COMPETITION_EXCHANGE_NAME,
-                CompetitionRabbitMQConfig.JUDGE_ASSIGNED_ROUTING_KEY,
+                MessagingConstants.COMPETITION_EXCHANGE_NAME,
+                MessagingConstants.JUDGE_ASSIGNED_ROUTING_KEY,
                 message,
                 msg -> {
                     msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
@@ -41,8 +41,8 @@ public class CompetitionNotifier {
      */
     public void sendJudgeRemoved(JudgeRemovedMessage message) {
         rabbitTemplate.convertAndSend(
-                CompetitionRabbitMQConfig.COMPETITION_EXCHANGE_NAME,
-                CompetitionRabbitMQConfig.JUDGE_REMOVED_ROUTING_KEY,
+                MessagingConstants.COMPETITION_EXCHANGE_NAME,
+                MessagingConstants.JUDGE_REMOVED_ROUTING_KEY,
                 message,
                 msg -> {
                     msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);

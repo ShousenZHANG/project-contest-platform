@@ -60,15 +60,19 @@ public class SubmissionRecords implements Serializable {
     private String reviewStatus;
 
     @Schema(description = "Optional comments from reviewers", example = "Well structured, but needs more documentation.")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String reviewComments;
 
     @Schema(description = "User ID of the reviewer", example = "admin-uuid-999")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String reviewedBy;
 
     @Schema(description = "Time when the submission was reviewed", example = "2025-04-05T15:30:00")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime reviewedAt;
 
     @Schema(description = "Total score given to the submission", example = "87.50")
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal totalScore;
 
     @Schema(description = "Timestamp of record creation", example = "2025-04-03T10:00:00")

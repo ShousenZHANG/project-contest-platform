@@ -1,5 +1,7 @@
 package com.w16a.danish.competition.config;
 
+import com.w16a.danish.common.messaging.MessagingConstants;
+import com.w16a.danish.common.messaging.NotificationMessageConverter;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -17,32 +19,21 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CompetitionRabbitMQConfig {
 
-    // Exchange Name (competition-specific)
-    public static final String COMPETITION_EXCHANGE_NAME = "competition.topic";
-
-    // Queues
-    public static final String JUDGE_ASSIGNED_QUEUE = "judge_assigned_queue";
-    public static final String JUDGE_REMOVED_QUEUE = "judge_removed_queue";
-
-    // Routing Keys
-    public static final String JUDGE_ASSIGNED_ROUTING_KEY = "judge.assigned";
-    public static final String JUDGE_REMOVED_ROUTING_KEY = "judge.removed";
-
     // Exchange
     @Bean
     public TopicExchange competitionExchange() {
-        return ExchangeBuilder.topicExchange(COMPETITION_EXCHANGE_NAME).durable(true).build();
+        return ExchangeBuilder.topicExchange(MessagingConstants.COMPETITION_EXCHANGE_NAME).durable(true).build();
     }
 
     // Queues
     @Bean
     public Queue judgeAssignedQueue() {
-        return QueueBuilder.durable(JUDGE_ASSIGNED_QUEUE).build();
+        return QueueBuilder.durable(MessagingConstants.JUDGE_ASSIGNED_QUEUE).build();
     }
 
     @Bean
     public Queue judgeRemovedQueue() {
-        return QueueBuilder.durable(JUDGE_REMOVED_QUEUE).build();
+        return QueueBuilder.durable(MessagingConstants.JUDGE_REMOVED_QUEUE).build();
     }
 
     // Bindings
@@ -50,20 +41,20 @@ public class CompetitionRabbitMQConfig {
     public Binding judgeAssignedBinding() {
         return BindingBuilder.bind(judgeAssignedQueue())
                 .to(competitionExchange())
-                .with(JUDGE_ASSIGNED_ROUTING_KEY);
+                .with(MessagingConstants.JUDGE_ASSIGNED_ROUTING_KEY);
     }
 
     @Bean
     public Binding judgeRemovedBinding() {
         return BindingBuilder.bind(judgeRemovedQueue())
                 .to(competitionExchange())
-                .with(JUDGE_REMOVED_ROUTING_KEY);
+                .with(MessagingConstants.JUDGE_REMOVED_ROUTING_KEY);
     }
 
     // Message Converter
     @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+        return NotificationMessageConverter.create();
     }
 
     // RabbitTemplate

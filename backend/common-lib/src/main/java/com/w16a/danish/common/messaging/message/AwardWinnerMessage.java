@@ -1,20 +1,14 @@
-package com.w16a.danish.judge.domain.mq;
+package com.w16a.danish.common.messaging.message;
 
 import lombok.Data;
+
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/**
- *
- * AwardWinnerMessage is a message object that contains information about the award winner.
- *
- * @author Eddy ZHANG
- * @date 2025/04/19
- */
+/** Notification of the awarding result for a Participant or Team member. */
 @Data
 public class AwardWinnerMessage implements Serializable {
-
     @Serial
     private static final long serialVersionUID = 1L;
 

@@ -220,11 +220,14 @@ class SubmissionRecordsServiceImplGuardsTest {
                     .thenReturn(competition(CompetitionStatus.ONGOING, null));
             when(fileServiceClient.uploadSubmission(any()))
                     .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
-            when(submissionQuery.one()).thenReturn(new SubmissionRecords().setId("s1"));
+            when(submissionQuery.one()).thenReturn(new SubmissionRecords()
+                    .setId("s1").setFileUrl("http://minio/bucket/old.pdf"));
             doReturn(false).when(service).updateById(any(SubmissionRecords.class));
 
             assertRefused(() -> service.submitWork(participant("u1"), "c1", "T", "D", FILE),
                     HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update submission");
+            verify(fileServiceClient, never()).deleteFile(anyString(), anyString());
+            verify(notifier, never()).sendSubmissionUploaded(any());
         }
 
         @Test
@@ -287,6 +290,24 @@ class SubmissionRecordsServiceImplGuardsTest {
 
             assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
                     HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file");
+        }
+
+        @Test
+        @DisplayName("A failed team replacement preserves the original file")
+        void failedUpdatePreservesOriginalFile() {
+            when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(true));
+            when(competitionGateway.require("c1"))
+                    .thenReturn(competition(CompetitionStatus.ONGOING, null));
+            when(fileServiceClient.uploadSubmission(any()))
+                    .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
+            when(submissionQuery.one()).thenReturn(new SubmissionRecords()
+                    .setId("s1").setTeamId("t1").setFileUrl("http://minio/bucket/old.pdf"));
+            doReturn(false).when(service).updateById(any(SubmissionRecords.class));
+
+            assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
+                    HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update existing team submission.");
+            verify(fileServiceClient, never()).deleteFile(anyString(), anyString());
+            verify(notifier, never()).sendSubmissionUploaded(any());
         }
     }
 

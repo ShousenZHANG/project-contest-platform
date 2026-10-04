@@ -1,7 +1,8 @@
 package com.w16a.danish.user.config;
 
-import com.w16a.danish.user.domain.mq.JudgeAssignedMessage;
-import com.w16a.danish.user.domain.mq.JudgeRemovedMessage;
+import com.w16a.danish.common.messaging.message.JudgeAssignedMessage;
+import com.w16a.danish.common.messaging.message.JudgeRemovedMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ public class CompetitionJudgeEventListener {
     /**
      * Handle judge assigned event.
      */
-    @RabbitListener(queues = RabbitMQConfig.JUDGE_ASSIGNED_QUEUE)
+    @RabbitListener(queues = MessagingConstants.JUDGE_ASSIGNED_QUEUE)
     public void handleJudgeAssigned(JudgeAssignedMessage message) {
         String subject = "🎖️ Judge Assignment Notification – " + message.getCompetitionName();
         String judgeCompetitionUrl = frontendProperties.buildJudgeCompetitionPageUrl(message.getJudgeEmail());
@@ -64,7 +65,7 @@ public class CompetitionJudgeEventListener {
     /**
      * Handle judge removed event.
      */
-    @RabbitListener(queues = RabbitMQConfig.JUDGE_REMOVED_QUEUE)
+    @RabbitListener(queues = MessagingConstants.JUDGE_REMOVED_QUEUE)
     public void handleJudgeRemoved(JudgeRemovedMessage message) {
         String subject = "❌ Judge Removal Notification – " + message.getCompetitionName();
         String judgeCompetitionUrl = frontendProperties.buildJudgeCompetitionPageUrl(message.getJudgeEmail());

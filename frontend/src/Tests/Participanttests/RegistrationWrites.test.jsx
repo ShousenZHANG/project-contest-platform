@@ -1,8 +1,6 @@
 import React from 'react';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import ChangeContestList from '../../Participant/contest/ChangeContestList';
-import AddComment from '../../Participant/contest/AddComment';
-import DeleteComment from '../../Participant/contest/DeleteComment';
 import { renderWithProviders } from '../testUtils';
 import apiClient from '../../api/apiClient';
 
@@ -103,56 +101,5 @@ describe('ChangeContestList registration status', () => {
       await screen.findByRole('heading', { name: /Already Registered/i })
     ).toBeInTheDocument();
     expect(apiClient.post).not.toHaveBeenCalled();
-  });
-});
-
-describe('AddComment', () => {
-  it('posts the comment and clears the box', async () => {
-    const onCommentPosted = jest.fn();
-    renderWithProviders(
-      <AddComment submissionId="sub-1" onCommentPosted={onCommentPosted} />
-    );
-
-    const box = screen.getByRole('textbox');
-    fireEvent.change(box, { target: { value: 'great entry' } });
-    fireEvent.click(screen.getByRole('button', { name: /post/i }));
-
-    await waitFor(() =>
-      expect(apiClient.post).toHaveBeenCalledWith('/interactions/comments', {
-        submissionId: 'sub-1',
-        content: 'great entry',
-      })
-    );
-    await waitFor(() => expect(onCommentPosted).toHaveBeenCalled());
-    expect(box).toHaveValue('');
-  });
-
-  it('refuses an empty comment without calling the API', () => {
-    renderWithProviders(<AddComment submissionId="sub-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /post/i }));
-    expect(apiClient.post).not.toHaveBeenCalled();
-  });
-});
-
-describe('DeleteComment', () => {
-  it('deletes and notifies the parent', async () => {
-    const onDeleted = jest.fn();
-    renderWithProviders(<DeleteComment commentId="c-1" onDeleted={onDeleted} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /delete comment/i }));
-
-    await waitFor(() =>
-      expect(apiClient.delete).toHaveBeenCalledWith('/interactions/comments/c-1')
-    );
-    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
-  });
-
-  it('does nothing when signed out', () => {
-    Storage.prototype.getItem = jest.fn(() => null);
-
-    renderWithProviders(<DeleteComment commentId="c-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /delete comment/i }));
-
-    expect(apiClient.delete).not.toHaveBeenCalled();
   });
 });

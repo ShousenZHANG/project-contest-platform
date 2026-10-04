@@ -1,10 +1,13 @@
-<!-- Verified: 2026-10-04; source baseline: 8074df1 -->
+<!-- Verified: 2026-10-04; scan baseline: 8074df1; architecture baseline: ca246ff -->
 # Project map
 
-This is the navigation entry point for Questora. The 2026-10-04 scan inventories
-597 tracked files at baseline `8074df1`: 252 backend main Java files, 48 backend
-test Java files, and 180 frontend source files. The maps follow behavior through
-controllers, services, schema, browser routes, auth/cache, Docker images, and CI.
+This is the navigation entry point for Questora. The initial scan at `8074df1`
+inventoried 597 tracked files, 252 backend main Java files, 48 backend test Java
+files and 180 frontend source files. After the architecture pass based on
+`ca246ff`, current source inventory is 245 backend main Java files, 51 backend
+test Java files and 158 frontend source files (including the new session tests).
+The maps follow controllers, services, schema, browser routes, auth/cache,
+Docker images and CI; the dated scan keeps its original verification evidence.
 
 ## Maps
 
@@ -16,6 +19,7 @@ controllers, services, schema, browser routes, auth/cache, Docker images, and CI
 | [Data](data.md) | Sixteen tables, shared persistence, indexes, MinIO, Redis, events |
 | [Dependencies and deployment](dependencies.md) | Locked versions, build commands, Compose, CI/CD, deployment risks |
 | [Scan evidence and findings](audit-2026-10-04.md) | Verification, reproduced failures, uncertainty, branch cleanup |
+| [Architecture cleanup](../architecture-cleanup-2026-10-04.md) | Deleted code, deeper module boundaries, regression checks and remaining work |
 
 ## Where to start for a change
 
@@ -39,6 +43,8 @@ controllers, services, schema, browser routes, auth/cache, Docker images, and CI
 - [ADR-0001](../adr/0001-frontend-design-system.md): design system and motion.
 - [ADR-0002](../adr/0002-react-query-data-layer.md): React Query and query keys.
 - [ADR-0003](../adr/0003-cross-service-gateway-seam.md): gateway seam.
+- [ADR-0004](../adr/0004-session-lifetime-boundary.md): session cache/request lifetime.
+- [ADR-0005](../adr/0005-notification-wire-contracts.md): shared notification wire compatibility.
 
 Keep maps synchronized with routes, contracts, data boundaries, and operations.
 State whether evidence is static, isolated runtime, browser, or live deployment.
@@ -48,8 +54,10 @@ State whether evidence is static, isolated runtime, browser, or live deployment.
 The platform has substantial workflows and automated tests, but the scan found
 authorization/privacy defects outside those tests. Public Admin registration
 and two unprotected controller writes were reproduced in isolation. Submission
-file privacy, Score/Winner guards, cross-account cache state, and Judge navigation
-need attention before a real competition. See the [audit](audit-2026-10-04.md).
+file privacy, Score/Winner guards and Judge navigation still need attention before
+a real competition. Cross-account cache/request isolation and persisted Submission
+review/score reset were fixed in the [architecture pass](../architecture-cleanup-2026-10-04.md).
+See the [audit](audit-2026-10-04.md) for unresolved authorization/privacy findings.
 
 ## Branch policy
 

@@ -1,5 +1,7 @@
 package com.w16a.danish.judge.config;
 
+import com.w16a.danish.common.messaging.MessagingConstants;
+import com.w16a.danish.common.messaging.NotificationMessageConverter;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -17,21 +19,12 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class JudgeRabbitMQConfig {
 
-    // Exchange Name (for all judge-service events)
-    public static final String JUDGE_EXCHANGE_NAME = "judge.topic";
-
-    // Queue Names
-    public static final String AWARD_WINNER_QUEUE = "award_winner_queue";
-
-    // Routing Keys
-    public static final String AWARD_WINNER_ROUTING_KEY = "award.winner";
-
     /**
      * Define topic exchange for judge service
      */
     @Bean
     public TopicExchange judgeExchange() {
-        return ExchangeBuilder.topicExchange(JUDGE_EXCHANGE_NAME)
+        return ExchangeBuilder.topicExchange(MessagingConstants.JUDGE_EXCHANGE_NAME)
                 .durable(true)
                 .build();
     }
@@ -41,7 +34,7 @@ public class JudgeRabbitMQConfig {
      */
     @Bean
     public Queue awardWinnerQueue() {
-        return QueueBuilder.durable(AWARD_WINNER_QUEUE)
+        return QueueBuilder.durable(MessagingConstants.AWARD_WINNER_QUEUE)
                 .build();
     }
 
@@ -52,7 +45,7 @@ public class JudgeRabbitMQConfig {
     public Binding awardWinnerBinding() {
         return BindingBuilder.bind(awardWinnerQueue())
                 .to(judgeExchange())
-                .with(AWARD_WINNER_ROUTING_KEY);
+                .with(MessagingConstants.AWARD_WINNER_ROUTING_KEY);
     }
 
     /**
@@ -60,7 +53,7 @@ public class JudgeRabbitMQConfig {
      */
     @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+        return NotificationMessageConverter.create();
     }
 
     /**

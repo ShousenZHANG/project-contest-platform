@@ -1,27 +1,27 @@
-<!-- Verified scan: 2026-10-04 -->
+<!-- Verified scan and architecture cleanup: 2026-10-04 -->
 # Frontend code map
 
-This map describes the checked-out implementation, including incomplete paths. Read [CONTEXT.md](../../CONTEXT.md) for vocabulary, [ADR-0001](../adr/0001-frontend-design-system.md) for UI decisions, and [ADR-0002](../adr/0002-react-query-data-layer.md) for data decisions. Historical phase checkmarks are not proof that a role journey works today.
+This map describes the checked-out implementation after the architecture cleanup, including incomplete paths. The initial scan's failures remain below as historical evidence, separately from current changes and checks. Read [CONTEXT.md](../../CONTEXT.md) for vocabulary, [ADR-0001](../adr/0001-frontend-design-system.md) for UI decisions, and [ADR-0002](../adr/0002-react-query-data-layer.md) for data decisions. Historical phase checkmarks are not proof that a role journey works today.
 
 ## Inventory and entry points
 
 | Item | Verified count / implementation |
 |---|---|
-| Files below `frontend/src` | 180: 104 JSX, 45 JS, 20 TSX, 6 TS, 2 CSS, 2 JPG, 1 JSON |
-| Production JS/JSX/TS/TSX files | 138, excluding Jest files |
+| Files below `frontend/src` | 158: 94 JSX, 36 JS, 19 TSX, 6 TS, 1 CSS, 2 JPG. Initial 180 minus 23 deleted files gives 157; the new session lifecycle test brings the final inventory to 158. |
+| Production JS/JSX/TS/TSX files | 117, excluding Jest files; previously 138 |
 | Routes / lazy imports | 39 explicit paths including `*` / 39 lazy imports |
-| Domain HTTP service files | 6, plus `index.js` and `serviceUtils.js` |
+| Domain HTTP service files | 6, plus `serviceUtils.js`; the unused `index.js` barrel was deleted |
 | Service HTTP calls | 85; every literal call matches a backend verb and path shape |
-| React Query source files | 41 containing `useQuery`, `useQueries` or `useMutation` |
-| Shared / UI primitive files | 16 / 15 |
-| Jest / Playwright files | 35 / 7 |
+| React Query production source files | 38 containing `useQuery`, `useQueries` or `useMutation`, including `useQueryClient` |
+| Shared / UI primitive files | 12 / 14 |
+| Jest / Playwright files | 36 / 7 |
 
 Versions and commands live in [package.json](../../frontend/package.json) and [package-lock.json](../../frontend/package-lock.json). The stack is React 19, Vite, React Router 6, Tailwind 4, Radix, Axios, TanStack Query, Sonner, Framer Motion and Recharts. The shell/primitives and two service modules use TypeScript; most business UI is JavaScript. MUI, TanStack Table and react-day-picker are not dependencies in this checkout.
 
 ```mermaid
 flowchart TD
     Main[main.jsx: StrictMode] --> Theme[ThemeProvider: next-themes]
-    Theme --> Query[QueryProvider: singleton QueryClient]
+    Theme --> Query[QueryProvider: QueryClient per session generation]
     Query --> Motion[MotionConfig: reducedMotion=user]
     Motion --> App[App: ErrorBoundary + AuthProvider + BrowserRouter]
     App --> Public[PublicLayout + PageTransition + Outlet]
@@ -32,10 +32,11 @@ flowchart TD
     Pages --> Hooks[React Query and shared hooks]
     Hooks --> Unwrap[queryFn.unwrap + serviceUtils]
     Unwrap --> Services[services: domain contracts]
-    Services --> Axios[apiClient: auth headers, 15s timeout, 401 redirect]
+    Services --> Axios[apiClient: captured session, 15s timeout, stale response rejection]
     Axios --> Gateway[API gateway :8080]
-    App --> Session[authTokenManager: localStorage + events]
+    App --> Session[authTokenManager: stable snapshot + session generation + events]
     Session --> Axios
+    Session --> Query
 ```
 
 - [main.jsx](../../frontend/src/main.jsx): providers, local font imports, global motion policy and Toaster.
@@ -45,7 +46,7 @@ flowchart TD
 
 ## Actual route map
 
-`App.jsx` owns the router. [routeManifest.js](../../frontend/src/routes/routeManifest.js) mirrors paths but is not consumed by the router, sidebar or current business pages; [useRoute.js](../../frontend/src/routes/useRoute.js) has no production callers. In the manifest, `roles: []` describes both public and authenticated-without-role-restriction groups, so it cannot independently describe access requirements.
+`App.jsx` owns the router and authorization groups. The unused `routeManifest.js` mirror and `useRoute.js` adapter were deleted during cleanup; there is no second route catalogue to maintain. Sidebar navigation remains in `Sidebar.tsx`.
 
 | Access group | Paths | Ownership |
 |---|---|---|
@@ -105,7 +106,7 @@ The `:email` segments are navigation context, not authentication. Identity comes
 
 ## Server state, sessions and shared modules
 
-[QueryProvider](../../frontend/src/providers/QueryProvider.jsx) creates one module-level client: default staleTime 30 seconds, garbage collection 15 minutes, focus/reconnect refetch, at most two retries for transient failures, no retries for 400/401/403/404/409/422 or mutations. Named tiers in [queryKeys.js](../../frontend/src/api/queryKeys.js) are live 0, short 30 seconds, medium 5 minutes and long 15 minutes. Domain prefixes support invalidation; some feature suffixes are composed at call sites.
+[QueryProvider](../../frontend/src/providers/QueryProvider.jsx) owns a client for one session generation: default staleTime 30 seconds, garbage collection 15 minutes, focus/reconnect refetch, at most two retries for transient failures, no retries for 400/401/403/404/409/422 or mutations. Token, user ID or role changes clear the old client, replace it with a new client and remount the provider subtree. An unchanged session or email-only edit retains the client. Named tiers in [queryKeys.js](../../frontend/src/api/queryKeys.js) are live 0, short 30 seconds, medium 5 minutes and long 15 minutes. Domain prefixes support invalidation; some feature suffixes are composed at call sites.
 
 - [useProfileEditor](../../frontend/src/shared/hooks/useProfileEditor.js) owns profile query, guarded form seeding, profile/avatar writes and account deletion for three roles. It validates image MIME/5 MiB, sanitizes filenames, and revokes preview URLs.
 - [useCommentThread](../../frontend/src/shared/hooks/useCommentThread.js) owns pagination, posting/replies, editing/deletion and thread invalidation. Posting optimistically patches page 1 and rolls back failures.
@@ -114,7 +115,13 @@ The `:email` segments are navigation context, not authentication. Identity comes
 - `useQueries` parallelizes WorkList vote tallies, organizer reporting, Project/TeamRegistrations submission enrichment and MyTeamsDialog creator details. These are cached fan-outs; request count still grows with list size.
 - Active shared reuse includes comment components, ConfirmDialog, EmptyState, PageSkeleton, root ErrorBoundary, and user/team form schemas.
 
-[authTokenManager](../../frontend/src/auth/authTokenManager.js) alone reads/writes auth storage keys `token`, `userId`, `email`, `role`; it emits same-tab events and subscribes to cross-tab storage changes. [AuthContext](../../frontend/src/context/AuthContext.jsx) subscribes and exposes login/logout/user/token. [apiClient](../../frontend/src/api/apiClient.js) uses `VITE_API_BASE_URL` or `http://localhost:8080`, 15-second timeout, Bearer/identity headers and FormData-aware content type. HTTP 401 clears the session and performs a full redirect to `/login`.
+[authTokenManager](../../frontend/src/auth/authTokenManager.js) alone reads/writes auth storage keys `token`, `userId`, `email`, `role`. It provides a stable frozen snapshot and a session generation, emits same-tab events and filters cross-tab storage changes to auth keys. Clearing and re-establishing the same token still advances the generation; unrelated storage changes do not notify subscribers. [AuthContext](../../frontend/src/context/AuthContext.jsx) uses `useSyncExternalStore` and retains the existing login/logout/user/token interface.
+
+[apiClient](../../frontend/src/api/apiClient.js) uses `VITE_API_BASE_URL` or `http://localhost:8080`, a 15-second timeout, Bearer/identity headers and FormData-aware content type. Its synchronous request interceptor captures the session generation and credentials before dispatch. Successes and failures from an older generation become `CanceledError`; an old 401 cannot expire a new account. Only a 401 for the current authenticated token clears the session and redirects to `/login`.
+
+Logout calls [userService.logout](../../frontend/src/services/userService.ts) with the captured current token, then clears the local session immediately even if the server is unreachable. [Topbar](../../frontend/src/layouts/Topbar.tsx) delegates revocation and clearing to AuthContext. The old logout response cannot clear a subsequent login. Server revocation remains best-effort when the HTTP request fails.
+
+Cache clearing alone cannot cancel every mutation callback. QueryProvider replaces pending old mutations' `mutationFn` before clearing, so a mutation waiting for optimistic `onMutate` work cannot later start under the next account's credentials. Late rollbacks retain their old client reference and cannot write to the new cache. The keyed provider also resets feature-local state on an account transition. Its subscription catches login from a child mount effect, and StrictMode effect replay does not discard an unchanged session's cache. [sessionLifecycle.test.jsx](../../frontend/src/auth/__tests__/sessionLifecycle.test.jsx) exercises these boundaries through the actual providers and Axios instance.
 
 ## UI, accessibility and motion
 
@@ -126,29 +133,49 @@ Both layouts provide a skip link and `main#main`; authenticated main has `tabInd
 
 ## Verified risks and incomplete contracts
 
-These are concrete source observations, not fixes made by the mapping task. Passing unit tests does not resolve them.
+These initial-scan observations remain open after the cleanup. Passing unit tests does not resolve them. Session/cache isolation and server logout were fixed in this pass and are recorded separately below.
 
 | Finding | Evidence and consequence |
 |---|---|
-| Private cache survives account changes | `QueryProvider.jsx:46` creates one client; `queryKeys.js:34` profile and several mine/judge keys omit identity; `AuthContext.jsx:45-59` changes session only; `Topbar.tsx:40-43` uses client navigation. `useProfileEditor.js:43-60` accepts a fresh 15-minute cached profile and seeds once. A second account in the same SPA session can receive the first account's cached private values. Cache reset/user-scoped keys need acceptance coverage. |
 | Homepage sample cards invoke live writes with synthetic IDs | `TopValues.jsx:14-58` hardcodes dated sample competitions and `:79-90` passes array index 0-3 as ID. `ContestCard.jsx:44-45` uses it as submissionId for voting and `:70` as competition ID for registration. Endpoint existence does not validate these entities. |
 | Distinct Judge role has no queue entry | `App.jsx:107-113` makes `/rating/:email` Participant-only; `Sidebar.tsx:60-88` handles Participant/Organizer/Admin only; `RoleSelectModal.jsx:44-67` offers Participant/Organizer. Scoring subroutes merely require authentication. RatingFlow unit tests mount pages directly and do not prove app entry for Judge accounts. |
 | OAuth buttons target frontend origin | `RegisterModal.jsx:357,369` goes to `/users/oauth/...` directly. API-origin builders in `userService.ts:61-65` are unused. `vite.config.js:16-22` only proxies `/api`, so Vite does not proxy these `/users` requests. Deployment must explicitly route them or buttons must use the API origin. |
-| Browser logout skips server invalidation | `Topbar.tsx:40-43` / `AuthContext.jsx:55-58` clear local state without `userService.logout`. `UsersController.java:128-137` has a real JWT-blacklisting logout endpoint that this UI does not invoke. |
 | Types drift from live schemas | `types/index.ts:11` declares ENDED/CANCELLED instead of COMPLETED/AWARDED/CANCELED; User uses username/bio instead of name/description; `types/api.ts:23-44` registration/profile fields differ from live forms; `userService.ts:13-24` declares token/enveloped sessions while login returns raw accessToken. `checkJs:false` leaves JS usage unvalidated by tsc. |
 | Scoring accessibility/loading/error gaps | `RatingDetail.jsx:94-107,114-126` and `ReRating.jsx:99-112,119-131` Labels lack linked IDs; submit buttons remain enabled during mutations and query errors are not rendered. `JudgeSubmissions.jsx:187-205` icon pagination lacks accessible names; search is placeholder-only. Existing axe coverage omits these pages. |
 | Keyboard gaps outside sampled pages | Collapsed Sidebar links remove visible text at `Sidebar.tsx:118` and rely on tooltip content; `SubmissionRatings.jsx:125-140` sorts using clickable th elements without keyboard handlers/buttons. Existing browser tests do not exercise those states. |
 | Published winner display absent | `judgeService.js:41` defines getPublicList; no production consumer exists. Auto-award is present but public results are not a completed UI journey. |
 | Pagination hides real records | `UserContestList.jsx:54-70,104-107` requests no page/size, then paginates only the returned slice; `CompetitionsController.java:112-115` defaults to 10 records. `WorkList.jsx:50-59` similarly requests only the first default 10 approved submissions and has no server pagination. `TeamRegistrations.jsx:41-46,62-69,215-217,308` initializes pages to 0, never copies pages from teamsPage, and only displays navigation when pages > 1; teams beyond its first 10 are unreachable. Fixtures contain one or two rows and do not catch these larger-list paths. |
-| Homepage axe result depends on animation readiness | The single-worker public-page rerun captured one serious color-contrast rule on 12 HeroPreview text nodes (ratios 1.36-1.76). `Hero.jsx:201-204` animates their parent opacity over 0.7 seconds after 0.15 seconds; `a11y.spec.js:43-45` waits for networkidle rather than settled motion. A separate light-mode Chromium probe explicitly waited for parent opacity 1 and found zero violations. This identifies a timing gap in the test, not a proven persistent token-contrast failure. The checked-in E2E command still failed in this scan. |
 
 The backend judging API permits completion or an end date in the past; `Rating.jsx:118` only enables Review for COMPLETED, potentially hiding permitted work. Score-page seed refs are not keyed by route IDs and PageTransition preserves the subtree, so same-component ID changes need a route-change test.
 
-## Residual modules
+## Resolved scan findings and cleanup evidence
 
-Static relative-import traversal from `main.jsx` and caller searches found no production import of `useApiQuery`, `useAsync`, `useAuthToken`, `routeManifest/useRoute`, `useContestFiltering/ContestListView`, FormField, AsyncBoundary, primitives/StatusBadge, Homepages/Loading, Tours, PublicUser/WorkDetail, PublicUser/ContestDetail, old Participant AddComment/DeleteComment/ProjectComment, competitionSchema or services/index.js. Some are covered by tests or re-exported by unused barrels. Check callers before treating them as active seams. Active details are PublicContestDetail and Participant/contest/ContestDetail.
+| Initial finding | Current implementation and acceptance evidence |
+|---|---|
+| Private cache survives account changes | Resolved by one QueryClient per session generation, old-client clearing and provider replacement. Lifecycle tests switch A to B, reject old responses and 401s, isolate late rollback, and stop a delayed old mutation from dispatching with B's token. Private query keys may still omit identity, but they now live within an identity-isolated client. |
+| Browser logout skips server invalidation | Resolved by AuthContext invoking `/users/logout` before immediate local clearing. Tests verify the old token on the request and preserve a later login after logout success, 401 or network failure. Failed server revocation is not claimed as a successful blacklist update. |
+| Homepage/dialog axe result depends on animation readiness | The initial rerun captured one serious contrast rule on 12 HeroPreview nodes during a fade (ratios 1.36-1.76); a settled-opacity probe had zero violations. The first architecture run also caught a Radix dialog during CSS fade and passed on retry. [a11y.spec.js](../../frontend/e2e/a11y.spec.js) now waits for finite CSS animations and visible content's final opacity before axe. [playwright.config.ts](../../frontend/playwright.config.ts) limits concurrent workers to two and removes an unused reporter callback. The final full-suite run passed all 35 checks with retries disabled. Product motion and color tokens were unchanged. |
 
-## Validation and coverage boundaries (2026-10-04)
+Static import traversal from `main.jsx`, followed by repository caller searches, confirmed the deleted modules had no production entry. The cleanup removed 23 files from `src`: `useApiQuery`, `useAsync`, `useAuthToken`, `routeManifest/useRoute`, `useContestFiltering/ContestListView`, FormField, AsyncBoundary, primitives/StatusBadge and its barrel, the unused scroll-area primitive, Homepages/Loading, Tours and its animation JSON, PublicUser/WorkDetail and ContestDetail, old Participant AddComment/DeleteComment/ProjectComment, competitionSchema, services/index.js, and the empty App.css. The empty App.css import was removed from App.jsx. Active details remain PublicContestDetail and Participant/contest/ContestDetail, and active comments remain behind useCommentThread.
+
+Five unused direct dependencies were removed from package.json and the lockfile: `@lottiefiles/react-lottie-player`, `@radix-ui/react-scroll-area`, `dayjs`, `@testing-library/user-event` and `vite-tsconfig-paths`. Two obsolete ExcelJS/Lottie Jest mocks and their unused mappings were deleted. Five tests that exercised only the removed comment components were removed; active comment and registration tests remain. The new lifecycle suite adds 13 acceptance cases, bringing the final Jest total to 186.
+
+Runtime traversal alone does not justify deleting type declarations. `types/index.ts` and `types/api.ts` remain because service modules import their types; `vite-env.d.ts` supplies build-time Vite declarations. The active production import graph has no unresolved local imports after the cleanup.
+
+## Current cleanup validation (2026-10-04)
+
+| Check | Result |
+|---|---|
+| `npm test -- --runInBand` | Passed: 36 suites, 186 tests |
+| `npm run build` | Passed; production Vite build |
+| Local `tsc --noEmit` | Passed, with checkJs:false |
+| `npm run test:e2e -- --retries=0` | Passed: 35 tests, 2 workers, no retries; 1.1 minutes |
+
+The lifecycle suite checks account/cache isolation, unchanged-session reuse, failed and successful server logout, old success/401 rejection, current-token expiry, same-token logout/re-login, delayed optimistic work, late rollback, cross-tab clearing, StrictMode and login before the provider subscription. These are behavioral checks at the public session/provider/HTTP interfaces. Current E2E evidence is `.git/audit/2026-10-04/architecture-e2e-final.log`; the first architecture run (34 passed / 1 flaky) remains in architecture-e2e.log. See [the cleanup record](../architecture-cleanup-2026-10-04.md) for combined acceptance evidence.
+
+## Initial scan validation and coverage boundaries (2026-10-04)
+
+The results below describe the pre-cleanup scan and remain as historical evidence. They do not override the current validation table.
 
 | Check | Result |
 |---|---|
@@ -161,8 +188,8 @@ Static relative-import traversal from `main.jsx` and caller searches found no pr
 | Public-page axe loop rerun (1 worker, retries 0) | 10 tests: 9 passed, 1 failed; 30.8 seconds. Original failed loop declarations regenerated all 10 light/dark public-page checks; Participant and keyboard tests were not repeated. Homepage failed color-contrast during its entrance animation. |
 | Targeted settled homepage axe probe | Passed in light mode at 1280x720: preview opacity 1, zero WCAG A/AA violations; text color rgb(15,23,41). This diagnoses the failing check's readiness gap and does not change its recorded failure. |
 
-Build chunks: index JS 166.80 kB (gzip 52.29), vendor 213.81 kB (68.07), Homepage 131.57 kB (42.66), chart chunk 381.06 kB (100.68). These are artifact sizes, not page-load measurement. No chunk-size warning was emitted; the build does not automatically run TypeScript or browser tests.
+Initial scan build chunks: index JS 166.80 kB (gzip 52.29), vendor 213.81 kB (68.07), Homepage 131.57 kB (42.66), chart chunk 381.06 kB (100.68). These are historical artifact sizes, not current bundle sizes or page-load measurements. No chunk-size warning was emitted; the build does not automatically run TypeScript or browser tests.
 
 Jest covers role guards, session manager, query/adapters/cache isolation, endpoint existence, motion, empty/loading/error states, public pages and several Participant/Organizer/Admin workflows. Browser specs cover Participant comments, contests, profile, projects, rating queue and teams plus axe/keyboard checks. Axe samples five public pages in light/dark, one authenticated contest page, one dialog and keyboard landmarks; it does not scan all routes, roles, mobile layouts or scoring forms. Participant specs and authenticated axe paths stub selected APIs and seed auth locally. The public axe-page loop has no API stubs: with the backend unavailable, catalogue scans can inspect empty/error surfaces. Neither run proves real gateway/DB/OAuth/MinIO journeys or full populated-page accessibility.
 
-Raw logs are local under `.git/scan-2026-10-04/`: frontend-jest.log, frontend-build.log, frontend-typescript.log, frontend-e2e-list.log, frontend-playwright-install.log, frontend-e2e.log, frontend-e2e-rerun.log and frontend-homepage-settled-axe.log. Generated build/, playwright-report/, test-results/ and coverage directories must remain untracked. No product source was changed by this scan.
+Initial-scan raw logs are local under `.git/scan-2026-10-04/`: frontend-jest.log, frontend-build.log, frontend-typescript.log, frontend-e2e-list.log, frontend-playwright-install.log, frontend-e2e.log, frontend-e2e-rerun.log and frontend-homepage-settled-axe.log. Generated build/, playwright-report/, test-results/ and coverage directories must remain untracked. The initial mapping scan changed no product source; the subsequent architecture pass made the cleanup and session changes documented above.

@@ -11,7 +11,7 @@ local environment.
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-178%20unit%20%2B%2035%20e2e-brightgreen)
+![Tests](https://img.shields.io/badge/frontend_tests-186%20unit%20%2B%2035%20e2e-brightgreen)
 ![WCAG](https://img.shields.io/badge/WCAG-2.1%20AA%20enforced-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -22,6 +22,7 @@ local environment.
 - [Local Development](#local-development)
 - [Architecture](#architecture)
 - [Project Map](docs/CODEMAPS/README.md)
+- [Architecture Cleanup](docs/architecture-cleanup-2026-10-04.md)
 - [Service Matrix](#service-matrix)
 - [Frontend Architecture](#frontend-architecture)
 - [Backend Contracts](#backend-contracts)
@@ -56,7 +57,7 @@ Questora supports the full competition lifecycle:
 - Docker Desktop with Docker Compose
 - Git
 - Java 23 for local backend development
-- Node.js 20+ for local frontend development
+- Node.js 20.19+ or 22.12+ for local frontend development
 
 ### 1. Configure Environment
 
@@ -310,6 +311,9 @@ Key conventions:
 - `src/api/apiClient.js` is the only Axios gateway client.
 - `src/auth/authTokenManager.js` is the auth session boundary. Business UI
   should not read or write auth `localStorage` keys directly.
+- QueryProvider gives each token/userId/role lifetime a separate client; the HTTP
+  adapter captures identity and rejects stale responses. Logout requests server
+  revocation before clearing local state. See [ADR-0004](docs/adr/0004-session-lifetime-boundary.md).
 - `src/services/serviceUtils.js` normalizes Axios responses, standard
   `ApiResponse<T>` envelopes, and historical raw payloads.
 
@@ -429,8 +433,8 @@ Three layers, each testing something the layer below cannot reach.
 
 | Layer | Tool | Count | Runs against |
 |-------|------|------:|--------------|
-| Backend unit & slice | JUnit 5, Mockito, AssertJ, WireMock, H2 | — | No containers; H2 stands in for MySQL, WireMock for Feign targets |
-| Frontend unit & component | Jest, Testing Library | 178 in 35 suites | jsdom, with a fresh `QueryClient` per test |
+| Backend unit & slice | JUnit 5, Mockito, AssertJ, WireMock, H2 | 605 in 67 suites | No containers; local H2 persistence and mocked/WireMock collaborators |
+| Frontend unit & component | Jest, Testing Library | 186 in 36 suites | jsdom, with a fresh `QueryClient` per test |
 | End-to-end | Playwright (Chromium) | 35 in 7 specs | A real browser and the real dev server; network stubbed via `page.route` |
 
 The E2E suite is 20 participant-flow tests plus 15 accessibility tests. Because it

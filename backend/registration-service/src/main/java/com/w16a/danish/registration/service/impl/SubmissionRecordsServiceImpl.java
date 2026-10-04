@@ -6,8 +6,8 @@ import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.notify.SubmissionNotifier;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
-import com.w16a.danish.registration.domain.mq.SubmissionReviewedMessage;
-import com.w16a.danish.registration.domain.mq.SubmissionUploadedMessage;
+import com.w16a.danish.common.messaging.message.SubmissionReviewedMessage;
+import com.w16a.danish.common.messaging.message.SubmissionUploadedMessage;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
@@ -156,48 +156,16 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         String uploadedUrl = Optional.ofNullable(fileServiceClient.uploadSubmission(file).getBody())
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed"));
 
-        String fileName = file.getOriginalFilename();
-        String fileType = file.getContentType();
-
         SubmissionRecords existing = lambdaQuery()
                 .eq(SubmissionRecords::getUserId, userId)
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .one();
 
-        if (existing != null) {
-            deleteFileByUrl(existing.getFileUrl());
-            existing.setTitle(title);
-            existing.setDescription(description);
-            existing.setFileName(fileName);
-            existing.setFileUrl(uploadedUrl);
-            existing.setFileType(fileType);
-            existing.setReviewStatus("PENDING");
-            existing.setReviewedBy(null);
-            existing.setReviewedAt(null);
-            existing.setReviewComments(null);
-            existing.setTotalScore(null);
-
-            boolean updated = this.updateById(existing);
-            if (!updated) {
-                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update submission");
-            }
-        } else {
-            SubmissionRecords submission = new SubmissionRecords();
-            submission.setId(StrUtil.uuid());
-            submission.setUserId(userId);
-            submission.setCompetitionId(competitionId);
-            submission.setTitle(title);
-            submission.setDescription(description);
-            submission.setFileName(fileName);
-            submission.setFileUrl(uploadedUrl);
-            submission.setFileType(fileType);
-            submission.setReviewStatus("PENDING");
-
-            boolean saved = this.save(submission);
-            if (!saved) {
-                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save submission");
-            }
-        }
+        SubmissionRecords submission = existing != null ? existing : new SubmissionRecords()
+                .setUserId(userId)
+                .setCompetitionId(competitionId);
+        persistUploadedSubmission(submission, title, description, file, uploadedUrl,
+                existing != null ? "Failed to update submission" : "Failed to save submission");
 
         UserBriefVO user = userServiceClient.getUserBriefById(userId).getBody();
 
@@ -497,54 +465,19 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .filter(StrUtil::isNotBlank)
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file."));
 
-        String fileName = file.getOriginalFilename();
-        String fileType = file.getContentType();
-
         SubmissionRecords existing = lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .eq(SubmissionRecords::getTeamId, teamId)
                 .one();
 
-        if (existing != null) {
-            if (StrUtil.isNotBlank(existing.getFileUrl())) {
-                deleteFileByUrl(existing.getFileUrl());
-            }
-
-            existing.setTitle(title)
-                    .setDescription(description)
-                    .setFileName(fileName)
-                    .setFileUrl(fileUrl)
-                    .setFileType(fileType)
-                    .setUpdatedAt(LocalDateTime.now())
-                    .setReviewStatus("PENDING")
-                    .setReviewedBy(null)
-                    .setReviewedAt(null)
-                    .setReviewComments(null)
-                    .setTotalScore(null);
-
-            boolean updated = this.updateById(existing);
-            if (!updated) {
-                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update existing team submission.");
-            }
-
-        } else {
-            SubmissionRecords submission = new SubmissionRecords();
-            submission.setId(StrUtil.uuid());
-            submission.setCompetitionId(competitionId);
-            submission.setTeamId(teamId);
-            submission.setTitle(title);
-            submission.setDescription(description);
-            submission.setFileName(fileName);
-            submission.setFileUrl(fileUrl);
-            submission.setFileType(fileType);
-            submission.setReviewStatus("PENDING");
-            submission.setCreatedAt(LocalDateTime.now());
-
-            boolean saved = this.save(submission);
-            if (!saved) {
-                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save new team submission.");
-            }
-        }
+        SubmissionRecords submission = existing != null
+                ? existing.setUpdatedAt(LocalDateTime.now())
+                : new SubmissionRecords()
+                        .setCompetitionId(competitionId)
+                        .setTeamId(teamId)
+                        .setCreatedAt(LocalDateTime.now());
+        persistUploadedSubmission(submission, title, description, file, fileUrl,
+                existing != null ? "Failed to update existing team submission." : "Failed to save new team submission.");
 
         UserBriefVO user = Optional.ofNullable(userServiceClient.getUserBriefById(userId).getBody())
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "User info not found."));
@@ -786,6 +719,34 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         vo.setTotalScore(r.getTotalScore());
         vo.setCreatedAt(r.getCreatedAt());
         return vo;
+    }
+
+    private void persistUploadedSubmission(SubmissionRecords submission, String title, String description,
+                                           MultipartFile file, String uploadedUrl, String failureMessage) {
+        boolean replacing = submission.getId() != null;
+        String previousFileUrl = submission.getFileUrl();
+        submission.setTitle(title)
+                .setDescription(description)
+                .setFileName(file.getOriginalFilename())
+                .setFileUrl(uploadedUrl)
+                .setFileType(file.getContentType())
+                .setReviewStatus("PENDING")
+                .setReviewedBy(null)
+                .setReviewedAt(null)
+                .setReviewComments(null)
+                .setTotalScore(null);
+
+        if (!replacing) {
+            submission.setId(StrUtil.uuid());
+        }
+        boolean persisted = replacing ? this.updateById(submission) : this.save(submission);
+        if (!persisted) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, failureMessage);
+        }
+        // Keep the original file available when the replacement cannot be written.
+        if (replacing) {
+            deleteFileByUrl(previousFileUrl);
+        }
     }
 
     private void deleteFileByUrl(String fileUrl) {

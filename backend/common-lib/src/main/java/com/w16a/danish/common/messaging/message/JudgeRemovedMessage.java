@@ -1,4 +1,4 @@
-package com.w16a.danish.user.domain.mq;
+package com.w16a.danish.common.messaging.message;
 
 import lombok.Data;
 
@@ -6,17 +6,9 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-
-/**
- *
- * This class represents a message sent to the message queue when a judge is removed from a competition.
- *
- * @author Eddy ZHANG
- * @date 2025/04/19
- */
+/** Notification sent when an Organizer removes a Judge from a Competition. */
 @Data
 public class JudgeRemovedMessage implements Serializable {
-
     @Serial
     private static final long serialVersionUID = 1L;
 

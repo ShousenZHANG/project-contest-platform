@@ -1,19 +1,17 @@
-package com.w16a.danish.registration.domain.mq;
+package com.w16a.danish.common.messaging.message;
 
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/**
- *
- * This class represents a message that is sent when a submission is uploaded.
- *
- * @author Eddy ZHANG
- * @date 2025/04/13
- */
+/** Confirmation that a Submission was uploaded or replaced. */
 @Data
 public class SubmissionUploadedMessage implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     private String userName;
     private String userEmail;
     private String competitionName;

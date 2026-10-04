@@ -1,12 +1,12 @@
 package com.w16a.danish.registration.notify;
 
-import com.w16a.danish.registration.domain.mq.RegisterSuccessMessage;
-import com.w16a.danish.registration.domain.mq.ParticipantRemovedMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
+import com.w16a.danish.common.messaging.message.RegisterSuccessMessage;
+import com.w16a.danish.common.messaging.message.ParticipantRemovedMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
-import com.w16a.danish.registration.config.RabbitMQConfig;
 
 /**
  *
@@ -23,8 +23,8 @@ public class RegistrationNotifier {
 
     public void sendRegisterSuccess(RegisterSuccessMessage message) {
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.REGISTER_SUCCESS_ROUTING_KEY,
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
+                MessagingConstants.REGISTER_SUCCESS_ROUTING_KEY,
                 message,
                 msg -> {
                     msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
@@ -35,8 +35,8 @@ public class RegistrationNotifier {
 
     public void sendParticipantRemoved(ParticipantRemovedMessage message) {
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_NAME,
-                RabbitMQConfig.PARTICIPANT_REMOVED_ROUTING_KEY,
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
+                MessagingConstants.PARTICIPANT_REMOVED_ROUTING_KEY,
                 message,
                 msg -> {
                     msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);

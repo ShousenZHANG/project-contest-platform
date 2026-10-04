@@ -1,19 +1,17 @@
-package com.w16a.danish.user.domain.mq;
+package com.w16a.danish.common.messaging.message;
 
 import lombok.Data;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/**
- *
- * This class represents a message that is sent when a participant is removed from a competition.
- *
- * @author Eddy ZHANG
- * @date 2025/04/13
- */
+/** Notification that an Organizer removed a Registration. */
 @Data
 public class ParticipantRemovedMessage implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     private String userName;
     private String userEmail;
     private String removedBy;

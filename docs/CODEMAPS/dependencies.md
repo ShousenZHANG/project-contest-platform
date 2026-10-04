@@ -73,7 +73,7 @@ The parent adds Redis, Mail, AMQP, discovery, validation, OpenFeign, and observa
 | Jest / jsdom environment | `^29.7.0` | 29.7.0 |
 | Playwright test | `^1.62.1` | 1.62.1 |
 
-Other dependencies cover Radix primitives, React Hook Form, Sonner, next-themes, class utilities, Day.js, fonts, and Lottie. Vite/plugin lock entries require Node **`^20.19.0 || >=22.12.0`** ([Vite:9509](../../frontend/package-lock.json#L9509), [plugin:4326](../../frontend/package-lock.json#L4326)); “Node 20+” is an imprecise prerequisite.
+Other dependencies cover Radix primitives, React Hook Form, Sonner, next-themes, class utilities and fonts. The architecture cleanup removed five unused direct packages: the Lottie player, scroll-area primitive, Day.js, testing-library user-event and vite-tsconfig-paths. [Vite/plugin lock entries](../../frontend/package-lock.json) require Node **`^20.19.0 || >=22.12.0`**; README prerequisites now reflect this minimum.
 
 [Vite:25](../../frontend/vite.config.js#L25) outputs `build/`; dev server port is 3000. [apiClient:12](../../frontend/src/api/apiClient.js#L12) uses build-time `VITE_API_BASE_URL`, defaulting to `http://localhost:8080`. Dockerfile has no corresponding ARG/ENV and Compose supplies no frontend build arguments. Runtime container environment changes do not rewrite a built Vite bundle.
 

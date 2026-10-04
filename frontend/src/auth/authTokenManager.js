@@ -11,6 +11,25 @@ const KEYS = {
 };
 
 const AUTH_SESSION_CHANGED = 'auth-session-changed';
+let currentSession;
+let sessionVersion = 0;
+
+function getSession() {
+  const next = {
+    token: read(KEYS.TOKEN),
+    userId: read(KEYS.USER_ID),
+    email: read(KEYS.EMAIL),
+    role: read(KEYS.ROLE),
+  };
+
+  if (!currentSession || Object.keys(next).some(key => next[key] !== currentSession[key])) {
+    if (currentSession && ['token', 'userId', 'role'].some(key => next[key] !== currentSession[key])) {
+      sessionVersion += 1;
+    }
+    currentSession = Object.freeze(next);
+  }
+  return currentSession;
+}
 
 function getStorage() {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -34,6 +53,8 @@ function write(key, value) {
 }
 
 function notifySessionChanged() {
+  // Record every transition even when no React tree is currently subscribed.
+  getSession();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(AUTH_SESSION_CHANGED));
   }
@@ -63,12 +84,13 @@ const AuthTokenManager = {
 
   isAuthenticated: () => Boolean(read(KEYS.TOKEN)),
 
-  getSession: () => ({
-    token: read(KEYS.TOKEN),
-    userId: read(KEYS.USER_ID),
-    email: read(KEYS.EMAIL),
-    role: read(KEYS.ROLE),
-  }),
+  // A stable snapshot also lets React subscribe without duplicating session state.
+  getSession,
+
+  getSessionVersion: () => {
+    getSession();
+    return sessionVersion;
+  },
 
   getAuthHeaders: () => {
     const token = read(KEYS.TOKEN);
@@ -87,7 +109,18 @@ const AuthTokenManager = {
       return () => {};
     }
 
-    const handler = () => listener(AuthTokenManager.getSession());
+    let previous = getSession();
+    const handler = (event) => {
+      if (event.type === 'storage' &&
+          ((event.key !== null && !Object.values(KEYS).includes(event.key)) ||
+           (event.storageArea && event.storageArea !== getStorage()))) {
+        return;
+      }
+      const next = getSession();
+      if (next === previous) return;
+      previous = next;
+      listener(next);
+    };
     window.addEventListener(AUTH_SESSION_CHANGED, handler);
     window.addEventListener('storage', handler);
 

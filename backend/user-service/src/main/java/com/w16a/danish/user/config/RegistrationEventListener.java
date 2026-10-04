@@ -1,9 +1,10 @@
 package com.w16a.danish.user.config;
 
-import com.w16a.danish.user.domain.mq.ParticipantRemovedMessage;
-import com.w16a.danish.user.domain.mq.RegisterSuccessMessage;
-import com.w16a.danish.user.domain.mq.SubmissionReviewedMessage;
-import com.w16a.danish.user.domain.mq.SubmissionUploadedMessage;
+import com.w16a.danish.common.messaging.message.ParticipantRemovedMessage;
+import com.w16a.danish.common.messaging.message.RegisterSuccessMessage;
+import com.w16a.danish.common.messaging.message.SubmissionReviewedMessage;
+import com.w16a.danish.common.messaging.message.SubmissionUploadedMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ public class RegistrationEventListener {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    @RabbitListener(queues = RabbitMQConfig.REGISTER_SUCCESS_QUEUE)
+    @RabbitListener(queues = MessagingConstants.REGISTER_SUCCESS_QUEUE)
     public void handleRegisterSuccess(RegisterSuccessMessage message) {
         String subject = "✅ Registration Submitted – " + message.getCompetitionName();
 
@@ -64,7 +65,7 @@ public class RegistrationEventListener {
         emailService.send(message.getUserEmail(), subject, content);
     }
 
-    @RabbitListener(queues = RabbitMQConfig.PARTICIPANT_REMOVED_QUEUE)
+    @RabbitListener(queues = MessagingConstants.PARTICIPANT_REMOVED_QUEUE)
     public void handleParticipantRemoved(ParticipantRemovedMessage message) {
         String subject = "❌ Registration Cancelled – " + message.getCompetitionName();
 
@@ -96,7 +97,7 @@ public class RegistrationEventListener {
         emailService.send(message.getUserEmail(), subject, content);
     }
 
-    @RabbitListener(queues = RabbitMQConfig.SUBMISSION_UPLOADED_QUEUE)
+    @RabbitListener(queues = MessagingConstants.SUBMISSION_UPLOADED_QUEUE)
     public void handleSubmissionUploaded(SubmissionUploadedMessage message) {
         String subject = "📤 Submission Uploaded – " + message.getCompetitionName();
         String competitionUrl = frontendProperties.buildCompetitionPageUrl(message.getUserEmail());
@@ -131,7 +132,7 @@ public class RegistrationEventListener {
         emailService.send(message.getUserEmail(), subject, content);
     }
 
-    @RabbitListener(queues = RabbitMQConfig.SUBMISSION_REVIEWED_QUEUE)
+    @RabbitListener(queues = MessagingConstants.SUBMISSION_REVIEWED_QUEUE)
     public void handleSubmissionReviewed(SubmissionReviewedMessage message) {
         String subject = "📋 Submission Reviewed – " + message.getCompetitionName();
         String competitionUrl = frontendProperties.buildCompetitionPageUrl(message.getUserEmail());

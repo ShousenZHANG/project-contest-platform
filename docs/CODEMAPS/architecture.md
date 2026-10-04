@@ -1,4 +1,4 @@
-<!-- Verified: 2026-10-04; source baseline: 8074df1 -->
+<!-- Verified: 2026-10-04; scan baseline: 8074df1; architecture baseline: ca246ff -->
 # Architecture map
 
 Start at the [map index](README.md). This map describes the scanned implementation;
@@ -45,9 +45,9 @@ and overlapping tables; see the [data map](data.md).
 | Area | Entry point | Responsibility |
 | --- | --- | --- |
 | Browser | [main.jsx](../../frontend/src/main.jsx), [App.jsx](../../frontend/src/App.jsx) | Providers, lazy routes, public/authenticated layouts |
-| Session | [authTokenManager.js](../../frontend/src/auth/authTokenManager.js), [AuthContext.jsx](../../frontend/src/context/AuthContext.jsx) | Token storage and current account |
-| Server state | [QueryProvider.jsx](../../frontend/src/providers/QueryProvider.jsx), [queryKeys.js](../../frontend/src/api/queryKeys.js) | Query cache and invalidation |
-| HTTP adapter | [apiClient.js](../../frontend/src/api/apiClient.js), [services](../../frontend/src/services) | Gateway base URL, headers, domain API calls |
+| Session | [authTokenManager.js](../../frontend/src/auth/authTokenManager.js), [AuthContext.jsx](../../frontend/src/context/AuthContext.jsx) | Stable account snapshot/generation, local expiry and server logout |
+| Server state | [QueryProvider.jsx](../../frontend/src/providers/QueryProvider.jsx), [queryKeys.js](../../frontend/src/api/queryKeys.js) | One cache lifetime per identity; isolate old callbacks and block delayed writes |
+| HTTP adapter | [apiClient.js](../../frontend/src/api/apiClient.js), [services](../../frontend/src/services) | Gateway base URL, captured identity, stale-response rejection, domain API calls |
 | Edge | [JwtAuthFilter.java](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/filters/JwtAuthFilter.java), [configuration](../../backend/api-gateway/src/main/resources/application.yml) | JWT verification, public URL policy, identity, routing |
 | Contracts | [common-lib](../../backend/common-lib/src/main/java/com/w16a/danish/common) | RequestContext, errors, enums, DTO/VO contracts |
 | Domain | [backend map](backend.md) | Controllers, guards, persistence, Feign/gateway seams |
@@ -83,7 +83,7 @@ flowchart TD
 | --- | --- | --- |
 | Competition | competition-service | Enum has UPCOMING, ONGOING, COMPLETED, AWARDED, CANCELED. Status write validates the enum but lacks actor/transition checks. |
 | Registration | registration-service | Individual/Team tables and creator/participant guards; synchronous RabbitMQ publication. |
-| Submission | registration-service + file-service | Remote upload then local write. Individual and Team submission use different status guards. Organizer Review and Judge Score are distinct. |
+| Submission | registration-service + file-service | Remote upload then shared local write/reset; four Review/Score fields explicitly clear in SQL. Old-object deletion follows successful SQL update. Individual and Team submission keep different status guards. |
 | Score | judge-service | Submitted criterion weights determine the judge total. Assignment is checked against requested competition, but score writes do not validate submission membership/APPROVED. Recalculated total is sent to registration after commit. |
 | Winner | judge-service | Rank scored submissions, commit Winner rows, then update status/notify. Does not enforce documented COMPLETED prerequisite or the scored-list UI's minimum judge count. |
 | Interaction | interaction-service | Reads User/Submission through Feign; schema enforces one vote per user per submission. |
@@ -131,7 +131,11 @@ homepage ID names a real Competition/Submission.
 | file-service | MinIO |
 
 RabbitMQ exchanges are `competition.topic`, `registration.topic`, `judge.topic`;
-user-service consumes events and sends emails. Most publishers call
+seven payload types and topology constants live in
+[common-lib messaging](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging).
+The shared converter preserves historical AMQP type IDs
+([ADR-0005](../adr/0005-notification-wire-contracts.md)); user-service consumes
+events and sends emails through one configured JSON converter. Most publishers call
 `convertAndSend` without catching failures. Award publication and score
 propagation use transaction callbacks, but have no persistent outbox/durable
 retry. See [data consistency](data.md).

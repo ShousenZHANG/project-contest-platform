@@ -1,7 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import './App.css';
 
 import { AuthProvider } from './context/AuthContext';
 import { ErrorBoundary } from './shared/components';

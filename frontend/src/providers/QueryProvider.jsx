@@ -1,5 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { CanceledError } from 'axios';
 import { staleTime } from '../api/queryKeys';
+import AuthTokenManager from '../auth/authTokenManager';
 
 /** HTTP statuses where retrying cannot help — the request itself is the problem. */
 const NON_RETRYABLE = new Set([400, 401, 403, 404, 409, 422]);
@@ -43,14 +46,44 @@ export function createQueryClient(overrides = {}) {
   });
 }
 
-const queryClient = createQueryClient();
-
 /**
- * Wrap the app root with this provider to enable React Query throughout.
+ * Own server state for one session. Replacing the client also isolates late
+ * mutation callbacks: an old optimistic rollback can only write to its old cache.
  */
 export function QueryProvider({ children }) {
+  const [scope, setScope] = useState(() => ({
+    version: AuthTokenManager.getSessionVersion(),
+    client: createQueryClient(),
+  }));
+  const currentScope = useRef(scope);
+
+  useEffect(() => {
+    const resetForSession = () => {
+      const version = AuthTokenManager.getSessionVersion();
+      if (version === currentScope.current.version) return;
+      const previous = currentScope.current.client;
+      // An optimistic onMutate may still be awaiting work before its HTTP call.
+      // Stop it from starting later with the next account's credentials.
+      for (const mutation of previous.getMutationCache().getAll()) {
+        if (mutation.state.status !== 'pending') continue;
+        mutation.setOptions({
+          ...mutation.options,
+          mutationFn: () => Promise.reject(new CanceledError('The session changed')),
+        });
+      }
+      previous.clear();
+      const next = { version, client: createQueryClient() };
+      currentScope.current = next;
+      setScope(next);
+    };
+    const unsubscribe = AuthTokenManager.subscribe(resetForSession);
+    // A child can log in from its mount effect before this subscription starts.
+    resetForSession();
+    return unsubscribe;
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider key={scope.version} client={scope.client}>
       {children}
     </QueryClientProvider>
   );

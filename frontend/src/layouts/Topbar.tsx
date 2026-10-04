@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { ThemeToggle } from '../components/ThemeToggle';
-import AuthTokenManager from '../auth/authTokenManager';
 import { useAuth } from '../context/AuthContext';
 
 interface TopbarProps {
@@ -38,8 +37,7 @@ export function Topbar({ role, userName, userEmail, userAvatar, onSearch }: Topb
   const { logout } = useAuth();
 
   const handleLogout = () => {
-    AuthTokenManager.clearSession();
-    logout();
+    void logout();
     navigate('/login', { replace: true });
   };
 

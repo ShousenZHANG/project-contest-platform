@@ -14,6 +14,18 @@ import AxeBuilder from '@axe-core/playwright';
 const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 async function scan(page) {
+  // Radix surfaces also enter through CSS animations, including their opacity.
+  await expect.poll(() => page.evaluate(() => document.getAnimations()
+    .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+    .every(animation => ['finished', 'idle'].includes(animation.playState))
+  ), { message: 'Finite CSS animations should settle before the axe scan' }).toBe(true);
+  // networkidle does not imply that Framer Motion's entrance fade has settled.
+  // Check visible content at its final opacity before measuring text contrast.
+  await expect.poll(() => page.locator('main [style*="opacity"]').evaluateAll(nodes =>
+    nodes
+      .filter(node => node.getClientRects().length && !node.closest('[aria-hidden="true"]'))
+      .every(node => getComputedStyle(node).opacity === '1')
+  ), { message: 'Visible content should finish its entrance fade before the axe scan' }).toBe(true);
   return new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
 }
 

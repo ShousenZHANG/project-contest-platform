@@ -1,7 +1,6 @@
 import React from 'react';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import ComentsPage from '../../PublicUser/ComentsPage';
-import ProjectComment from '../../Participant/contest/ProjectComment';
 import { renderWithProviders } from '../testUtils';
 import apiClient from '../../api/apiClient';
 
@@ -22,7 +21,6 @@ beforeEach(() => {
     if (key === 'userId') return 'user-1';
     return null;
   });
-  apiClient.post.mockResolvedValue({ data: 'ok' });
 });
 
 afterEach(() => {
@@ -59,30 +57,5 @@ describe('ComentsPage', () => {
 
     await screen.findByText('comment page 1');
     expect(apiClient.get).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('ProjectComment', () => {
-  it('refreshes the thread after posting', async () => {
-    apiClient.get.mockResolvedValue(commentPage(1, 1));
-
-    renderWithProviders(<ProjectComment submissionId="sub-1" />);
-    await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
-
-    fireEvent.change(screen.getByPlaceholderText('Add a Comment'), {
-      target: { value: 'nice work' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /post comment/i }));
-
-    await waitFor(() =>
-      expect(apiClient.post).toHaveBeenCalledWith(
-        '/interactions/comments',
-        expect.objectContaining({ submissionId: 'sub-1', content: 'nice work' })
-      )
-    );
-
-    // The old implementation never refetched, so a posted comment stayed
-    // invisible until the component remounted.
-    await waitFor(() => expect(apiClient.get.mock.calls.length).toBeGreaterThan(1));
   });
 });

@@ -1,11 +1,11 @@
 package com.w16a.danish.judge.notify;
 
-import com.w16a.danish.judge.domain.mq.AwardWinnerMessage;
+import com.w16a.danish.common.messaging.MessagingConstants;
+import com.w16a.danish.common.messaging.message.AwardWinnerMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
-import com.w16a.danish.judge.config.JudgeRabbitMQConfig;
 
 /**
  * MQ sender for notifying award winners.
@@ -28,8 +28,8 @@ public class AwardNotifier {
      */
     public void sendAwardWinner(AwardWinnerMessage message) {
         rabbitTemplate.convertAndSend(
-                JudgeRabbitMQConfig.JUDGE_EXCHANGE_NAME,
-                JudgeRabbitMQConfig.AWARD_WINNER_ROUTING_KEY,
+                MessagingConstants.JUDGE_EXCHANGE_NAME,
+                MessagingConstants.AWARD_WINNER_ROUTING_KEY,
                 message,
                 m -> {
                     m.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);

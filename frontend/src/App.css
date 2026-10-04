@@ -1,2 +1,0 @@
-/* App-wide styles intentionally live in index.css.
-   This file is kept only because App.jsx imports it; avoid global selectors here. */
