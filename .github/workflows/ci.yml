@@ -32,8 +32,9 @@ jobs:
 
       - name: Build and test
         # The suite is self-contained: H2 in place of MySQL, WireMock in place
-        # of the Feign targets. No service containers are needed.
-        run: ./mvnw -B --no-transfer-progress verify
+        # of the Feign targets. No service containers are needed. Collect every
+        # independent module's failures in one run; any failure still fails CI.
+        run: ./mvnw -B --no-transfer-progress --fail-at-end verify
 
       - name: Upload JaCoCo aggregate report
         if: always()

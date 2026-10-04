@@ -14,8 +14,9 @@ Final static inventory: 275 backend main Java files, 82 backend test Java files,
 and 168 frontend source files, including 165 JS/JSX/TS/TSX files (124 production,
 41 test/helper). Java syntax and explicit project imports, frontend syntax/imports/
 HTTP route shapes, TypeScript noEmit, configuration syntax and local map links were
-checked. No application, test suite, project build or deployment was run for this
-delivery; source inventory is not runtime acceptance evidence.
+checked for optimization baseline `b5f96a1`. The CI repair follow-up validates
+pushed commits in GitHub Actions, with local services/tests/builds/deployment still
+disabled; source inventory is not runtime acceptance evidence.
 
 ## Maps
 
@@ -68,8 +69,9 @@ Score/Winner defects outside the former tests. The current pass implements their
 guards, private download paths, Judge UI and durable effects, preserving the earlier
 session isolation and persisted review reset. Current static review evidence and limits
 belong to the [runbook](../production-readiness-2026-10-04.md); the dated audit preserves
-its pre-change reproductions. This delivery did not run services, tests or builds;
-the release gates remain separate from static source review.
+its pre-change reproductions. Current CI repair results are tracked by exact commit;
+local services/tests/builds/deployment remain disabled. Real release gates remain
+separate from source review and GitHub CI.
 
 ## Branch policy
 

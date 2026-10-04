@@ -1,6 +1,8 @@
 package com.w16a.danish.user.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.user.config.FrontendProperties;
@@ -24,6 +26,8 @@ import com.w16a.danish.user.util.JwtUtil;
 import com.w16a.danish.user.util.PasswordUtil;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,6 +73,17 @@ class UsersServiceImplTest {
     @Mock private FrontendProperties frontendProperties;
     @Mock
     private GithubOAuthProperties githubOAuthProperties;
+
+    @BeforeAll
+    static void initializeEntityMetadata() {
+        // Mockito does not bootstrap mapped entities; real lambda wrappers still need column metadata.
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        for (Class<?> entity : List.of(Users.class, UserRoles.class, Roles.class)) {
+            MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "UsersServiceImplTest");
+            assistant.setCurrentNamespace(entity.getName());
+            TableInfoHelper.initTableInfo(assistant, entity);
+        }
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -394,6 +409,7 @@ class UsersServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId()).isEqualTo("uid1");
+        assertThat(result.get(0).getRole()).isEqualTo("PARTICIPANT");
     }
 
 
@@ -403,10 +419,14 @@ class UsersServiceImplTest {
         Users user = new Users().setId("uid").setName("Test User");
 
         when(usersService.getById(anyString())).thenReturn(user);
+        when(userRolesService.list(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(new UserRoles().setUserId("uid").setRoleId(3)));
+        when(rolesService.getById(3)).thenReturn(new Roles().setId(3).setName("JUDGE"));
 
         UserBriefVO result = usersService.getUserBriefById("uid");
 
         assertThat(result).isNotNull();
+        assertThat(result.getRole()).isEqualTo("JUDGE");
     }
 
     @Test
@@ -423,6 +443,9 @@ class UsersServiceImplTest {
                 new Users().setId("user1").setName("Test User").setEmail("test@test.com")
         );
         when(userQuery.list()).thenReturn(mockUsers);
+        when(userRolesService.list(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(new UserRoles().setUserId("user1").setRoleId(1)));
+        when(rolesService.getById(1)).thenReturn(new Roles().setId(1).setName("PARTICIPANT"));
 
         // Act
         List<UserBriefVO> result = usersService.getUsersByEmails(emails);
@@ -431,6 +454,7 @@ class UsersServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getEmail()).isEqualTo("test@test.com");
+        assertThat(result.get(0).getRole()).isEqualTo("PARTICIPANT");
     }
 
     @Test

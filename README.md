@@ -4,11 +4,11 @@ Questora manages hackathons, innovation challenges and academic contests with
 individual or Team registration, private Submissions, Organizer Review, assigned
 Judge scoring and automatic Winner selection.
 
-**Delivery status · 2026-10-04:** this revision was reviewed and improved through
-static source, interface and configuration checks. At the user's request, no
-application, deployment, build or test suite was run for this delivery. Runtime,
-coverage, browser accessibility and real integration results remain unverified
-for this revision; earlier reports belong to their earlier source versions.
+**Verification scope · 2026-10-04:** the optimization baseline `b5f96a1` received
+static source, interface and configuration checks. The CI repair follow-up uses
+GitHub Actions to validate pushed commits; no local services, test suites, project
+builds or deployments are started. The badge below follows `master`; exact-commit
+results and remaining real-integration/release gates are recorded in the runbook.
 
 [![CI](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk)

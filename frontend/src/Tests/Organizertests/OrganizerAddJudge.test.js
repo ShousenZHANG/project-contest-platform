@@ -67,10 +67,12 @@ describe("OrganizerAddJudge", () => {
 
   test("adds a new judge", async () => {
     renderWithRouter();
-    fireEvent.change(screen.getByLabelText(/Judge Email\(s\)/i), {
+    const judgeEmailInput = await screen.findByRole("textbox", { name: /Judge Email\(s\)/i });
+    expect(judgeEmailInput).toBeEnabled();
+    fireEvent.change(judgeEmailInput, {
       target: { value: "newjudge@example.com" },
     });
-    fireEvent.click(screen.getByText(/Add Judge/i));
+    fireEvent.click(screen.getByRole("button", { name: /^Add Judge$/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(

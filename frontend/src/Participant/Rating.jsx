@@ -105,7 +105,6 @@ function Rating() {
                       <td
                         colSpan={99}
                         className="px-3 py-8 text-center text-sm text-destructive"
-                        role="alert"
                       >
                         <PageError error={error} onRetry={() => refetch()} retrying={isFetching} />
                       </td>
