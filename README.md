@@ -21,6 +21,7 @@ local environment.
 - [Quick Start](#quick-start)
 - [Local Development](#local-development)
 - [Architecture](#architecture)
+- [Project Map](docs/CODEMAPS/README.md)
 - [Service Matrix](#service-matrix)
 - [Frontend Architecture](#frontend-architecture)
 - [Backend Contracts](#backend-contracts)
@@ -372,6 +373,11 @@ Authentication policy:
 
 ## Security
 
+The [2026-10-04 scan](docs/CODEMAPS/audit-2026-10-04.md) identified unresolved
+authorization and privacy gaps, including public Admin role assignment and
+unprotected score/status writes. Its isolated runtime evidence and remaining
+deployment limits should be reviewed before using the platform for a real contest.
+
 Identity is enforced at the edge and validated in depth:
 
 - **Single trusted identity source.** The gateway strips any client-supplied
@@ -489,8 +495,11 @@ healthchecks and memory/CPU limits.
 
 ### Dependencies
 
-`.github/dependabot.yml` opens grouped weekly update PRs for Maven, npm and the
-workflow actions themselves.
+`master` is the sole retained branch. Scheduled Dependabot version-update PRs
+for Maven, npm and GitHub Actions are paused with `open-pull-requests-limit: 0`
+in `.github/dependabot.yml`, so they do not recreate branches after cleanup.
+Dependency updates are reviewed explicitly. This setting does not disable
+security alerts or override the repository's security-update settings.
 
 ## Quality Gates
 
@@ -684,6 +693,9 @@ The fastest single check is the cross-service call from
 database are all fine and the problem is in the browser or in auth.
 
 ## Documentation
+
+Start with the [project map](docs/CODEMAPS/README.md) for verified code entrypoints,
+business flows, service and data boundaries, test evidence, and current audit findings.
 
 Read these before changing architecture, naming, or agent workflows:
 
