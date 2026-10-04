@@ -4,11 +4,13 @@ Questora manages hackathons, innovation challenges and academic contests with
 individual or Team registration, private Submissions, Organizer Review, assigned
 Judge scoring and automatic Winner selection.
 
-**Verification scope · 2026-10-04:** the optimization baseline `b5f96a1` received
-static source, interface and configuration checks. The CI repair follow-up uses
-GitHub Actions to validate pushed commits; no local services, test suites, project
-builds or deployments are started. The badge below follows `master`; exact-commit
-results and remaining real-integration/release gates are recorded in the runbook.
+**Verified · 2026-10-04:** [CI #76](https://github.com/ShousenZHANG/project-contest-platform/actions/runs/37189507496)
+passed for source repair `cefa463`: 1,128 backend tests, 217 Jest tests, all eight
+original coverage gates, type checking, production build and 55 zero-retry browser
+tests. The accepted optimization baseline `b5f96a1` is preserved in its history.
+Verification ran in GitHub Actions; local services, suites, project builds and
+deployment remain disabled. The badge follows `master`; exact-commit evidence and
+remaining real-integration/release gates are recorded in the runbook.
 
 [![CI](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ShousenZHANG/project-contest-platform/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk)
