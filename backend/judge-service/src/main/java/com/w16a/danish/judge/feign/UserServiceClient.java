@@ -15,15 +15,10 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service", fallback = com.w16a.danish.judge.feign.fallback.UserServiceClientFallback.class)
+@FeignClient(name = "user-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.judge.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
-    @PostMapping("/users/query-by-emails")
-    ResponseEntity<List<UserBriefVO>> getUsersByEmails(
-            @RequestBody List<String> emails
-    );
-
-    @PostMapping("/users/query-by-ids")
+    @PostMapping("/users/internal/query-by-ids")
     ResponseEntity<List<UserBriefVO>> getUsersByIds(
             @RequestBody List<String> userIds,
             @RequestParam(required = false) String role
@@ -32,7 +27,7 @@ public interface UserServiceClient {
     /**
      * Query a single user by user ID.
      */
-    @GetMapping("/users/{userId}")
+    @GetMapping("/users/internal/{userId}")
     ResponseEntity<UserBriefVO> getUserBriefById(@PathVariable("userId") String userId);
 
     /**
@@ -41,17 +36,17 @@ public interface UserServiceClient {
      * @param teamId ID of the team
      * @return List of UserBriefVO (basic user info)
      */
-    @GetMapping("/teams/public/{teamId}/members")
+    @GetMapping("/teams/internal/{teamId}/members")
     ResponseEntity<List<UserBriefVO>> getTeamMembersByTeamId(@PathVariable("teamId") String teamId);
 
     /**
      * Fetch brief info (id, name, description, createdAt) for multiple teams.
-     * This is a public endpoint used by registration service.
+     * Internal lookup for authorized competition result and notification assembly.
      *
      * @param teamIds list of team IDs to query
      * @return list of team brief info
      */
-    @PostMapping("/teams/public/brief")
+    @PostMapping("/teams/internal/brief")
     ResponseEntity<List<TeamInfoVO>> getTeamBriefByIds(@RequestBody List<String> teamIds);
 
     /**
@@ -60,7 +55,7 @@ public interface UserServiceClient {
      * @param userId ID of the user
      * @return List of team IDs
      */
-    @GetMapping("/teams/public/joined")
+    @GetMapping("/teams/internal/joined")
     ResponseEntity<List<String>> getJoinedTeamIdsByUser(
             @RequestParam("userId") String userId
     );

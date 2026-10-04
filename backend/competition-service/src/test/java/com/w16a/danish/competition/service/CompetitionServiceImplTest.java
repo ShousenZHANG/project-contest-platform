@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWra
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.notify.CompetitionNotifier;
+import com.w16a.danish.competition.notify.CompetitionMediaFiles;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.po.CompetitionJudges;
@@ -49,6 +50,7 @@ class CompetitionServiceImplTest {
     @Mock private ICompetitionOrganizersService competitionOrganizersService;
     @Mock private ICompetitionJudgesService competitionJudgesService;
     @Mock private CompetitionNotifier competitionNotifier;
+    @Mock private CompetitionMediaFiles mediaFiles;
     @Mock private CompetitionsMapper competitionsMapper;
 
     @BeforeEach
@@ -63,6 +65,11 @@ class CompetitionServiceImplTest {
         when(mockQuery.in(any(), anyCollection())).thenReturn(mockQuery);
         when(mockQuery.exists()).thenReturn(false);
         when(mockQuery.list()).thenReturn(Collections.emptyList());
+        LambdaQueryChainWrapper<CompetitionOrganizers> organizers = mock(LambdaQueryChainWrapper.class);
+        when(competitionOrganizersService.lambdaQuery()).thenReturn(organizers);
+        when(organizers.eq(any(), any())).thenReturn(organizers);
+        when(organizers.exists()).thenReturn(false);
+
     }
 
     private static RequestContext ctx(String userId, String role) {
@@ -74,6 +81,9 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ Create competition success")
     void testCreateCompetitionSuccess() {
         CompetitionCreateDTO dto = new CompetitionCreateDTO();
+        dto.setStartDate(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
+        dto.setEndDate(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(2));
+        dto.setScoringCriteria(List.of("Design", "Innovation"));
         dto.setName("Test Competition");
 
         // mock competitionsService.lambdaQuery()
@@ -94,6 +104,9 @@ class CompetitionServiceImplTest {
     @DisplayName("❌ Create competition - Duplicate name")
     void testCreateCompetitionDuplicateName() {
         CompetitionCreateDTO dto = new CompetitionCreateDTO();
+        dto.setStartDate(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
+        dto.setEndDate(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(2));
+        dto.setScoringCriteria(List.of("Design", "Innovation"));
         dto.setName("Duplicate Competition");
 
         LambdaQueryChainWrapper<Competitions> competitionQuery = mock(LambdaQueryChainWrapper.class);
@@ -111,6 +124,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ Delete competition success")
     void testDeleteCompetitionSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
@@ -133,6 +147,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ Get competition by ID success")
     void testGetCompetitionByIdSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
@@ -156,6 +171,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ Upload competition media success")
     void testUploadCompetitionMedia() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
@@ -173,6 +189,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ Delete intro video success")
     void testDeleteIntroVideoSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
         competition.setIntroVideoUrl("http://mocked.com/oldvideo.mp4");
 
@@ -191,6 +208,7 @@ class CompetitionServiceImplTest {
         dto.setJudgeEmails(List.of("test@example.com"));
 
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
@@ -198,8 +216,8 @@ class CompetitionServiceImplTest {
         when(userServiceClient.getUsersByEmails(anyList()))
                 .thenReturn(ResponseEntity.ok(List.of(
                         UserBriefVO.builder()
-                                .id("userId")
-                                .name("Judge Name")
+                                .id("judgeId")
+                                .name("Judge Name").role("Judge")
                                 .email("test@example.com")
                                 .build()
                 )));
@@ -207,7 +225,7 @@ class CompetitionServiceImplTest {
         LambdaQueryChainWrapper<CompetitionOrganizers> organizerQuery = mock(LambdaQueryChainWrapper.class);
         when(competitionOrganizersService.lambdaQuery()).thenReturn(organizerQuery);
         when(organizerQuery.eq(any(), any())).thenReturn(organizerQuery);
-        when(organizerQuery.exists()).thenReturn(true);
+        when(organizerQuery.exists()).thenReturn(true, false);
 
         LambdaQueryChainWrapper<CompetitionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
         when(competitionJudgesService.lambdaQuery()).thenReturn(judgeQuery);
@@ -220,12 +238,15 @@ class CompetitionServiceImplTest {
         competitionsService.assignJudges("comp-id", ctx("userId", "ADMIN"), dto);
 
         verify(competitionNotifier, atLeastOnce()).sendJudgeAssigned(any());
+        verify(competitionJudgesService).saveBatch(argThat(rows -> rows.size() == 1 &&
+                rows.stream().allMatch(row -> "judgeId".equals(row.getUserId()))));
     }
 
     @Test
     @DisplayName("✅ Remove judge success")
     void testRemoveJudgeSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsMapper.selectById(anyString())).thenReturn(competition);
@@ -249,7 +270,7 @@ class CompetitionServiceImplTest {
                 .thenReturn(ResponseEntity.ok(
                         UserBriefVO.builder()
                                 .id("userId")
-                                .name("Judge Name")
+                                .name("Judge Name").role("Judge")
                                 .email("judge@example.com")
                                 .build()
                 ));
@@ -264,6 +285,7 @@ class CompetitionServiceImplTest {
     void testListAllCompetitionsSuccess() {
         // mock competition
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         LambdaQueryChainWrapper<Competitions> queryWrapper = mock(LambdaQueryChainWrapper.class);
@@ -294,12 +316,14 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ updateCompetitionStatus success")
     void testUpdateCompetitionStatusSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsService.getById(anyString())).thenReturn(competition);
         when(competitionsService.updateById(any())).thenReturn(true);
 
-        CompetitionResponseVO result = competitionsService.updateCompetitionStatus("comp-id", "ONGOING");
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.COMPLETED);
+        CompetitionResponseVO result = competitionsService.updateCompetitionStatus("comp-id", "AWARDED");
         assertThat(result).isNotNull();
     }
 
@@ -307,6 +331,7 @@ class CompetitionServiceImplTest {
     @DisplayName("❌ updateCompetitionStatus - invalid status")
     void testUpdateCompetitionStatusInvalidStatus() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
 
         when(competitionsService.getById(anyString())).thenReturn(competition);
@@ -330,6 +355,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ deleteCompetitionImage - success")
     void testDeleteCompetitionImageSuccess() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
         competition.setImageUrls(new ArrayList<>(List.of("http://mock.com/image.jpg")));
 
@@ -353,6 +379,7 @@ class CompetitionServiceImplTest {
     @DisplayName("❌ deleteCompetitionImage - not authorized")
     void testDeleteCompetitionImageUnauthorized() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
         competition.setImageUrls(List.of("http://mock.com/img1.jpg"));
 
@@ -372,6 +399,7 @@ class CompetitionServiceImplTest {
     @DisplayName("❌ deleteCompetitionImage - image not found")
     void testDeleteCompetitionImageNotFound() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
         competition.setImageUrls(new ArrayList<>(List.of("http://mock.com/img1.jpg")));
 
@@ -481,6 +509,7 @@ class CompetitionServiceImplTest {
     @DisplayName("✅ listAssignedJudges returns empty")
     void testListAssignedJudgesEmpty() {
         Competitions competition = new Competitions();
+        competition.setStatus(com.w16a.danish.common.domain.enums.CompetitionStatus.UPCOMING);
         competition.setId("comp-id");
         when(competitionsService.getById(anyString())).thenReturn(competition);
 

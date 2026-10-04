@@ -4,8 +4,8 @@ import com.w16a.danish.common.messaging.MessagingConstants;
 import com.w16a.danish.common.messaging.message.JudgeAssignedMessage;
 import com.w16a.danish.common.messaging.message.JudgeRemovedMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.w16a.danish.common.recovery.DurableTasks;
+import com.w16a.danish.common.recovery.NotificationOutbox;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,35 +19,21 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CompetitionNotifier {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final DurableTasks tasks;
 
     /**
      * Send judge assigned message.
      */
     public void sendJudgeAssigned(JudgeAssignedMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.COMPETITION_EXCHANGE_NAME,
-                MessagingConstants.JUDGE_ASSIGNED_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.COMPETITION_EXCHANGE_NAME, MessagingConstants.JUDGE_ASSIGNED_ROUTING_KEY, message));
     }
 
     /**
      * Send judge removed message.
      */
     public void sendJudgeRemoved(JudgeRemovedMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.COMPETITION_EXCHANGE_NAME,
-                MessagingConstants.JUDGE_REMOVED_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.COMPETITION_EXCHANGE_NAME, MessagingConstants.JUDGE_REMOVED_ROUTING_KEY, message));
     }
 }

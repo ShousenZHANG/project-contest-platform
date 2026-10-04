@@ -1,6 +1,6 @@
 /** API request/response shapes for each service domain. */
 
-import type { Competition, User, Team, Submission, PageResponse } from './index';
+import type { Competition, UserRole, AdminUser, TeamSummary, Submission, PageResponse } from './index';
 
 // Competition service
 export type CompetitionListResponse = PageResponse<Competition>;
@@ -18,27 +18,31 @@ export interface CreateCompetitionRequest {
   scoringCriteria?: string[];
 }
 
-export interface UpdateCompetitionRequest extends Partial<CreateCompetitionRequest> {}
+export interface UpdateCompetitionRequest extends Partial<CreateCompetitionRequest> {
+  status?: Competition['status'];
+}
 
 // User service
-export type UserListResponse = PageResponse<User>;
+export type UserListResponse = PageResponse<AdminUser>;
 
 export interface RegisterRequest {
-  username: string;
+  name: string;
   email: string;
   password: string;
-  role?: User['role'];
+  role: Extract<UserRole, 'PARTICIPANT' | 'ORGANIZER'>;
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+  role: UserRole;
 }
 
 export interface UpdateProfileRequest {
-  username?: string;
-  bio?: string;
-  avatarUrl?: string;
+  name?: string;
+  email?: string;
+  description?: string;
+  password?: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -54,22 +58,21 @@ export interface ResetPasswordRequest {
 export type SubmissionListResponse = PageResponse<Submission>;
 
 // Team service
-export type TeamListResponse = PageResponse<Team>;
+export type TeamListResponse = PageResponse<TeamSummary>;
 
 export interface CreateTeamRequest {
   name: string;
   description?: string;
-  maxMembers: number;
-  competitionId?: string;
 }
 
-export interface UpdateTeamRequest extends Partial<CreateTeamRequest> {}
+export interface UpdateTeamRequest extends CreateTeamRequest {}
 
 // Judge service
 export interface ScoreRequest {
-  score: number;
-  comment?: string;
-  criteria?: Record<string, number>;
+  competitionId: string;
+  submissionId: string;
+  judgeComments?: string;
+  scores: Array<{ criterion: string; score: number }>;
 }
 
 // Registration service

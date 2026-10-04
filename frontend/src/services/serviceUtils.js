@@ -21,6 +21,10 @@ export function extractErrorMessage(err) {
  * - Axios response: { data: ... }
  * - Standard ApiResponse: { success: true, data: ... }
  * - Historical raw values: string/object/array
+ *
+ * @template T
+ * @param {T} result
+ * @returns {import('../types').ServicePayload<T>}
  */
 export function unwrapApiPayload(result) {
   const payload = result && Object.prototype.hasOwnProperty.call(result, 'data')
@@ -48,7 +52,7 @@ export function unwrapApiPayload(result) {
  *
  * @template T
  * @param {() => Promise<T>} fn - Async function to execute.
- * @returns {Promise<{ data: T | null, error: string | null }>}
+ * @returns {Promise<{ data: import('../types').ServicePayload<T> | null, error: string | null }>}
  *
  * Usage:
  *   const { data, error } = await safeCall(() => competitionService.create(dto));

@@ -2,12 +2,14 @@ package com.w16a.danish.registration.gateway;
 
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
+import com.w16a.danish.common.exception.ServiceUnavailableException;
 import com.w16a.danish.registration.feign.CompetitionServiceClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 
 /**
@@ -54,15 +56,30 @@ public class CompetitionGateway {
     }
 
     /**
-     * Several competitions in one call. Missing ids are absent from the result rather than an error;
+     * Several competitions in batches of at most 100. Missing ids are absent from the result;
      * batch reads are used to decorate lists, where one dead id should not fail the page.
      */
     public List<CompetitionResponseVO> findAll(List<String> competitionIds) {
         if (competitionIds == null || competitionIds.isEmpty()) {
             return List.of();
         }
-        return Optional.ofNullable(competitionServiceClient.getCompetitionsByIds(competitionIds))
-                .map(response -> response.getBody())
-                .orElse(List.of());
+        List<CompetitionResponseVO> competitions = new ArrayList<>();
+        for (int start = 0; start < competitionIds.size(); start += 100) {
+            var response = competitionServiceClient.getCompetitionsByIds(
+                    competitionIds.subList(start, Math.min(start + 100, competitionIds.size())));
+            if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new ServiceUnavailableException("competition-service", "getCompetitionsByIds");
+            }
+            competitions.addAll(response.getBody());
+        }
+        return competitions;
+    }
+
+    public boolean isAssignedJudge(String competitionId, String userId) {
+        var response = competitionServiceClient.isUserJudge(competitionId, userId);
+        if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new ServiceUnavailableException("competition-service", "isUserJudge");
+        }
+        return response.getBody();
     }
 }

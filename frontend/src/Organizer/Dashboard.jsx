@@ -25,13 +25,15 @@ import {
   LineChart,
   Line,
 } from 'recharts';
-import { toast } from 'sonner';
 import { competitionService } from '../services/competitionService';
 import { dashboardService } from '../services/judgeService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap, toMessage } from '../api/queryFn';
+import { unwrap } from '../api/queryFn';
 import { Card, CardContent } from '../components/ui/card';
 import { Label } from '../components/ui/label';
+import PageError from '../shared/components/PageError';
+import Pagination from '../shared/components/Pagination';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
 import {
   Tooltip,
   TooltipContent,
@@ -41,14 +43,14 @@ import {
 
 
 const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-11 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
 function MetricCard({ label, value, unit = '', tooltipRows = [] }) {
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card className="cursor-default transition-colors hover:bg-accent/40">
+          <Card tabIndex={tooltipRows.length ? 0 : undefined} className="cursor-default transition-colors hover:bg-accent/40">
             <CardContent className="flex flex-col gap-1 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {label}
@@ -80,56 +82,47 @@ function OrganizerDashboard() {
   useDocumentTitle('Competition Dashboard');
   const colors = useMemo(() => getChartColors(), []);
   const [selectedComp, setSelectedComp] = useState('');
+  const paging = usePagedSearchParams();
 
-  const listParams = { page: 1, size: 100 };
+  const listParams = { page: paging.page, size: 10 };
 
   const {
-    data: competitions = [],
+    data: listPage,
     isPending: listPending,
     error: listError,
+    isFetching: listFetching,
+    refetch: retryList,
   } = useQuery({
     queryKey: queryKeys.competitions.mine(listParams),
     queryFn: () => unwrap(competitionService.getMyOrganized(listParams)),
-    select: (page) => (Array.isArray(page?.data) ? page.data : []),
     staleTime: staleTime.short,
   });
+  const competitions = listPage?.data || [];
 
-  // Statistics and detail are fetched per competition. useQueries keeps the
-  // fan-out but caches each competition separately, so adding one contest no
-  // longer refetches the statistics of every other one.
+  // The paged list already has metadata. Fetch statistics only for its 10
+  // contests, keeping the request count bounded to 1 list + at most 10 reads.
   const statQueries = useQueries({
     queries: competitions.map((c) => ({
       queryKey: [...queryKeys.dashboard.organizer(), c.id],
-      queryFn: () => unwrap(dashboardService.getCompetitionStatistics(c.id)),
-      staleTime: staleTime.medium,
-    })),
-  });
-
-  const detailQueries = useQueries({
-    queries: competitions.map((c) => ({
-      queryKey: queryKeys.competitions.detail(c.id),
-      queryFn: () => unwrap(competitionService.getById(c.id)),
+      queryFn: () => unwrap(dashboardService.getManagedCompetitionStatistics(c.id)),
       staleTime: staleTime.medium,
     })),
   });
 
   const loading =
     listPending ||
-    statQueries.some((q) => q.isPending) ||
-    detailQueries.some((q) => q.isPending);
+    statQueries.some((q) => q.isPending);
 
   const error =
     listError ||
     statQueries.find((q) => q.error)?.error ||
-    detailQueries.find((q) => q.error)?.error ||
     null;
 
   // Not memoized on purpose: useQueries hands back a fresh array every render,
   // so a useMemo keyed on it would recompute anyway while looking like it did
-  // not. The map is over at most 100 rows.
+  // not. The map is over at most 10 rows on the current page.
   const stats = competitions.map((c, i) => {
     const stat = statQueries[i]?.data ?? {};
-    const detail = detailQueries[i]?.data ?? {};
 
     const totalSubs = stat.submissionCount || 0;
     const approved = stat.approvedSubmissionCount || 0;
@@ -137,7 +130,7 @@ function OrganizerDashboard() {
     return {
       id: c.id,
       name: c.name,
-      status: (detail.status || detail.competitionStatus || 'UNKNOWN').toUpperCase(),
+      status: (c.status || 'UNKNOWN').toUpperCase(),
       regs:
         stat.participationType === 'INDIVIDUAL'
           ? stat.individualParticipantCount || 0
@@ -151,6 +144,12 @@ function OrganizerDashboard() {
           : Object.keys(stat.teamParticipantTrend || {}).length > 0
             ? stat.teamParticipantTrend
             : stat.submissionTrend,
+      trendLabel:
+        Object.keys(stat.individualParticipantTrend || {}).length > 0
+          ? 'Individual registrations'
+          : Object.keys(stat.teamParticipantTrend || {}).length > 0
+            ? 'Team registrations'
+            : 'Submissions',
     };
   });
 
@@ -211,6 +210,7 @@ function OrganizerDashboard() {
     [stats]
   );
 
+  const selectedStat = stats.find((s) => s.id === selectedComp);
   const currentTrend = useMemo(() => {
     const t = stats.find((s) => s.id === selectedComp);
     if (!t) return [];
@@ -222,8 +222,11 @@ function OrganizerDashboard() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Competition Dashboard</h1>
         <p className="text-sm text-muted-foreground">
-          Aggregated metrics across your competitions.
+          Browse your competitions 10 at a time. Metrics and status distribution cover the current page; the trend viewer covers the selected competition.
         </p>
+        {listPage && <p className="mt-2 text-sm text-muted-foreground" role="status">
+          {competitions.length ? `Showing competitions ${(paging.page - 1) * 10 + 1}–${(paging.page - 1) * 10 + competitions.length}` : 'No competitions on this page'} of {listPage.total ?? competitions.length} total.
+        </p>}
       </div>
 
       {loading ? (
@@ -236,20 +239,18 @@ function OrganizerDashboard() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
         </div>
       ) : error ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
-          {toMessage(error)}
-        </div>
+        <PageError error={error} retrying={listFetching || statQueries.some((query) => query.isFetching)} onRetry={() => {
+          if (listError) retryList();
+          statQueries.filter((query) => query.error).forEach((query) => query.refetch());
+        }} />
       ) : stats.length === 0 ? (
-        <p className="text-sm text-muted-foreground">(No competitions yet)</p>
+        <p className="text-sm text-muted-foreground">No competitions on this page. Use the pagination controls to return to an earlier page.</p>
       ) : (
         <>
           <section className="mb-8">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">Overall Metrics</h2>
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Current page metrics · {stats.length} competitions</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <MetricCard label="Participants" value={totals.regs} tooltipRows={tooltipMap.regs} />
+              <MetricCard label="Participants / teams registered" value={totals.regs} tooltipRows={tooltipMap.regs} />
               <MetricCard label="Submissions" value={totals.subs} tooltipRows={tooltipMap.subs} />
               <MetricCard label="Judges" value={totals.judges} tooltipRows={tooltipMap.judges} />
               <MetricCard
@@ -264,7 +265,7 @@ function OrganizerDashboard() {
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
               <CardContent className="p-4">
-                <h2 className="mb-2 text-sm font-semibold text-foreground">Status Distribution</h2>
+                <h2 className="mb-2 text-sm font-semibold text-foreground">Status Distribution · current page</h2>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -297,7 +298,7 @@ function OrganizerDashboard() {
                     </Label>
                     <select
                       id="comp-select"
-                      value={selectedComp}
+                      value={selectedStat ? selectedComp : ''}
                       onChange={(e) => setSelectedComp(e.target.value)}
                       className={SELECT_CLASS}
                     >
@@ -313,6 +314,7 @@ function OrganizerDashboard() {
                         ))}
                     </select>
                   </div>
+                  {selectedStat && <p className="mb-3 text-sm text-muted-foreground">{selectedStat.name} · {selectedStat.trendLabel}. This chart shows only the selected competition.</p>}
 
                   {currentTrend.length > 0 ? (
                     <ResponsiveContainer width="100%" height={260}>
@@ -338,6 +340,8 @@ function OrganizerDashboard() {
           </section>
         </>
       )}
+      <Pagination page={paging.page} pages={listPage?.pages} total={listPage?.total ?? competitions.length}
+        onPageChange={(page) => { setSelectedComp(''); paging.setPage(page); }} busy={loading || listFetching} />
     </div>
   );
 }

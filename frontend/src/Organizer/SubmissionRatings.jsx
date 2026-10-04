@@ -1,193 +1,345 @@
-/**
- * @file SubmissionRatings.jsx
- * @description
- * Compare submission scores across criteria with sortable columns and trigger
- * automatic winner award. Migrated from MUI to shadcn/ui.
- *
- * Role: Organizer
- */
-
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Trophy } from 'lucide-react';
-import { toast } from 'sonner';
+import { Trophy, ArrowUpDown } from 'lucide-react';
 import { winnerService } from '../services/judgeService';
 import { queryKeys, staleTime } from '../api/queryKeys';
 import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Card, CardContent } from '../components/ui/card';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import EmptyState from '../shared/components/EmptyState';
+import ConfirmDialog from '../shared/components/ConfirmDialog';
+import Pagination from '../shared/components/Pagination';
 
-function SortIcon({ active, direction }) {
-  if (!active) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground" />;
-  return direction === 'asc' ? (
-    <ArrowUp className="ml-1 inline h-3 w-3" />
-  ) : (
-    <ArrowDown className="ml-1 inline h-3 w-3" />
-  );
-}
-
-function SubmissionRatings() {
+export default function SubmissionRatings() {
   const { competitionId } = useParams();
-  const navigate = useNavigate();
-  const [sortConfig, setSortConfig] = useState({ key: 'totalScore', direction: 'desc' });
-
   const queryClient = useQueryClient();
-  const scoredKey = [...queryKeys.winners.byCompetition(competitionId), 'scored'];
-
-  const { data: submissions = [], isPending: loading } = useQuery({
-    queryKey: scoredKey,
-    queryFn: () => unwrap(winnerService.getScoredList({ competitionId })),
-    select: (payload) => (Array.isArray(payload?.data) ? payload.data : []),
-    enabled: Boolean(competitionId),
+  const [confirm, setConfirm] = useState(false);
+  const [descending, setDescending] = useState(true);
+  const [resultPage, setResultPage] = useState(1);
+  const query = useQuery({
+    queryKey: queryKeys.winners.eligibility(competitionId),
+    queryFn: () => unwrap(winnerService.getEligibility(competitionId)),
+    staleTime: staleTime.live,
+  });
+  const eligibility = query.data;
+  const resultParams = { competitionId, page: resultPage, size: 12 };
+  const results = useQuery({
+    queryKey: queryKeys.winners.managedList(competitionId, resultParams),
+    queryFn: () => unwrap(winnerService.getManagedList(resultParams)),
+    enabled: eligibility?.status === 'AWARDED',
     staleTime: staleTime.short,
   });
-
-  const allCriteria = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          submissions.flatMap((sub) =>
-            sub.criterionScores ? Object.keys(sub.criterionScores) : []
-          )
-        )
-      ),
-    [submissions]
+  const submissions = [...(eligibility?.submissions || [])].sort(
+    (a, b) => (Number(b.totalScore ?? -1) - Number(a.totalScore ?? -1)) * (descending ? 1 : -1),
   );
-
-  const sortedSubmissions = useMemo(() => {
-    const sorted = [...submissions];
-    const { key, direction } = sortConfig;
-
-    sorted.sort((a, b) => {
-      let aValue, bValue;
-      if (key === 'totalScore') {
-        aValue = a.totalScore ?? 0;
-        bValue = b.totalScore ?? 0;
-      } else {
-        aValue = a.criterionScores?.[key] ?? 0;
-        bValue = b.criterionScores?.[key] ?? 0;
-      }
-      if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return sorted;
-  }, [submissions, sortConfig]);
-
-  const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const autoAward = useMutation({
+  const criteria = [
+    ...new Set(submissions.flatMap((submission) => Object.keys(submission.criterionScores || {}))),
+  ];
+  const award = useMutation({
     mutationFn: () => unwrap(winnerService.autoAward(competitionId)),
     onSuccess: () => {
-      toast.success('Auto-award completed successfully');
+      setConfirm(false);
       queryClient.invalidateQueries({ queryKey: queryKeys.winners.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all });
     },
-    onError: (error) => {
-      const status = error.response?.status;
-      if (status === 400) {
-        toast.warning('No scored submissions found.');
-      } else if (status === 403) {
-        toast.error('You are not authorized to award.');
-      } else {
-        toast.error('Failed to connect to server.');
-      }
+    onError: () => {
+      setConfirm(false);
+      query.refetch();
     },
   });
-
-  const handleAutoAward = () => autoAward.mutate();
-
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="mb-4">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header>
         <h1 className="text-2xl font-semibold tracking-tight">Rated Submissions Comparison</h1>
-        <p className="text-sm text-muted-foreground">
-          Click a column header to sort by total or individual criterion.
+        <p className="mt-2 text-muted-foreground">
+          Awards require a completed competition and at least 3 valid judges for every approved
+          work.
         </p>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : sortedSubmissions.length > 0 ? (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2">Title</th>
-                <th
-                  className="cursor-pointer select-none px-3 py-2 hover:bg-muted/60"
-                  onClick={() => handleSort('totalScore')}
-                >
-                  Total Score
-                  <SortIcon
-                    active={sortConfig.key === 'totalScore'}
-                    direction={sortConfig.direction}
-                  />
-                </th>
-                {allCriteria.map((criterion) => (
-                  <th
-                    key={criterion}
-                    className="cursor-pointer select-none px-3 py-2 hover:bg-muted/60"
-                    onClick={() => handleSort(criterion)}
-                  >
-                    {criterion}
-                    <SortIcon
-                      active={sortConfig.key === criterion}
-                      direction={sortConfig.direction}
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedSubmissions.map((sub) => (
-                <tr
-                  key={sub.submissionId}
-                  className="border-b border-border last:border-0 hover:bg-muted/40"
-                >
-                  <td className="px-3 py-1.5 font-medium text-foreground">{sub.title}</td>
-                  <td className="px-3 py-1.5 font-semibold text-foreground">{sub.totalScore}</td>
-                  {allCriteria.map((criterion) => (
-                    <td key={criterion} className="px-3 py-1.5 text-muted-foreground">
-                      {sub.criterionScores?.[criterion] ?? '-'}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+      </header>
+      {query.isPending ? (
+        <PageSkeleton rows={4} />
+      ) : query.error ? (
+        <PageError
+          error={query.error}
+          onRetry={() => query.refetch()}
+          retrying={query.isFetching}
+        />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          No scored submissions found for this competition.
-        </p>
+        eligibility && (
+          <>
+            <Card>
+              <CardContent className="space-y-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold">Award readiness</h2>
+                  <Badge variant={eligibility.canAward ? 'success' : 'outline'}>
+                    {eligibility.status}
+                  </Badge>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Approved works</p>
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {eligibility.approvedCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ready for awards</p>
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {eligibility.eligibleCount} / {eligibility.approvedCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Minimum judges per work</p>
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {eligibility.minimumJudgeCount}
+                    </p>
+                  </div>
+                </div>
+                {eligibility.status === 'AWARDED' ? (
+                  <p className="text-sm text-success">
+                    Results have been finalized. Scores and awards are locked.
+                  </p>
+                ) : eligibility.canAward ? (
+                  <p className="text-sm text-success">
+                    Every approved work meets the award requirements.
+                  </p>
+                ) : (
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    {eligibility.blockers.map((blocker, index) => (
+                      <li key={index}>{blocker}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setConfirm(true)}
+                    disabled={!eligibility.canAward || award.isPending || query.isFetching}
+                    className="min-h-11"
+                  >
+                    <Trophy aria-hidden="true" />
+                    Auto Award Winners
+                  </Button>
+                  {eligibility.status === 'AWARDED' && eligibility.isPublic === true && (
+                    <Button asChild variant="outline">
+                      <Link to={`/results/${competitionId}`}>View published results</Link>
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => query.refetch()}
+                    disabled={query.isFetching}
+                  >
+                    Refresh readiness
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            {eligibility.status === 'AWARDED' && (
+              <section aria-labelledby="finalized-awards-title" className="space-y-4">
+                <h2 id="finalized-awards-title" className="text-lg font-semibold">Finalized awards</h2>
+                {eligibility.isPublic !== true && (
+                  <p className="text-sm text-muted-foreground">This competition is private. Results are available to its organizers and admins.</p>
+                )}
+                {results.isPending ? (
+                  <PageSkeleton rows={3} />
+                ) : results.error ? (
+                  <PageError error={results.error} onRetry={() => results.refetch()} retrying={results.isFetching} />
+                ) : results.data?.data?.length ? (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {results.data.data.map((winner) => (
+                        <Card key={winner.submissionId}>
+                          <CardContent className="space-y-3 p-5">
+                            <div className="flex flex-wrap gap-2">
+                              {(winner.awards || []).map((label) => <Badge key={label} variant="success">{label}</Badge>)}
+                            </div>
+                            <h3 className="break-words font-semibold">{winner.title}</h3>
+                            <p className="break-words text-sm text-muted-foreground">{winner.submitterName}</p>
+                            <p className="font-mono text-xl font-semibold">
+                              {winner.totalScore == null ? 'Score unavailable' : `${Number(winner.totalScore).toFixed(2)} / 10`}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                    <Pagination page={resultPage} pages={results.data.pages} total={results.data.total} onPageChange={setResultPage} busy={results.isFetching} />
+                  </>
+                ) : (
+                  <EmptyState title="No finalized awards available" description="Refresh results or reconcile historical awards before sharing them." />
+                )}
+              </section>
+            )}
+            {submissions.length === 0 ? (
+              <EmptyState
+                title="No approved works yet"
+                description="Review submissions before preparing awards."
+              />
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setDescending((value) => !value)}
+                  aria-pressed={descending}
+                  className="min-h-11"
+                >
+                  <ArrowUpDown aria-hidden="true" className="h-4 w-4" />
+                  Total score / 10
+                  <span className="sr-only">
+                    {descending ? ', highest first' : ', lowest first'}
+                  </span>
+                </Button>
+                <div className="space-y-4 md:hidden">
+                  {submissions.map((submission) => (
+                    <article
+                      key={submission.submissionId}
+                      aria-label={`Award eligibility for ${submission.title}`}
+                      className="space-y-4 rounded-lg border bg-card p-5"
+                    >
+                      <h2 className="break-words text-lg font-semibold">{submission.title}</h2>
+                      <ReadinessFeedback submission={submission} />
+                      <dl className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground">Valid judges</dt>
+                          <dd className="mt-1 text-lg font-semibold tabular-nums">
+                            {submission.judgeCount} / {eligibility.minimumJudgeCount}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Score / 10</dt>
+                          <dd className="mt-1 text-lg font-semibold tabular-nums">
+                            {submission.totalScore == null
+                              ? 'Unscored'
+                              : Number(submission.totalScore).toFixed(2)}
+                          </dd>
+                        </div>
+                      </dl>
+                      {criteria.length > 0 && (
+                        <details className="border-t pt-2">
+                          <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">
+                            Criterion averages
+                          </summary>
+                          <dl className="space-y-2 text-sm">
+                            {criteria.map((criterion) => (
+                              <div key={criterion} className="flex justify-between gap-4">
+                                <dt className="break-words text-muted-foreground">{criterion}</dt>
+                                <dd className="shrink-0 tabular-nums">
+                                  {submission.criterionScores?.[criterion] == null
+                                    ? '—'
+                                    : Number(submission.criterionScores[criterion]).toFixed(2)}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </details>
+                      )}
+                    </article>
+                  ))}
+                </div>
+                <Card className="hidden overflow-hidden md:block">
+                  <div
+                    className="overflow-x-auto"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Submission score comparison"
+                  >
+                    <table className="w-full text-left text-sm">
+                      <caption className="sr-only">
+                        Award eligibility for each approved submission
+                      </caption>
+                      <thead className="border-b bg-muted/40">
+                        <tr>
+                          <th scope="col" className="px-4 py-3">
+                            Title
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-4 py-3"
+                            aria-sort={descending ? 'descending' : 'ascending'}
+                          >
+                            Total score / 10
+                          </th>
+                          <th scope="col" className="px-4 py-3">
+                            Judges
+                          </th>
+                          <th scope="col" className="px-4 py-3">
+                            Readiness
+                          </th>
+                          {criteria.map((criterion) => (
+                            <th scope="col" key={criterion} className="px-4 py-3">
+                              {criterion}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {submissions.map((submission) => (
+                          <tr key={submission.submissionId} className="border-b last:border-0">
+                            <th scope="row" className="max-w-xs break-words px-4 py-3 font-medium">
+                              {submission.title}
+                            </th>
+                            <td className="px-4 py-3 font-mono">
+                              {submission.totalScore == null
+                                ? 'Unscored'
+                                : Number(submission.totalScore).toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 tabular-nums">
+                              {submission.judgeCount} / {eligibility.minimumJudgeCount}
+                            </td>
+                            <td className="px-4 py-3">
+                              <ReadinessFeedback submission={submission} />
+                            </td>
+                            {criteria.map((criterion) => (
+                              <td key={criterion} className="px-4 py-3 font-mono">
+                                {submission.criterionScores?.[criterion] == null
+                                  ? '—'
+                                  : Number(submission.criterionScores[criterion]).toFixed(2)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            )}
+          </>
+        )
       )}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          onClick={handleAutoAward}
-          className="bg-success text-success-foreground hover:bg-success/90"
-        >
-          <Trophy className="mr-1 h-4 w-4" />
-          Auto Award Winners
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/OrganizerSubmissions/${competitionId}`)}
-        >
-          Back to Submissions List
-        </Button>
-      </div>
+      {award.error && <PageError error={award.error} />}
+      <Button asChild variant="outline">
+        <Link to={`/OrganizerSubmissions/${competitionId}`}>Back to Submissions List</Link>
+      </Button>
+      <ConfirmDialog
+        open={confirm}
+        title="Publish competition awards?"
+        message="This publishes the automatic ranking and locks scoring. The server will recheck every work before awarding."
+        confirmLabel="Publish awards"
+        pending={award.isPending}
+        onConfirm={() => award.mutate()}
+        onCancel={() => setConfirm(false)}
+      />
     </div>
   );
 }
 
-export default SubmissionRatings;
+function ReadinessFeedback({ submission }) {
+  return (
+    <div>
+      <Badge variant={submission.eligible ? 'success' : 'warning'}>
+        {submission.eligible ? 'Ready' : 'Needs attention'}
+      </Badge>
+      {submission.blockers?.length > 0 && (
+        <ul className="mt-2 max-w-xs space-y-1 text-sm text-muted-foreground">
+          {submission.blockers.map((blocker, index) => (
+            <li key={index}>{blocker}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

@@ -7,7 +7,7 @@ test.describe('Rating Page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('token', 'mock-token');
       localStorage.setItem('userId', 'mock-user-id');
-      localStorage.setItem('role', 'Participant');
+      localStorage.setItem('role', 'Judge');
     });
 
     await page.route('**/judges/my-competitions**', async (route) => {
@@ -27,7 +27,7 @@ test.describe('Rating Page', () => {
       });
     });
 
-    await page.route('**/competitions/competition-1', async (route) => {
+    await page.route('**/competitions/managed/competition-1', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -49,7 +49,9 @@ test.describe('Rating Page', () => {
       });
     });
 
-    await page.goto('http://localhost:3000/rating/mockuser@example.com', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:3000/rating/mockuser@example.com', {
+      waitUntil: 'networkidle',
+    });
   });
 
   test('should display Competitions Assigned to You title', async ({ page }) => {
@@ -61,16 +63,12 @@ test.describe('Rating Page', () => {
   });
 
   test('should open competition detail dialog when clicking competition name', async ({ page }) => {
-    
     await page.getByRole('button', { name: 'Mock Competition 1' }).click();
 
-   
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
-   
     await expect(dialog.getByRole('heading', { name: /Mock Competition 1/i })).toBeVisible();
-
 
     await expect(dialog.getByText('Detailed description for Competition 1.')).toBeVisible();
   });

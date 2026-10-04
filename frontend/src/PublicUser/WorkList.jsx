@@ -1,255 +1,200 @@
-/**
- * WorkList.jsx
- *
- * Public-facing browse view for approved submissions in a competition.
- * Migrated from MUI to shadcn/ui + Tailwind.
- *
- * Role: Public User
- * Developer: Zhaoyi Yang (migrated)
- */
-import React, { useState, useEffect } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import {
-  Search,
-  FileText,
-  Image as ImageIcon,
-  Code,
-  File as FileIcon,
-  Loader2,
-  ExternalLink,
-  Heart,
-  MessageCircle,
-} from "lucide-react";
-import { toast } from "sonner";
-import { useLocation, useNavigate } from "react-router-dom";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import { submissionService } from "../services/registrationService";
-import { voteService } from "../services/interactionService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap, toMessage } from "../api/queryFn";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import React from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { Heart, MessageCircle, FileText } from 'lucide-react';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import { submissionService } from '../services/registrationService';
+import { voteService } from '../services/interactionService';
+import AuthTokenManager from '../auth/authTokenManager';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent } from '../components/ui/card';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import EmptyState from '../shared/components/EmptyState';
+import Pagination from '../shared/components/Pagination';
+import SubmissionFile from '../shared/components/SubmissionFile';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-function WorkList() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [competitionId, setCompetitionId] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
+function WorkCard({ work }) {
+  const queryClient = useQueryClient();
+  const signedIn = Boolean(AuthTokenManager.getToken());
+  const canVote = signedIn && AuthTokenManager.getRole()?.toUpperCase() === 'PARTICIPANT';
+  const count = useQuery({
+    queryKey: queryKeys.votes.count(work.id),
+    queryFn: () => unwrap(voteService.getCount(work.id)),
+    staleTime: staleTime.live,
+  });
+  const status = useQuery({
+    queryKey: queryKeys.votes.hasVoted(work.id),
+    queryFn: () => unwrap(voteService.hasVoted(work.id)),
+    enabled: canVote,
+    staleTime: staleTime.live,
+  });
+  const vote = useMutation({
+    mutationFn: () => unwrap(voteService.vote(work.id)),
+    onSuccess: () => {
+      queryClient.setQueryData(queryKeys.votes.hasVoted(work.id), true);
+      queryClient.invalidateQueries({ queryKey: queryKeys.votes.count(work.id) });
+    },
+    onError: (error) => {
+      if (error.response?.status === 409) {
+        queryClient.setQueryData(queryKeys.votes.hasVoted(work.id), true);
+        queryClient.invalidateQueries({ queryKey: queryKeys.votes.count(work.id) });
+      }
+    },
+  });
+  return (
+    <Card className="min-w-0">
+      <CardContent className="flex h-full flex-col gap-4 p-5">
+        <h2 className="break-words text-lg font-semibold">{work.title}</h2>
+        <p className="flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+          {work.description}
+        </p>
+        <SubmissionFile fileUrl={work.fileUrl} fileName={work.fileName} />
+        <p className="text-sm text-muted-foreground">
+          Votes: {count.error ? 'Unavailable' : count.isPending ? 'Loading…' : count.data}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {canVote ? (
+            <Button
+              variant="outline"
+              disabled={
+                vote.isPending || status.isPending || Boolean(status.error) || status.data === true
+              }
+              onClick={() => vote.mutate()}
+              aria-busy={vote.isPending}
+            >
+              <Heart aria-hidden="true" />
+              {status.data ? 'Voted' : vote.isPending ? 'Voting…' : 'Vote'}
+            </Button>
+          ) : !signedIn ? (
+            <Button asChild variant="outline">
+              <Link
+                to="/login"
+                state={{ from: { pathname: `/work-list?competitionId=${work.competitionId}` } }}
+              >
+                Sign in to vote
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="outline">
+            <Link to={`/publicusercoments/${work.id}`}>
+              <MessageCircle aria-hidden="true" />
+              Comments
+            </Link>
+          </Button>
+        </div>
+        {vote.error && vote.error.response?.status !== 409 && (
+          <p role="alert" className="text-sm text-destructive">
+            {toMessage(vote.error)}
+          </p>
+        )}
+        {status.error && (
+          <p role="alert" className="text-sm text-destructive">
+            Unable to check your vote. Refresh and try again.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
-  useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const id = queryParams.get("competitionId");
-    if (id) {
-      setCompetitionId(id);
-    }
-  }, [location.search]);
-
-  const approvedParams = { competitionId };
-
-  const {
-    data: items = [],
-    isPending: itemsPending,
-    error: listError,
-  } = useQuery({
-    queryKey: [...queryKeys.submissions.all, "approved", approvedParams],
-    queryFn: () => unwrap(submissionService.getApproved(approvedParams)),
-    select: (payload) => (payload && payload.data) || [],
+export default function WorkList() {
+  useDocumentTitle('Approved submissions');
+  const state = usePagedSearchParams();
+  const competitionId = state.searchParams.get('competitionId');
+  const params = {
+    competitionId,
+    page: state.page,
+    size: 12,
+    ...(state.keyword && { keyword: state.keyword }),
+  };
+  const query = useQuery({
+    queryKey: [...queryKeys.submissions.all, 'approved', params],
+    queryFn: () => unwrap(submissionService.getApproved(params)),
     enabled: Boolean(competitionId),
     staleTime: staleTime.short,
   });
-
-  // Vote counts share their cache key with ViewVote, so a tally already read
-  // elsewhere on the page does not get fetched twice.
-  const voteQueries = useQueries({
-    queries: items.map((item) => ({
-      queryKey: queryKeys.votes.count(item.id),
-      queryFn: () => unwrap(voteService.getCount(item.id)),
-      staleTime: staleTime.live,
-    })),
-  });
-
-  const works = items.map((item, idx) => ({
-    id: item.id || String(idx),
-    title: item.title || `Work ${idx}`,
-    description: item.description || "No description.",
-    fileType: item.fileType || "",
-    fileUrl: item.fileUrl || "",
-    voteCount: parseInt(voteQueries[idx] && voteQueries[idx].data, 10) || 0,
-  }));
-
-  const loading = itemsPending || voteQueries.some((q) => q.isPending);
-
-  useEffect(() => {
-    if (listError) toast.error(toMessage(listError));
-  }, [listError]);
-
-  // Search is derived from state already on hand, so it is computed during
-  // render rather than mirrored into a second piece of state.
-  const term = appliedSearch.trim().toLowerCase();
-  const filteredWorks = term
-    ? works.filter(
-        (w) =>
-          w.title.toLowerCase().includes(term) ||
-          w.description.toLowerCase().includes(term)
-      )
-    : works;
-
-  const handleSearchClick = () => setAppliedSearch(searchInput);
-
-  const handleSearchKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSearchClick();
-    }
-  };
-
-  const handleVoteClick = () => {
-    toast.warning("Please log in first.");
-  };
-
-  const handleViewCommentClick = (id) => {
-    navigate(`/publicusercoments/${id}`);
-  };
-
-  const getFileTypeIcon = (type) => {
-    if (!type) return <FileIcon className="h-4 w-4 text-muted-foreground" />;
-    if (type.startsWith("image/"))
-      return <ImageIcon className="h-4 w-4 text-blue-500" />;
-    if (type === "application/pdf")
-      return <FileText className="h-4 w-4 text-red-500" />;
-    if (type.includes("code") || type.includes("json") || type.includes("python"))
-      return <Code className="h-4 w-4 text-emerald-500" />;
-    return <FileIcon className="h-4 w-4 text-muted-foreground" />;
-  };
-
-  if (!competitionId) return null;
-
+  const items = query.data?.data || [];
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
-        <div className="mx-auto max-w-6xl">
-          <h1 className="mb-8 text-center text-3xl font-bold tracking-tight text-foreground">
-            Approved Submissions
-          </h1>
-
-          {/* Search bar */}
-          <div className="mb-6 flex items-center justify-center gap-2">
-            <div className="relative w-full max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by title or description..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                className="pl-9"
-              />
-            </div>
-            <Button onClick={handleSearchClick} variant="default">
-              <Search className="mr-1.5 h-4 w-4" />
-              Search
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight">Approved Submissions</h1>
+          <p className="mt-2 text-muted-foreground">
+            Explore work reviewed by the competition organizer.
+          </p>
+        </header>
+        {!competitionId ? (
+          <EmptyState
+            icon={FileText}
+            title="Choose a competition first"
+            description="Open a competition to view its approved submissions."
+            actionLabel="Browse contests"
+            onAction={() => window.location.assign('/contest-list')}
+          />
+        ) : (
+          <>
+            <Button asChild variant="outline">
+              <Link to={`/publiccontest-detail/${competitionId}`}>Back to contest</Link>
             </Button>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <Card className="overflow-hidden border-border/60 shadow-md">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-amber-500 text-white">
-                      <th className="px-4 py-3 text-center font-semibold">Title</th>
-                      <th className="px-4 py-3 text-center font-semibold">Description</th>
-                      <th className="px-4 py-3 text-center font-semibold">Type</th>
-                      <th className="px-4 py-3 text-center font-semibold">View File</th>
-                      <th className="px-4 py-3 text-center font-semibold">Votes</th>
-                      <th className="px-4 py-3 text-center font-semibold">Vote</th>
-                      <th className="px-4 py-3 text-center font-semibold">Comment</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredWorks.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                          No submissions found.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredWorks.map((w) => (
-                        <tr
-                          key={w.id}
-                          className="border-b border-border/60 transition-colors hover:bg-muted/40 last:border-b-0"
-                        >
-                          <td className="px-4 py-3 text-center font-medium text-foreground">
-                            {w.title}
-                          </td>
-                          <td className="px-4 py-3 text-center text-muted-foreground">
-                            {w.description}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center">
-                              {getFileTypeIcon(w.fileType)}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Button
-                              size="sm"
-                              className="bg-amber-500 hover:bg-amber-600"
-                              asChild
-                            >
-                              <a
-                                href={w.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                                View
-                              </a>
-                            </Button>
-                          </td>
-                          <td className="px-4 py-3 text-center font-semibold text-foreground">
-                            {w.voteCount}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Button
-                              size="sm"
-                              className="bg-amber-500 hover:bg-amber-600"
-                              onClick={() => handleVoteClick(w)}
-                            >
-                              <Heart className="mr-1 h-3.5 w-3.5" />
-                              Vote
-                            </Button>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                              onClick={() => handleViewCommentClick(w.id)}
-                            >
-                              <MessageCircle className="mr-1 h-3.5 w-3.5" />
-                              View
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+            <form onSubmit={state.submitSearch} className="flex flex-wrap items-end gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor="work-search">Search submissions</Label>
+                <Input
+                  id="work-search"
+                  type="search"
+                  placeholder="Search by title or description..."
+                  className="h-11 text-base"
+                  value={state.searchInput}
+                  onChange={(event) => state.setSearchInput(event.target.value)}
+                />
               </div>
-            </Card>
-          )}
-        </div>
+              <Button type="submit" className="h-11">
+                Search
+              </Button>
+            </form>
+            {query.isPending ? (
+              <PageSkeleton rows={3} />
+            ) : query.error ? (
+              <PageError
+                error={query.error}
+                onRetry={() => query.refetch()}
+                retrying={query.isFetching}
+              />
+            ) : items.length === 0 ? (
+              <EmptyState
+                icon={FileText}
+                title="No approved submissions found"
+                description="Try a different search or check back after submissions are reviewed."
+              />
+            ) : (
+              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {items.map((work) => (
+                  <WorkCard key={work.id} work={{ ...work, competitionId }} />
+                ))}
+              </div>
+            )}
+            {!query.error && !query.isPending && (
+              <Pagination
+                page={state.page}
+                pages={query.data?.pages}
+                total={query.data?.total ?? items.length}
+                onPageChange={state.setPage}
+                busy={query.isFetching}
+              />
+            )}
+          </>
+        )}
       </div>
       <Footer />
     </>
   );
 }
-
-export default WorkList;

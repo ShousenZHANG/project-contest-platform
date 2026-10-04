@@ -7,19 +7,20 @@
  * Role: Public User
  * Developer: Ziqi Yi (migrated)
  */
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Loader2, FileText, Pin, Paperclip, Award } from "lucide-react";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import { submissionService } from "../services/registrationService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap, toMessage } from "../api/queryFn";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import React from 'react';
+import SubmissionFile from '@/shared/components/SubmissionFile';
+import { useQuery } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Loader2, FileText, Pin, Paperclip, Award } from 'lucide-react';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import { submissionService } from '../services/registrationService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 function TeamPublicDetail() {
   const { competitionId, teamId } = useParams();
@@ -31,7 +32,7 @@ function TeamPublicDetail() {
     isPending: loading,
     error: queryError,
   } = useQuery({
-    queryKey: [...queryKeys.submissions.all, "teamSubmission", competitionId, teamId],
+    queryKey: [...queryKeys.submissions.all, 'teamSubmission', competitionId, teamId],
     queryFn: () => unwrap(submissionService.getTeamSubmission(competitionId, teamId)),
     enabled: Boolean(competitionId && teamId),
     staleTime: staleTime.medium,
@@ -39,9 +40,7 @@ function TeamPublicDetail() {
 
   // A missing submission comes back as an error from this endpoint rather than
   // an empty body, so the fallback copy stays the same as before.
-  const error = queryError
-    ? toMessage(queryError) || "No submission found for this team."
-    : null;
+  const error = queryError ? toMessage(queryError) || 'No submission found for this team.' : null;
 
   return (
     <>
@@ -56,10 +55,10 @@ function TeamPublicDetail() {
           <Card className="border-border/60 shadow-lg">
             <CardHeader className="space-y-2">
               <CardTitle className="text-3xl font-bold tracking-tight">
-                {teamName || "Unnamed Team"}
+                {teamName || 'Unnamed Team'}
               </CardTitle>
               <CardDescription className="text-base leading-relaxed">
-                {teamDescription || "No description provided."}
+                {teamDescription || 'No description provided.'}
               </CardDescription>
             </CardHeader>
             <Separator />
@@ -80,7 +79,7 @@ function TeamPublicDetail() {
                       Submission Title
                     </div>
                     <p className="mt-1 text-base text-muted-foreground">
-                      {submission.title || "No title"}
+                      {submission.title || 'No title'}
                     </p>
                   </div>
 
@@ -90,7 +89,7 @@ function TeamPublicDetail() {
                       Description
                     </div>
                     <p className="mt-1 text-base text-muted-foreground">
-                      {submission.description || "No description"}
+                      {submission.description || 'No description'}
                     </p>
                   </div>
 
@@ -99,20 +98,7 @@ function TeamPublicDetail() {
                       <Paperclip className="h-4 w-4 text-primary" />
                       File
                     </div>
-                    {submission.fileUrl ? (
-                      <a
-                        href={submission.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-block text-sm font-medium text-primary hover:underline"
-                      >
-                        {submission.fileName || "Download File"}
-                      </a>
-                    ) : (
-                      <p className="mt-1 text-base text-muted-foreground">
-                        No file submitted.
-                      </p>
-                    )}
+                    <SubmissionFile fileUrl={submission.fileUrl} fileName={submission.fileName} />
                   </div>
 
                   <Separator />
@@ -123,7 +109,7 @@ function TeamPublicDetail() {
                         Review Status
                       </p>
                       <div className="mt-2">
-                        <Badge variant="secondary">{submission.reviewStatus || "—"}</Badge>
+                        <Badge variant="secondary">{submission.reviewStatus || '—'}</Badge>
                       </div>
                     </div>
                     <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
@@ -132,7 +118,7 @@ function TeamPublicDetail() {
                       </p>
                       <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-foreground">
                         <Award className="h-5 w-5 text-amber-500" />
-                        {submission.totalScore ?? "N/A"}
+                        {submission.totalScore ?? 'N/A'}
                       </div>
                     </div>
                   </div>

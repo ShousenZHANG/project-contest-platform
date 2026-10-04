@@ -2,6 +2,7 @@ package com.w16a.danish.interaction.domain.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
 
 /**
  *
@@ -21,5 +22,6 @@ public class SubmissionCommentDTO {
     private String parentId;
 
     @Schema(description = "Content of the comment", example = "Awesome work! Could you share your model config?", required = true)
+    @NotBlank
     private String content;
 }

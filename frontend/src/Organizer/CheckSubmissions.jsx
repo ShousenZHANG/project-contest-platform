@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * @file CheckSubmissions.jsx
  * @description
@@ -12,6 +13,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import PageError from '../shared/components/PageError';
+import SubmissionFile from '../shared/components/SubmissionFile';
 import { competitionService } from '../services/competitionService';
 import { submissionService } from '../services/registrationService';
 import { queryKeys, staleTime } from '../api/queryKeys';
@@ -63,7 +66,7 @@ function OrganizerSubmissions() {
   const listParams = { competitionId, page, size: 10, keyword, sortBy, order };
   const listKey = queryKeys.submissions.byCompetition(competitionId, listParams);
 
-  const { data: listPage, isPending: loading } = useQuery({
+  const { data: listPage, isPending: loading, error: listError, refetch: retryList, isFetching: listFetching } = useQuery({
     queryKey: listKey,
     queryFn: () => unwrap(submissionService.getPublic(listParams)),
     enabled: Boolean(competitionId),
@@ -74,14 +77,15 @@ function OrganizerSubmissions() {
   const totalPages = listPage?.pages ?? 1;
   const totalCount = listPage?.total ?? 0;
 
-  const { data: competition } = useQuery({
-    queryKey: queryKeys.competitions.detail(competitionId),
-    queryFn: () => unwrap(competitionService.getById(competitionId)),
+  const { data: competition, error: competitionError, refetch: retryCompetition, isFetching: competitionFetching } = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(competitionId),
+    queryFn: () => unwrap(competitionService.getManagedById(competitionId)),
     enabled: Boolean(competitionId),
     staleTime: staleTime.medium,
   });
 
   const competitionName = competition?.name || 'Unnamed Competition';
+  const canReview = competition?.status === 'ONGOING';
 
   const reviewSubmission = useMutation({
     mutationFn: (data) => unwrap(submissionService.review(data)),
@@ -104,16 +108,17 @@ function OrganizerSubmissions() {
   };
 
   const handleViewDetail = (submission) => {
+    reviewSubmission.reset();
     setSelectedSubmission(submission);
     setReviewStatus(
-      ['APPROVED', 'REJECTED'].includes(submission.reviewStatus) ? submission.reviewStatus : ''
+      ['APPROVED', 'REJECTED'].includes(submission.reviewStatus) ? submission.reviewStatus : '',
     );
     setReviewComments(submission.reviewComments || '');
     setDialogOpen(true);
   };
 
   const handleReviewSubmit = () => {
-    if (!selectedSubmission) return;
+    if (!selectedSubmission || !canReview || reviewSubmission.isPending || !['APPROVED', 'REJECTED'].includes(reviewStatus)) return;
     reviewSubmission.mutate({
       submissionId: selectedSubmission.id,
       reviewStatus,
@@ -129,8 +134,13 @@ function OrganizerSubmissions() {
         </h1>
       </div>
 
-      <div className="mb-4 flex gap-2">
+      {competitionError && <PageError error={competitionError} onRetry={() => retryCompetition()} retrying={competitionFetching} />}
+      {listError && <PageError error={listError} onRetry={() => retryList()} retrying={listFetching} />}
+      {competition && !canReview && <p role="status" className="mb-4 text-sm text-muted-foreground">Review changes are available only while the competition is ONGOING. Existing decisions remain visible.</p>}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Label htmlFor="review-search" className="sr-only">Search submissions</Label>
         <Input
+          id="review-search"
           placeholder="Search by title or description"
           value={keyword}
           onChange={handleSearch}
@@ -182,7 +192,7 @@ function OrganizerSubmissions() {
                         <span className="line-clamp-1">{s.description}</span>
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">
-                        {new Date(s.createdAt).toLocaleString()}
+                        {parseApiDateTime(s.createdAt).toLocaleString()}
                       </td>
                       <td className="px-3 py-1.5">
                         {s.totalScore != null ? (
@@ -246,7 +256,7 @@ function OrganizerSubmissions() {
             </div>
           </div>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { if (!reviewSubmission.isPending) setDialogOpen(open); }}>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Submission Review</DialogTitle>
@@ -262,35 +272,22 @@ function OrganizerSubmissions() {
                   <p>
                     <strong>Description:</strong> {selectedSubmission.description}
                   </p>
-                  <p>
-                    <strong>File:</strong>{' '}
-                    <a
-                      href={selectedSubmission.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline"
-                    >
-                      {selectedSubmission.fileName}
-                    </a>
-                  </p>
+                  <SubmissionFile
+                    fileUrl={selectedSubmission.fileUrl}
+                    fileName={selectedSubmission.fileName}
+                  />
                   <p>
                     <strong>Type:</strong> {selectedSubmission.fileType}
                   </p>
                   <p>
                     <strong>Time:</strong>{' '}
-                    {new Date(selectedSubmission.createdAt).toLocaleString()}
+                    {parseApiDateTime(selectedSubmission.createdAt).toLocaleString()}
                   </p>
-                  {selectedSubmission.fileType?.startsWith('image') && (
-                    <img
-                      src={selectedSubmission.fileUrl}
-                      alt="preview"
-                      className="max-w-full rounded-md border border-border"
-                    />
-                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="reviewStatus">Review Status</Label>
                     <select
                       id="reviewStatus"
+                      disabled={!canReview || reviewSubmission.isPending}
                       value={reviewStatus}
                       onChange={(e) => setReviewStatus(e.target.value)}
                       className={SELECT_CLASS}
@@ -304,6 +301,8 @@ function OrganizerSubmissions() {
                     <Label htmlFor="reviewComments">Review Comments</Label>
                     <textarea
                       id="reviewComments"
+                      disabled={!canReview || reviewSubmission.isPending}
+                      maxLength={2000}
                       rows={4}
                       value={reviewComments}
                       onChange={(e) => setReviewComments(e.target.value)}
@@ -312,20 +311,20 @@ function OrganizerSubmissions() {
                   </div>
                 </div>
               )}
+              {reviewSubmission.error && <PageError error={reviewSubmission.error} />}
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button variant="outline" disabled={reviewSubmission.isPending} onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleReviewSubmit}>Submit Review</Button>
+                <Button onClick={handleReviewSubmit} disabled={!canReview || reviewSubmission.isPending || !['APPROVED', 'REJECTED'].includes(reviewStatus)} aria-busy={reviewSubmission.isPending}>
+                  {reviewSubmission.isPending ? 'Submitting…' : 'Submit Review'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
           <div className="mt-4">
-            <Button
-              variant="outline"
-              onClick={() => navigate(`/OrganizerContestList/${email}`)}
-            >
+            <Button variant="outline" onClick={() => navigate(`/OrganizerContestList/${email}`)}>
               Back to Contest List
             </Button>
           </div>

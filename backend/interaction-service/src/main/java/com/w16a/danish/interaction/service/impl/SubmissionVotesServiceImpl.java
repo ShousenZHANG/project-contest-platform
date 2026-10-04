@@ -5,11 +5,13 @@ import com.w16a.danish.interaction.domain.po.SubmissionVotes;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.interaction.mapper.SubmissionVotesMapper;
 import com.w16a.danish.interaction.service.ISubmissionVotesService;
+import com.w16a.danish.interaction.service.PublicSubmissionAccess;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -24,6 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMapper, SubmissionVotes> implements ISubmissionVotesService {
 
+    private final PublicSubmissionAccess submissions;
+
     @Override
     @Transactional
     public void vote(String submissionId, String userId) {
@@ -31,6 +35,7 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID or User ID cannot be empty");
         }
 
+        submissions.requireVisible(submissionId);
         boolean alreadyVoted = this.lambdaQuery()
                 .eq(SubmissionVotes::getSubmissionId, submissionId)
                 .eq(SubmissionVotes::getUserId, userId)
@@ -45,7 +50,12 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
                 .setSubmissionId(submissionId)
                 .setUserId(userId);
 
-        boolean saved = this.save(vote);
+        boolean saved;
+        try {
+            saved = this.save(vote);
+        } catch (DuplicateKeyException duplicate) {
+            throw new BusinessException(HttpStatus.CONFLICT, "You have already voted for this submission");
+        }
         if (!saved) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save vote");
         }
@@ -58,6 +68,7 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID or User ID cannot be empty");
         }
 
+        submissions.requireVisible(submissionId);
         boolean exists = this.lambdaQuery()
                 .eq(SubmissionVotes::getSubmissionId, submissionId)
                 .eq(SubmissionVotes::getUserId, userId)
@@ -83,6 +94,7 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID cannot be empty");
         }
 
+        submissions.requireVisible(submissionId);
         return this.lambdaQuery()
                 .eq(SubmissionVotes::getSubmissionId, submissionId)
                 .count();
@@ -94,6 +106,7 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID and User ID cannot be empty");
         }
 
+        submissions.requireVisible(submissionId);
         return this.lambdaQuery()
                 .eq(SubmissionVotes::getSubmissionId, submissionId)
                 .eq(SubmissionVotes::getUserId, userId)
@@ -102,7 +115,13 @@ public class SubmissionVotesServiceImpl extends ServiceImpl<SubmissionVotesMappe
 
     @Override
     public Long countAllVotes() {
-        return this.lambdaQuery().count();
+        return baseMapper.countPublicVotes();
+    }
+
+    @Override
+    public long countCompetitionVotes(String competitionId) {
+        if (StrUtil.isBlank(competitionId)) throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition ID must not be blank");
+        return baseMapper.countCompetitionVotes(competitionId);
     }
 
 }

@@ -37,4 +37,7 @@ public class UserBriefVO {
 
     @Schema(description = "User created/joined time", example = "2025-04-04T14:23:00")
     private LocalDateTime createdAt;
+
+    @Schema(description = "Account role resolved by user-service", example = "JUDGE")
+    private String role;
 }

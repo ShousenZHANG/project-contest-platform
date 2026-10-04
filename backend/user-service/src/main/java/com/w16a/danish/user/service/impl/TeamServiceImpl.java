@@ -12,7 +12,6 @@ import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.domain.vo.*;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.user.feign.SubmissionServiceClient;
 import com.w16a.danish.user.mapper.TeamMapper;
 import com.w16a.danish.user.service.ITeamMembersService;
 import com.w16a.danish.user.service.ITeamService;
@@ -43,7 +42,6 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     private final ITeamMembersService teamMembersService;
     private final IUsersService usersService;
-    private final SubmissionServiceClient submissionService;
 
     @Override
     @Transactional
@@ -129,6 +127,14 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
     @Override
     @Transactional
     public void deleteTeam(RequestContext ctx, String teamId) {
+        // Lock before any ordinary read establishes the MySQL repeatable-read snapshot.
+        // The team lock also blocks new registration/submission foreign-key references.
+        if (baseMapper.lockAccount(ctx.userId()) == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "User not found");
+        }
+        if (baseMapper.lockTeam(teamId) == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Team not found.");
+        }
         Team team = this.getById(teamId);
         if (team == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Team not found.");
@@ -140,16 +146,11 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only the team creator or an ADMIN can delete this team.");
         }
 
-        Boolean hasSubmission = Optional.ofNullable(submissionService.existsByTeamId(teamId).getBody())
-                .orElse(false);
-        if (hasSubmission) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Cannot delete a team that has submitted work.");
-        }
-
-        Boolean hasRegistration = Optional.ofNullable(submissionService.existsRegistrationByTeamId(teamId).getBody())
-                .orElse(false);
-        if (hasRegistration) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Cannot delete a team that has registered for competitions.");
+        if (baseMapper.hasCompetitionHistory(teamId)) {
+            String message = baseMapper.hasSubmissionHistory(teamId)
+                    ? "Cannot delete a team that has submitted work."
+                    : "Cannot delete a team that has registered for competitions.";
+            throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
 
         boolean membersRemoved = teamMembersService.lambdaUpdate()
@@ -272,7 +273,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
                 .map(TeamMembers::getUserId)
                 .toList();
 
-        List<UserBriefVO> userInfos = usersService.getUsersByIds(userIds, null);
+        List<UserBriefVO> userInfos = memberProfiles(userIds);
         if (userInfos == null) {
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to fetch team member info");
         }
@@ -314,6 +315,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     @Override
     public PageResponse<TeamSummaryVO> getTeamsCreatedBy(String userId, int page, int size, String sortBy, String order, String keyword) {
+        requirePage(page, size);
         List<Team> all = this.lambdaQuery()
                 .eq(Team::getCreatedBy, userId)
                 .list();
@@ -350,7 +352,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
         all = all.stream().sorted(comparator).toList();
 
         int total = all.size();
-        int fromIndex = Math.min((page - 1) * size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
         int toIndex = Math.min(fromIndex + size, total);
 
         List<TeamSummaryVO> pagedList = all.subList(fromIndex, toIndex).stream()
@@ -370,6 +372,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     @Override
     public PageResponse<TeamSummaryVO> getTeamsJoinedBy(String userId, int page, int size, String sortBy, String order, String keyword) {
+        requirePage(page, size);
         // 1. Fetch all teams the user has joined
         List<TeamMembers> memberships = teamMembersService.lambdaQuery()
                 .eq(TeamMembers::getUserId, userId)
@@ -397,8 +400,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
         }
 
         // 5. Fetch leader name and member counts
-        Map<String, String> leaderNameMap = usersService.getUsersByIds(
-                teams.stream().map(Team::getCreatedBy).distinct().toList(), null
+        Map<String, String> leaderNameMap = memberProfiles(
+                teams.stream().map(Team::getCreatedBy).distinct().toList()
         ).stream().collect(Collectors.toMap(UserBriefVO::getId, UserBriefVO::getName));
 
         Map<String, Long> memberCountMap = teamMembersService.lambdaQuery()
@@ -421,7 +424,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
         // 7. Pagination
         int total = teams.size();
-        int fromIndex = Math.min((page - 1) * size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
         int toIndex = Math.min(fromIndex + size, total);
 
         List<TeamSummaryVO> paged = teams.subList(fromIndex, toIndex).stream()
@@ -441,6 +444,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     @Override
     public PageResponse<TeamSummaryVO> getAllTeams(int page, int size, String sortBy, String order, String keyword) {
+        requirePage(page, size);
         List<Team> all = this.lambdaQuery().list();
 
         if (StrUtil.isNotBlank(keyword)) {
@@ -450,8 +454,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
                     .toList();
         }
 
-        Map<String, String> leaderNameMap = usersService.getUsersByIds(
-                all.stream().map(Team::getCreatedBy).distinct().toList(), null
+        Map<String, String> leaderNameMap = memberProfiles(
+                all.stream().map(Team::getCreatedBy).distinct().toList()
         ).stream().collect(Collectors.toMap(UserBriefVO::getId, UserBriefVO::getName));
 
         Map<String, Long> memberCountMap = teamMembersService.lambdaQuery()
@@ -473,7 +477,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
         all = all.stream().sorted(comparator).toList();
 
         int total = all.size();
-        int fromIndex = Math.min((page - 1) * size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
         int toIndex = Math.min(fromIndex + size, total);
 
         List<TeamSummaryVO> paged = all.subList(fromIndex, toIndex).stream()
@@ -516,6 +520,9 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
 
     @Override
     public List<TeamInfoVO> getTeamBriefByIds(List<String> teamIds) {
+        if (teamIds != null && (teamIds.size() > 100 || teamIds.stream().anyMatch(id -> id == null || id.isBlank()))) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Provide at most 100 non-empty team IDs");
+        }
         if (teamIds == null || teamIds.isEmpty()) {
             return Collections.emptyList();
         }
@@ -562,7 +569,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
                 .distinct()
                 .toList();
 
-        List<UserBriefVO> userInfos = usersService.getUsersByIds(userIds, null);
+        List<UserBriefVO> userInfos = memberProfiles(userIds);
         if (userInfos == null || userInfos.isEmpty()) {
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to fetch team member info");
         }
@@ -584,6 +591,22 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team> implements IT
                 .map(TeamMembers::getTeamId)
                 .distinct()
                 .toList();
+    }
+
+    private static void requirePage(int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
+    }
+
+    private List<UserBriefVO> memberProfiles(List<String> ids) {
+        List<UserBriefVO> users = new ArrayList<>();
+        for (int from = 0; from < ids.size(); from += 100) {
+            List<UserBriefVO> batch = usersService.getUsersByIds(ids.subList(from, Math.min(from + 100, ids.size())), null);
+            if (batch == null) throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to fetch team member info");
+            users.addAll(batch);
+        }
+        return users;
     }
 
 }

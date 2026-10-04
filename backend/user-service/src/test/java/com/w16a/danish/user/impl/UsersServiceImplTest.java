@@ -16,6 +16,7 @@ import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.user.feign.*;
 import com.w16a.danish.user.mapper.UsersMapper;
+import com.w16a.danish.user.profile.AvatarFiles;
 import com.w16a.danish.user.service.IRolesService;
 import com.w16a.danish.user.service.IUserRolesService;
 import com.w16a.danish.user.service.impl.UsersServiceImpl;
@@ -26,6 +27,8 @@ import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -52,6 +55,7 @@ class UsersServiceImplTest {
     private UsersServiceImpl usersService;
 
     @Mock private UsersMapper usersMapper;
+    @Mock private AvatarFiles avatarFiles;
     @Mock private IRolesService rolesService;
     @Mock private IUserRolesService userRolesService;
     @Mock private JwtConfig jwtConfig;
@@ -74,6 +78,7 @@ class UsersServiceImplTest {
         when(jwtConfig.getExpiration()).thenReturn(3600000L);
 
         ReflectionTestUtils.setField(usersService, "baseMapper", usersMapper);
+        when(usersMapper.lockAccount(anyString())).thenAnswer(call -> call.getArgument(0));
 
         // Default mock for lambdaQuery
         LambdaQueryChainWrapper<Users> userQuery = mock(LambdaQueryChainWrapper.class);
@@ -109,6 +114,63 @@ class UsersServiceImplTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getAccessToken()).isEqualTo("jwt-token");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "JUDGE", "admin", "judge", "INVALID"})
+    void publicRegistrationCannotProvisionPrivilegedRole(String role) {
+        RegisterRequestDTO dto = new RegisterRequestDTO();
+        dto.setEmail("new@example.com");
+        dto.setPassword("Password1");
+        dto.setRole(role);
+        assertThatThrownBy(() -> usersService.register(dto)).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Public registration only permits");
+        verify(usersService, never()).save(any(Users.class));
+        verify(userRolesService, never()).save(any(UserRoles.class));
+        verify(jwtUtil, never()).generateAndStoreToken(anyMap(), anyString(), anyLong());
+    }
+
+    @Test
+    void onlyAdminCanProvisionPrivilegedAccount() {
+        RegisterRequestDTO dto = new RegisterRequestDTO();
+        dto.setRole("JUDGE");
+        assertThatThrownBy(() -> usersService.provisionAccount(ctx("p1", "PARTICIPANT"), dto))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("required role(s): ADMIN");
+        verify(usersService, never()).save(any(Users.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "JUDGE"})
+    void administratorProvisionsAccountWithoutReceivingItsSessionToken(String role) {
+        RegisterRequestDTO dto = new RegisterRequestDTO();
+        dto.setName("Provisioned User");
+        dto.setEmail("new@example.com");
+        dto.setPassword("Password1");
+        dto.setRole(role);
+        LambdaQueryChainWrapper<Roles> roleQuery = mock(LambdaQueryChainWrapper.class);
+        when(rolesService.lambdaQuery()).thenReturn(roleQuery);
+        when(roleQuery.eq(any(), any())).thenReturn(roleQuery);
+        when(roleQuery.one()).thenReturn(new Roles().setId(3).setName(role));
+        when(passwordUtil.isPasswordValid(anyString())).thenReturn(true);
+        when(passwordUtil.encryptPassword(anyString())).thenReturn("hashed");
+        UserBriefVO created = usersService.provisionAccount(ctx("a1", "ADMIN"), dto);
+        assertThat(created.getRole()).isEqualTo(role);
+        assertThat(created.getId()).isNotBlank();
+        verify(userRolesService).save(argThat(assignment -> assignment.getRoleId() == 3 && assignment.getUserId().equals(created.getId())));
+        verify(jwtUtil, never()).generateAndStoreToken(anyMap(), anyString(), anyLong());
+    }
+
+    @Test
+    void emailLookupReportsDatabaseRoleForAssignment() {
+        LambdaQueryChainWrapper<Users> query = mock(LambdaQueryChainWrapper.class);
+        doReturn(query).when(usersService).lambdaQuery();
+        when(query.in(any(), anyCollection())).thenReturn(query);
+        when(query.list()).thenReturn(List.of(new Users().setId("j1").setEmail("judge@example.com")));
+        when(userRolesService.list(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(new UserRoles().setUserId("j1").setRoleId(3)));
+        when(rolesService.getById(3)).thenReturn(new Roles().setId(3).setName("JUDGE"));
+        assertThat(usersService.getUsersByEmails(List.of("judge@example.com"))).singleElement()
+                .extracting(UserBriefVO::getRole).isEqualTo("JUDGE");
     }
 
     @Test
@@ -170,8 +232,15 @@ class UsersServiceImplTest {
         // Mock GitHub User Info Client
         GithubUserDTO mockGithubUser = new GithubUserDTO();
         mockGithubUser.setLogin("mockuser");
+        mockGithubUser.setId(12345L);
         mockGithubUser.setEmail("mockuser@example.com");
         when(githubUserClient.getUserInfo(anyString())).thenReturn(mockGithubUser);
+        GithubEmailDTO verifiedEmail = new GithubEmailDTO();
+        verifiedEmail.setEmail("mockuser@example.com");
+        verifiedEmail.setPrimary(true);
+        verifiedEmail.setVerified(true);
+        when(githubUserClient.getEmails(anyString())).thenReturn(List.of(verifiedEmail));
+        when(usersMapper.bindOAuthAccount(eq("github"), eq("12345"), anyString())).thenReturn(1);
 
         // Mock lambdaQuery for checking existing user (none found)
         LambdaQueryChainWrapper<Users> userQuery = mock(LambdaQueryChainWrapper.class);
@@ -209,7 +278,8 @@ class UsersServiceImplTest {
         request.setNewPassword("Password1New");
 
         when(valueOperations.get(anyString())).thenReturn("userId");
-        Users user = new Users().setPassword("oldPass");
+        when(valueOperations.getAndDelete(anyString())).thenReturn("userId");
+        Users user = new Users().setId("userId").setPassword("oldPass");
         when(usersService.getById(anyString())).thenReturn(user);
 
         when(passwordUtil.isPasswordValid(anyString())).thenReturn(true);
@@ -217,10 +287,12 @@ class UsersServiceImplTest {
         when(jwtUtil.generateAndStoreToken(anyMap(), anyString(), anyLong())).thenReturn("new-jwt-token");
         when(userRolesService.getOne(any())).thenReturn(new UserRoles().setRoleId(1));
         when(rolesService.getById(anyInt())).thenReturn(new Roles().setName("PARTICIPANT"));
+        doReturn(true).when(usersService).updateById(any(Users.class));
 
         UserResponseVO result = usersService.resetPassword(request);
 
         assertThat(result.getAccessToken()).isEqualTo("new-jwt-token");
+        verify(valueOperations).getAndDelete("reset:token:reset-token");
     }
 
     @Test
@@ -519,6 +591,40 @@ class UsersServiceImplTest {
         assertThatThrownBy(() -> usersService.resetPassword(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("New password must be different");
+    }
+
+    @Test void resetTokenForDeletedAccountIsRejectedWithoutNullDereferenceOrConsumption() {
+        var request = new ResetPasswordRequest(); request.setToken("reset-token"); request.setNewPassword("Password1New");
+        when(valueOperations.get(anyString())).thenReturn("userId");
+        when(passwordUtil.isPasswordValid(anyString())).thenReturn(true);
+        doReturn(null).when(usersService).getById("userId");
+        assertThatThrownBy(() -> usersService.resetPassword(request)).hasMessageContaining("invalid or expired");
+        verify(valueOperations, never()).getAndDelete(anyString());
+        verify(usersService, never()).updateById(any(Users.class));
+    }
+
+    @Test void onlyOneRequestCanConsumeAValidatedResetTokenAndWriteThePassword() {
+        var request = new ResetPasswordRequest(); request.setToken("reset-token"); request.setNewPassword("Password1New");
+        when(valueOperations.get(anyString())).thenReturn("userId");
+        when(valueOperations.getAndDelete(anyString())).thenReturn("userId", null);
+        var user = new Users().setId("userId").setPassword("oldHash");
+        doReturn(user).when(usersService).getById("userId");
+        when(passwordUtil.isPasswordValid(anyString())).thenReturn(true);
+        when(passwordUtil.verifyPassword(anyString(), anyString())).thenReturn(false);
+        when(passwordUtil.encryptPassword(anyString())).thenReturn("newHash");
+        when(userRolesService.getOne(any())).thenReturn(new UserRoles().setRoleId(1));
+        when(rolesService.getById(1)).thenReturn(new Roles().setName("PARTICIPANT"));
+        doReturn(true).when(usersService).updateById(any(Users.class));
+        usersService.resetPassword(request);
+        assertThatThrownBy(() -> usersService.resetPassword(request)).hasMessageContaining("invalid or expired");
+        verify(usersService, times(1)).updateById(any(Users.class));
+        verify(valueOperations, times(2)).getAndDelete("reset:token:reset-token");
+    }
+
+    @Test void ordinaryProfileUpdateCannotBypassTheManagedAvatarEndpoint() {
+        var body = new UpdateUserDTO(); body.setAvatarUrl("https://files/user-avatar/another-user.png");
+        assertThatThrownBy(() -> usersService.updateUserProfile("userId", body)).hasMessageContaining("avatar endpoint");
+        verify(usersService, never()).updateById(any(Users.class));
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.w16a.danish.registration.controller;
 
+import com.w16a.danish.common.security.ServiceOnly;
+
 import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -9,6 +11,8 @@ import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
+import com.w16a.danish.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -18,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
@@ -44,6 +49,21 @@ public class SubmissionRecordsController {
 
     private final ISubmissionRecordsService submissionService;
     private final ISubmissionAnalyticsService analyticsService;
+    private final CompetitionGateway competitionGateway;
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/public-approved")
+    @ServiceOnly(value = "internal:read", callers = "interaction-service")
+    public ResponseEntity<Boolean> isPublicApproved(@RequestParam String submissionId) {
+        return ResponseEntity.ok(submissionService.isPublicApproved(submissionId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/is-organizer")
+    @ServiceOnly(value = "internal:read", callers = "interaction-service")
+    public ResponseEntity<Boolean> isOrganizerForInteraction(@RequestParam String submissionId, @RequestParam String userId) {
+        return ResponseEntity.ok(submissionService.isUserOrganizerOfSubmission(submissionId, userId));
+    }
 
     @Operation(
             summary = "Upload submission work",
@@ -229,6 +249,10 @@ public class SubmissionRecordsController {
             @RequestParam String submissionId,
             @RequestParam String userId) {
 
+        if (!submissionService.isPublicApproved(submissionId)) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found");
+        }
+
         boolean result = submissionService.isUserOrganizerOfSubmission(submissionId, userId);
         return ResponseEntity.ok(result);
     }
@@ -366,6 +390,7 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/exists-by-team")
+    @ServiceOnly(value = "internal:read", callers = "user-service")
     public ResponseEntity<Boolean> existsByTeamId(@RequestParam String teamId) {
         boolean exists = submissionService.existsByTeamId(teamId);
         return ResponseEntity.ok(exists);
@@ -387,6 +412,7 @@ public class SubmissionRecordsController {
     public ResponseEntity<SubmissionStatisticsVO> getSubmissionStatistics(
             @RequestParam String competitionId) {
 
+        requirePublicCompetition(competitionId);
         SubmissionStatisticsVO statistics = analyticsService.getSubmissionStatistics(competitionId);
         return ResponseEntity.ok(statistics);
     }
@@ -407,6 +433,7 @@ public class SubmissionRecordsController {
     public ResponseEntity<Map<String, Integer>> getSubmissionTrend(
             @PathVariable("competitionId") String competitionId) {
 
+        requirePublicCompetition(competitionId);
         Map<String, Integer> trend = analyticsService.getSubmissionTrend(competitionId);
         return ResponseEntity.ok(trend);
     }
@@ -439,19 +466,42 @@ public class SubmissionRecordsController {
         return ResponseEntity.ok(trend);
     }
 
+    @Operation(hidden = true)
+    @GetMapping("/internal/{competitionId}/statistics")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    public ResponseEntity<SubmissionStatisticsVO> getInternalSubmissionStatistics(@PathVariable String competitionId) {
+        return ResponseEntity.ok(analyticsService.getSubmissionStatistics(competitionId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/{competitionId}/submission-trend")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    public ResponseEntity<Map<String, Integer>> getInternalSubmissionTrend(@PathVariable String competitionId) {
+        return ResponseEntity.ok(analyticsService.getSubmissionTrend(competitionId));
+    }
+
+    private void requirePublicCompetition(String competitionId) {
+        if (!Boolean.TRUE.equals(competitionGateway.require(competitionId).getIsPublic())) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
+    }
+
     // ── Internal endpoints (called by judge-service only, not exposed via gateway) ──
 
     @Operation(hidden = true)
     @PutMapping("/internal/{id}/total-score")
+    @ServiceOnly(value = "internal:write", callers = "judge-service")
     public ResponseEntity<Void> updateTotalScore(
             @PathVariable("id") String submissionId,
-            @RequestParam("score") BigDecimal totalScore) {
-        submissionService.updateTotalScore(submissionId, totalScore);
+            @RequestParam("score") BigDecimal totalScore,
+            @RequestParam("version") long version, @RequestParam("revision") int revision) {
+        submissionService.updateTotalScore(submissionId, totalScore, version, revision);
         return ResponseEntity.ok().build();
     }
 
     @Operation(hidden = true)
     @GetMapping("/internal/score-statistics")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
     public ResponseEntity<SubmissionScoreStatisticsVO> getScoreStatistics(
             @RequestParam("competitionId") String competitionId) {
         return ResponseEntity.ok(analyticsService.getScoreStatistics(competitionId));
@@ -459,6 +509,7 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/my-submission")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
     public ResponseEntity<SubmissionInfoVO> getMySubmissionBasic(
             @RequestParam("competitionId") String competitionId,
             @RequestParam("userId") String userId) {
@@ -467,6 +518,7 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/team-submission")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
     public ResponseEntity<SubmissionInfoVO> getTeamSubmissionBasic(
             @RequestParam("competitionId") String competitionId,
             @RequestParam("teamId") String teamId) {
@@ -475,6 +527,7 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/team-submissions")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
     public ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(
             @RequestParam("competitionId") String competitionId,
             @RequestParam("teamIds") List<String> teamIds) {
@@ -483,6 +536,7 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/scored")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
     public ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(
             @RequestParam("competitionId") String competitionId) {
         return ResponseEntity.ok(analyticsService.getScoredSubmissions(competitionId));
@@ -490,9 +544,16 @@ public class SubmissionRecordsController {
 
     @Operation(hidden = true)
     @PostMapping("/internal/by-ids")
+    @ServiceOnly(value = "internal:write", callers = "judge-service")
     public ResponseEntity<List<SubmissionInfoVO>> getSubmissionsByIds(
             @RequestBody List<String> submissionIds) {
         return ResponseEntity.ok(analyticsService.getSubmissionsByIds(submissionIds));
     }
 
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"judge-service"})
+    @GetMapping("/internal/approved")
+    public ResponseEntity<List<SubmissionInfoVO>> getApprovedSubmissions(@RequestParam String competitionId) {
+        return ResponseEntity.ok(submissionService.getApprovedSubmissions(competitionId));
+    }
 }

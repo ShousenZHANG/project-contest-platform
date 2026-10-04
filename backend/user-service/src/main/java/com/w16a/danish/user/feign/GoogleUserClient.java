@@ -12,11 +12,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
  */
 @FeignClient(
         name = "googleUserClient",
-        url = "https://www.googleapis.com",
+        url = "https://openidconnect.googleapis.com",
         configuration = GoogleFeignConfig.class
 )
 public interface GoogleUserClient {
 
-    @GetMapping("/oauth2/v2/userinfo")
+    @GetMapping("/v1/userinfo")
     GoogleUserDTO getUserInfo(@RequestHeader("Authorization") String bearerToken);
 }

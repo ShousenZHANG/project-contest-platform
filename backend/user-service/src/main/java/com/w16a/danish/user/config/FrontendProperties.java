@@ -58,13 +58,17 @@ public class FrontendProperties {
      * Build OAuth callback redirection URL.
      */
     public String buildOauthRedirectUrl(String token, String email, String role, String userId) {
-        return String.format("%s%s?token=%s&email=%s&role=%s&userId=%s",
+        return String.format("%s%s#token=%s&email=%s&role=%s&userId=%s",
                 baseUrl,
                 oauthCallbackPath,
                 encode(token),
                 encode(email),
                 encode(role),
                 encode(userId));
+    }
+
+    public String buildOauthErrorUrl(String message) {
+        return baseUrl + oauthCallbackPath + "#error=" + encode(message);
     }
 
     private String encode(String value) {

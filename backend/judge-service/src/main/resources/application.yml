@@ -2,13 +2,16 @@ server:
   port: 8086
 
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   # None of these use Redis — the starter arrives from the parent POM. Without
   # this the client fell back to localhost:6379, and the health endpoint blocked
   # long enough for the container healthcheck to time out.
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
   application:
     name: judge-service
   datasource:
@@ -26,13 +29,18 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: public
+        username: ${NACOS_USERNAME:competition-platform}
+        password: ${NACOS_PASSWORD:}
   rabbitmq:
     host: rabbitmq
     port: 5672
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
     virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
@@ -53,11 +61,6 @@ springdoc:
     - group: "default"
       paths-to-match: "/**"
       packages-to-scan: com.w16a.danish.judge.controller
-knife4j:
-  enable: true
-  setting:
-    language: zh_cn
-
 feign:
   circuitbreaker:
     enabled: true

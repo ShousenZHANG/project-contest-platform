@@ -16,10 +16,10 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service", path = "/users", fallback = com.w16a.danish.interaction.feign.fallback.UserServiceClientFallback.class)
+@FeignClient(name = "user-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.interaction.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
-    @PostMapping("/query-by-ids")
+    @PostMapping("/users/internal/query-by-ids")
     ResponseEntity<List<UserBriefVO>> getUsersByIds(
             @RequestBody List<String> userIds,
             @RequestParam(required = false) String role

@@ -43,25 +43,35 @@ describe('WorkList', () => {
     await screen.findByText('Rocket Report');
 
     const voteCalls = apiClient.get.mock.calls.filter(
-      ([url]) => url === '/interactions/votes/count'
+      ([url]) => url === '/interactions/votes/count',
     );
     expect(voteCalls).toHaveLength(2);
   });
 
-  it('filters on the applied search term without refetching', async () => {
+  it('searches all approved works on the server and resets pagination', async () => {
+    apiClient.get.mockImplementation((url, config) => {
+      if (url === '/interactions/votes/count') return Promise.resolve({ data: 4 });
+      if (url === '/submissions/public/approved')
+        return Promise.resolve(
+          config.params.keyword
+            ? { data: { data: [APPROVED.data.data[1]], total: 1, pages: 1 } }
+            : APPROVED,
+        );
+      return Promise.resolve({ data: {} });
+    });
     renderWithProviders(<WorkList />, { route: '/work-list?competitionId=comp-1' });
     await screen.findByText('Rocket Report');
-
-    const callsBefore = apiClient.get.mock.calls.length;
 
     fireEvent.change(screen.getByPlaceholderText(/search/i), {
       target: { value: 'cake' },
     });
     fireEvent.click(screen.getByRole('button', { name: /search/i }));
 
-    await waitFor(() => expect(screen.queryByText('Rocket Report')).not.toBeInTheDocument());
-    expect(screen.getByText('Cake Design')).toBeInTheDocument();
-    expect(apiClient.get.mock.calls.length).toBe(callsBefore);
+    expect(await screen.findByText('Cake Design')).toBeInTheDocument();
+    expect(screen.queryByText('Rocket Report')).not.toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/submissions/public/approved', {
+      params: { competitionId: 'comp-1', page: 1, size: 12, keyword: 'cake' },
+    });
   });
 });
 
@@ -75,7 +85,7 @@ describe('contest ViewSubmission', () => {
     expect(await screen.findByText('Rocket Report')).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith(
       '/submissions/public/approved',
-      expect.objectContaining({ params: { competitionId: 'comp-1' } })
+      expect.objectContaining({ params: { competitionId: 'comp-1' } }),
     );
   });
 });

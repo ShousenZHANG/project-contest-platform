@@ -53,8 +53,12 @@ class SubmissionAnalyticsServiceImplStatsTest {
     void setUp() {
         competitionGateway = mock(CompetitionGateway.class);
 
-        SubmissionAnalyticsServiceImpl real = new SubmissionAnalyticsServiceImpl(competitionGateway);
-        ReflectionTestUtils.setField(real, "baseMapper", mock(SubmissionRecordsMapper.class));
+        SubmissionRecordsMapper mapper = mock(SubmissionRecordsMapper.class);
+        when(mapper.selectCurrentScoreIds(org.mockito.ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        SubmissionAnalyticsServiceImpl real = new SubmissionAnalyticsServiceImpl(competitionGateway,
+                new com.w16a.danish.registration.service.SubmissionScores(mapper));
+        ReflectionTestUtils.setField(real, "baseMapper", mapper);
         service = spy(real);
 
         // The builder methods are overloaded and take varargs, so naming each one
@@ -73,6 +77,7 @@ class SubmissionAnalyticsServiceImplStatsTest {
 
     private static SubmissionRecords scored(String score) {
         SubmissionRecords r = new SubmissionRecords();
+        r.setId(java.util.UUID.randomUUID().toString()).setRevision(0).setScoreVersion(1L).setReviewStatus("APPROVED");
         r.setTotalScore(new BigDecimal(score));
         return r;
     }
@@ -102,50 +107,47 @@ class SubmissionAnalyticsServiceImplStatsTest {
         @Test
         @DisplayName("Average is rounded to two places, half up")
         void averageIsRoundedHalfUp() {
-            when(query.list()).thenReturn(List.of(scored("10"), scored("10"), scored("11")));
+            when(query.list()).thenReturn(List.of(scored("1"), scored("1"), scored("2")));
 
             SubmissionScoreStatisticsVO stats = service.getScoreStatistics("c1");
 
-            // 31 / 3 = 10.333… → 10.33
-            assertThat(stats.getAverageScore()).isEqualByComparingTo("10.33");
+            assertThat(stats.getAverageScore()).isEqualByComparingTo("1.33");
         }
 
         @Test
         @DisplayName("Highest and lowest come from the values, not from the arrival order")
         void extremesAreTheRealExtremes() {
-            when(query.list()).thenReturn(List.of(scored("50"), scored("92.5"), scored("7.25")));
+            when(query.list()).thenReturn(List.of(scored("5"), scored("9.25"), scored("7.25")));
 
             SubmissionScoreStatisticsVO stats = service.getScoreStatistics("c1");
 
-            assertThat(stats.getHighestScore()).isEqualByComparingTo("92.5");
-            assertThat(stats.getLowestScore()).isEqualByComparingTo("7.25");
+            assertThat(stats.getHighestScore()).isEqualByComparingTo("9.25");
+            assertThat(stats.getLowestScore()).isEqualByComparingTo("5");
         }
 
         @Test
         @DisplayName("A single submission is both the highest and the lowest")
         void oneSubmissionIsBothExtremes() {
-            when(query.list()).thenReturn(List.of(scored("42")));
+            when(query.list()).thenReturn(List.of(scored("4.2")));
 
             SubmissionScoreStatisticsVO stats = service.getScoreStatistics("c1");
 
-            assertThat(stats.getHighestScore()).isEqualByComparingTo("42");
-            assertThat(stats.getLowestScore()).isEqualByComparingTo("42");
-            assertThat(stats.getAverageScore()).isEqualByComparingTo("42.00");
+            assertThat(stats.getHighestScore()).isEqualByComparingTo("4.2");
+            assertThat(stats.getLowestScore()).isEqualByComparingTo("4.2");
+            assertThat(stats.getAverageScore()).isEqualByComparingTo("4.20");
         }
 
         @Test
-        @DisplayName("A null score is skipped by the extremes but still counted in the divisor")
-        void nullScoreIsSkippedButStillCounted() {
+        @DisplayName("A missing score does not lower the mean of scored submissions")
+        void nullScoreIsExcludedFromTheDivisor() {
             SubmissionRecords unscored = new SubmissionRecords();
-            when(query.list()).thenReturn(List.of(scored("10"), unscored, scored("20")));
+            when(query.list()).thenReturn(List.of(scored("1"), unscored, scored("2")));
 
             SubmissionScoreStatisticsVO stats = service.getScoreStatistics("c1");
 
-            assertThat(stats.getHighestScore()).isEqualByComparingTo("20");
-            assertThat(stats.getLowestScore()).isEqualByComparingTo("10");
-            // 30 / 3 rather than 30 / 2 — the query filters nulls out, so this only
-            // matters if that filter ever changes.
-            assertThat(stats.getAverageScore()).isEqualByComparingTo("10.00");
+            assertThat(stats.getHighestScore()).isEqualByComparingTo("2");
+            assertThat(stats.getLowestScore()).isEqualByComparingTo("1");
+            assertThat(stats.getAverageScore()).isEqualByComparingTo("1.50");
         }
     }
 

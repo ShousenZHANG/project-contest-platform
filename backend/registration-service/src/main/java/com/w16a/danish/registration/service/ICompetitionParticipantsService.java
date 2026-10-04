@@ -120,7 +120,7 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      * @param teamId ID of the team
      * @return true if registered, false otherwise
      */
-    boolean isTeamRegistered(String competitionId, String teamId);
+    boolean isTeamRegistered(String competitionId, String teamId, RequestContext ctx);
 
     /**
      * Retrieve paginated list of teams registered for a competition, with optional search and sorting.
@@ -140,6 +140,9 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
                                                              String sortBy,
                                                              String order);
 
+    PageResponse<TeamInfoVO> getManagedTeamsByCompetitionWithSearch(
+            String competitionId, RequestContext ctx, int page, int size, String keyword, String sortBy, String order);
+
     /**
      * Retrieve paginated list of competitions a team has registered for, with optional search and sorting.
      *
@@ -152,7 +155,7 @@ public interface ICompetitionParticipantsService extends IService<CompetitionPar
      * @return Paginated response of competition participation information
      */
     PageResponse<CompetitionParticipationVO> getCompetitionsRegisteredByTeam(
-            String teamId, int page, int size, String keyword, String sortBy, String order
+            String teamId, RequestContext ctx, int page, int size, String keyword, String sortBy, String order
     );
 
     /**

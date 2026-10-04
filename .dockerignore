@@ -1,6 +1,10 @@
 # Version control
 .git
 .gitignore
+.env
+.env.*
+**/.env
+**/.env.*
 
 # Data volumes (not needed in build context)
 .mysql-data

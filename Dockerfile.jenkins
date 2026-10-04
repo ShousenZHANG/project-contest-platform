@@ -1,5 +1,8 @@
 FROM jenkins/jenkins:jdk21
 
+# This JDK runs the Jenkins controller. Jenkinsfile selects a separate build
+# agent with JDK 25, Node 24 and Python 3; this image does not supply those tools.
+
 USER root
 
 RUN apt-get update && \

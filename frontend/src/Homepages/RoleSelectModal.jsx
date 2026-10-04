@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { Users, Briefcase } from 'lucide-react';
+import { Users, Briefcase, ClipboardCheck, ShieldCheck } from 'lucide-react';
 
 import {
   Dialog,
@@ -29,15 +29,11 @@ function RoleSelectModal({ onSelectRole, onClose }) {
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold tracking-tight">
-            Select Your Role
-          </DialogTitle>
-          <DialogDescription>
-            Choose how you want to use the platform.
-          </DialogDescription>
+          <DialogTitle className="text-2xl font-bold tracking-tight">Select Your Role</DialogTitle>
+          <DialogDescription>Choose how you want to use the platform.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-2 gap-3 mt-2">
           <Button
             type="button"
             variant="outline"
@@ -50,6 +46,26 @@ function RoleSelectModal({ onSelectRole, onClose }) {
             <span className="text-xs font-normal text-muted-foreground text-center">
               Join contests and submit work
             </span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-auto flex-col gap-2 py-5"
+            onClick={() => onSelectRole('Judge')}
+          >
+            <ClipboardCheck aria-hidden="true" className="h-6 w-6 text-primary" />
+            <span>Judge</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-auto flex-col gap-2 py-5"
+            onClick={() => onSelectRole('Admin')}
+          >
+            <ShieldCheck aria-hidden="true" className="h-6 w-6 text-primary" />
+            <span>Admin</span>
           </Button>
 
           <Button

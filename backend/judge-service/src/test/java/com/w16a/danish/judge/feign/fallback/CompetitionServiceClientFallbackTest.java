@@ -51,10 +51,10 @@ class CompetitionServiceClientFallbackTest {
     }
 
     @Test
-    @DisplayName("Batch reads still degrade to empty, because one dead id must not fail a page")
-    void batchReadsDegradeQuietly() {
-        assertThat(fallback.getCompetitionsByIds(List.of("c1")).getBody()).isEmpty();
-        assertThat(fallback.listAllCompetitions().getBody()).isEmpty();
+    @DisplayName("An upstream outage cannot be represented as an empty competition history or platform")
+    void batchReadsReportOutage() {
+        assertThatThrownBy(() -> fallback.getCompetitionsByIds(List.of("c1"))).isInstanceOf(ServiceUnavailableException.class);
+        assertThatThrownBy(() -> fallback.listAllCompetitions()).isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test

@@ -17,6 +17,6 @@ public class TimeZoneConfig {
 
     @PostConstruct
     public void setDefaultTimeZone() {
-        TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("Australia/Sydney")));
+        TimeZone.setDefault(TimeZone.getTimeZone(ZoneId.of("UTC")));
     }
 }

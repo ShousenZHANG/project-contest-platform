@@ -39,13 +39,7 @@ import { loginSchema } from '../shared/schemas/userSchema';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { cn } from '../lib/utils';
 
 const DEFAULT_ROLE = 'PARTICIPANT';
@@ -56,7 +50,7 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
   const { login } = useAuth();
 
   const isModal = typeof onClose === 'function';
-  const role = (roleProp || DEFAULT_ROLE).toString();
+  const [role, setRole] = useState((roleProp || DEFAULT_ROLE).toString().toUpperCase());
   useDocumentTitle(isModal ? null : 'Sign In');
 
   const [showPassword, setShowPassword] = useState(false);
@@ -92,25 +86,23 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
 
       toast.success('Signed in successfully');
 
-      const from = location.state?.from?.pathname;
-      if (from && from !== '/login') {
-        navigate(from, { replace: true });
-      } else if (data.role === 'Admin') {
-        navigate('/AdminDashboard');
-      } else if (data.role === 'Organizer') {
-        navigate(`/OrganizerDashboard/${data.email}`);
-      } else if (data.role === 'Participant') {
-        navigate(`/profile/${data.email}`);
+      const from = location.state?.from;
+      if (from?.pathname?.startsWith('/') && !from.pathname.startsWith('//') && from.pathname !== '/login') {
+        navigate({ pathname: from.pathname, search: from.search, hash: from.hash }, { replace: true });
       } else {
-        navigate('/');
+        const profileEmail = encodeURIComponent(data.email);
+        const destinations = {
+          ADMIN: '/AdminDashboard',
+          ORGANIZER: `/OrganizerDashboard/${profileEmail}`,
+          PARTICIPANT: `/profile/${profileEmail}`,
+          JUDGE: '/judge',
+        };
+        navigate(destinations[data.role?.toUpperCase()] || '/', { replace: true });
       }
 
       if (isModal) onClose();
     } catch (err) {
-      const msg =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Login failed';
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Login failed';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
@@ -125,11 +117,9 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
     }
     setForgotPending(true);
     try {
-      await apiClient.post(
-        `/users/forgot-password?email=${encodeURIComponent(email)}`,
-        null,
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
+      await apiClient.post(`/users/forgot-password?email=${encodeURIComponent(email)}`, null, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
       toast.success('Reset link sent to your email');
     } catch (err) {
       toast.error('Unable to send reset link. Please check the email.');
@@ -161,22 +151,38 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
       )}
 
       <CardHeader className="space-y-2 pb-6">
-        <CardTitle className="text-3xl font-bold tracking-tight">
-          Welcome back
-        </CardTitle>
+        <CardTitle className="text-3xl font-bold tracking-tight">Welcome back</CardTitle>
         <CardDescription className="text-base">
-          Sign in to your{' '}
-          <span className="font-medium text-foreground">{role.toLowerCase()}</span>{' '}
+          Sign in to your <span className="font-medium text-foreground">{role.toLowerCase()}</span>{' '}
           account to continue
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4"
-          noValidate
-        >
+        {typeof location.state?.oauthError === 'string' && (
+          <div role="alert" className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+            <p className="text-destructive">{location.state.oauthError}</p>
+            <p className="text-muted-foreground">Use your existing account password to sign in. If you need a new password, enter your email and select “Forgot password?”.</p>
+          </div>
+        )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          {!isModal && (
+            <div className="space-y-2">
+              <Label htmlFor="login-role">Account role</Label>
+              <select
+                id="login-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {['Participant', 'Organizer', 'Judge', 'Admin'].map((value) => (
+                  <option key={value} value={value.toUpperCase()}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
@@ -189,14 +195,12 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
                 aria-invalid={!!errors.email}
                 className={cn(
                   'pl-9 h-11',
-                  errors.email && 'border-destructive focus-visible:ring-destructive'
+                  errors.email && 'border-destructive focus-visible:ring-destructive',
                 )}
                 {...register('email')}
               />
             </div>
-            {errors.email && (
-              <p className="text-xs text-destructive">{errors.email.message}</p>
-            )}
+            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
 
           <div className="space-y-2">
@@ -221,8 +225,7 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
                 aria-invalid={!!errors.password}
                 className={cn(
                   'pl-9 pr-10 h-11',
-                  errors.password &&
-                    'border-destructive focus-visible:ring-destructive'
+                  errors.password && 'border-destructive focus-visible:ring-destructive',
                 )}
                 {...register('password')}
               />
@@ -232,17 +235,11 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {errors.password && (
-              <p className="text-xs text-destructive">
-                {errors.password.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.password.message}</p>
             )}
           </div>
 
@@ -266,16 +263,22 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
           </Button>
         </form>
 
-        <p className="text-sm text-center text-muted-foreground">
-          Don't have an account?{' '}
-          <button
-            type="button"
-            onClick={handleRegisterClick}
-            className="font-medium text-primary hover:underline"
-          >
-            Sign up
-          </button>
-        </p>
+        {['PARTICIPANT', 'ORGANIZER'].includes(role) ? (
+          <p className="text-sm text-center text-muted-foreground">
+            Don't have an account?{' '}
+            <button
+              type="button"
+              onClick={handleRegisterClick}
+              className="font-medium text-primary hover:underline"
+            >
+              Sign up
+            </button>
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Judge and Admin accounts are provisioned by a platform administrator. Use password sign-in for these roles.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -318,7 +321,10 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
             maskImage: 'linear-gradient(to bottom, #000 55%, transparent 100%)',
           }}
         />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-noise opacity-[0.06]" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-noise opacity-[0.06]"
+        />
 
         <div className="relative flex items-center gap-2 text-lg font-semibold">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
@@ -356,9 +362,7 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
       </div>
 
       {/* Right — form */}
-      <div className="flex items-center justify-center p-6 sm:p-12">
-        {FormCard}
-      </div>
+      <div className="flex items-center justify-center p-6 sm:p-12">{FormCard}</div>
     </div>
   );
 }

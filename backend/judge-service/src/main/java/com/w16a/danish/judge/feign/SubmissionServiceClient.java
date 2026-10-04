@@ -1,7 +1,5 @@
 package com.w16a.danish.judge.feign;
 
-import com.w16a.danish.common.domain.vo.PageResponse;
-import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
@@ -21,34 +19,13 @@ import java.util.Map;
  * @author Eddy
  * @since 2025-04-18
  */
-@FeignClient(name = "registration-service", fallback = com.w16a.danish.judge.feign.fallback.SubmissionServiceClientFallback.class)
+@FeignClient(name = "registration-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.judge.feign.fallback.SubmissionServiceClientFallback.class)
 public interface SubmissionServiceClient {
-
-    /**
-     * List approved submissions for a given competition (public access).
-     *
-     * @param competitionId ID of the competition
-     * @param page          Page number (default 1)
-     * @param size          Page size (default 10)
-     * @param keyword       Optional search keyword
-     * @param sortBy        Field to sort by (default createdAt)
-     * @param order         Sorting order (asc/desc)
-     * @return Paginated list of approved submissions
-     */
-    @GetMapping("/submissions/public/approved")
-    ResponseEntity<PageResponse<SubmissionInfoVO>> listApprovedSubmissionsPublic(
-            @RequestParam("competitionId") String competitionId,
-            @RequestParam(value = "page", defaultValue = "1") int page,
-            @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
-            @RequestParam(value = "order", defaultValue = "desc") String order
-    );
 
     /**
      * Get registration statistics (individual and team participants) for a competition.
      */
-    @GetMapping("/registrations/public/{competitionId}/statistics")
+    @GetMapping("/registrations/internal/{competitionId}/statistics")
     ResponseEntity<RegistrationStatisticsVO> getRegistrationStatistics(
             @PathVariable("competitionId") String competitionId
     );
@@ -56,15 +33,15 @@ public interface SubmissionServiceClient {
     /**
      * Get submission statistics (approved, pending, rejected counts) for a competition.
      */
-    @GetMapping("/submissions/statistics")
+    @GetMapping("/submissions/internal/{competitionId}/statistics")
     ResponseEntity<SubmissionStatisticsVO> getSubmissionStatistics(
-            @RequestParam("competitionId") String competitionId
+            @PathVariable("competitionId") String competitionId
     );
 
     /**
      * Get participant registration trend (individual & team) for a competition.
      */
-    @GetMapping("/registrations/public/{competitionId}/participant-trend")
+    @GetMapping("/registrations/internal/{competitionId}/participant-trend")
     ResponseEntity<Map<String, Map<String, Integer>>> getParticipantTrend(
             @PathVariable("competitionId") String competitionId
     );
@@ -72,7 +49,7 @@ public interface SubmissionServiceClient {
     /**
      * Get submission upload trend (date -> number of submissions) for a competition.
      */
-    @GetMapping("/submissions/public/{competitionId}/submission-trend")
+    @GetMapping("/submissions/internal/{competitionId}/submission-trend")
     ResponseEntity<Map<String, Integer>> getSubmissionTrend(
             @PathVariable("competitionId") String competitionId
     );
@@ -111,13 +88,18 @@ public interface SubmissionServiceClient {
 
     // ── Internal endpoints ────────────────────────────────────────────────────
 
+    @GetMapping("/submissions/internal/approved")
+    ResponseEntity<List<SubmissionInfoVO>> getApprovedSubmissions(@RequestParam("competitionId") String competitionId);
+
     /**
      * Update the aggregated total score on a submission record.
      */
     @PutMapping("/submissions/internal/{id}/total-score")
     ResponseEntity<Void> updateTotalScore(
             @PathVariable("id") String submissionId,
-            @RequestParam("score") java.math.BigDecimal totalScore
+            @RequestParam("score") java.math.BigDecimal totalScore,
+            @RequestParam("version") long version,
+            @RequestParam("revision") int revision
     );
 
     /**
@@ -153,14 +135,6 @@ public interface SubmissionServiceClient {
     ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(
             @RequestParam("competitionId") String competitionId,
             @RequestParam("teamIds") List<String> teamIds
-    );
-
-    /**
-     * Get all scored submissions (totalScore IS NOT NULL) for a competition.
-     */
-    @GetMapping("/submissions/internal/scored")
-    ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(
-            @RequestParam("competitionId") String competitionId
     );
 
     /**

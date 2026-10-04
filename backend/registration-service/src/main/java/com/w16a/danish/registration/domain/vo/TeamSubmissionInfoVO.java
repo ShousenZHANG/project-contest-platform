@@ -54,6 +54,6 @@ public class TeamSubmissionInfoVO {
     @Schema(description = "Review timestamp", example = "2025-04-05T14:30:00")
     private LocalDateTime reviewedAt;
 
-    @Schema(description = "Total score assigned after review (if any)", example = "92.5")
+    @Schema(description = "Current score from 0 to 10; null when awaiting reassessment", example = "9.25")
     private Double totalScore;
 }

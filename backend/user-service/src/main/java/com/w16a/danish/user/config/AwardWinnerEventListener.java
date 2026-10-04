@@ -20,11 +20,17 @@ import java.time.format.DateTimeFormatter;
 public class AwardWinnerEventListener {
 
     private final EmailService emailService;
+    private final NotificationInbox inbox;
     private final FrontendProperties frontendProperties;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @RabbitListener(queues = MessagingConstants.AWARD_WINNER_QUEUE)
+    public void receiveAwardWinner(AwardWinnerMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("AwardWinnerMessage", eventId, message);
+    }
+
     public void handleAwardWinner(AwardWinnerMessage message) {
         String subject;
         String content;

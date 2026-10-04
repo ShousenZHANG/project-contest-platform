@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>w16a.danish</groupId><artifactId>database-migrations</artifactId><version>1.0</version><packaging>pom</packaging>
+    <build><plugins><plugin>
+        <groupId>org.flywaydb</groupId><artifactId>flyway-maven-plugin</artifactId><version>13.9.0</version>
+        <configuration>
+            <url>${env.MIGRATION_DATABASE_URL}</url><user>${env.MYSQL_USER}</user><password>${env.MYSQL_PASSWORD}</password>
+            <locations><location>filesystem:${project.basedir}/migrations</location></locations>
+            <schemas><schema>project_contest_platform</schema></schemas>
+            <baselineOnMigrate>false</baselineOnMigrate><cleanDisabled>true</cleanDisabled><validateMigrationNaming>true</validateMigrationNaming>
+        </configuration>
+        <dependencies><dependency><groupId>org.flywaydb</groupId><artifactId>flyway-mysql</artifactId><version>13.9.0</version></dependency></dependencies>
+    </plugin></plugins></build>
+</project>

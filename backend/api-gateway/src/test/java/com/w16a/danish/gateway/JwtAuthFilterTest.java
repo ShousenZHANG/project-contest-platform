@@ -1,20 +1,18 @@
 package com.w16a.danish.gateway;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
-import com.w16a.danish.gateway.config.JwtConfig;
-import com.w16a.danish.gateway.util.JwtUtil;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 
 /**
  * ✅ Integration tests for JwtAuthFilter in API Gateway.
@@ -33,13 +31,15 @@ class JwtAuthFilterTest {
     @Autowired
     private WebTestClient webTestClient;
 
-    @Autowired
-    private JwtConfig jwtConfig;
+    private static final WireMockServer wireMockServer = new WireMockServer(options().dynamicPort());
 
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    private WireMockServer wireMockServer;
+    @DynamicPropertySource
+    static void backendRoute(DynamicPropertyRegistry properties) {
+        wireMockServer.start();
+        properties.add("spring.cloud.gateway.server.webflux.routes[0].id", () -> "user-service");
+        properties.add("spring.cloud.gateway.server.webflux.routes[0].uri", wireMockServer::baseUrl);
+        properties.add("spring.cloud.gateway.server.webflux.routes[0].predicates[0]", () -> "Path=/users/**");
+    }
 
     /**
      * Start WireMock server before all tests.
@@ -47,9 +47,6 @@ class JwtAuthFilterTest {
      */
     @BeforeAll
     void startWireMock() {
-        wireMockServer = new WireMockServer(9999);
-        wireMockServer.start();
-
         // ✅ Mock public endpoint: /users/login (no authentication required)
         wireMockServer.stubFor(get(urlEqualTo("/users/login"))
                 .willReturn(okJson("{\"message\": \"Login OK\"}")));
@@ -67,21 +64,6 @@ class JwtAuthFilterTest {
         if (wireMockServer != null) {
             wireMockServer.stop();
         }
-    }
-
-    /**
-     * Generate a valid JWT token for future extended tests (if needed).
-     *
-     * @return Signed JWT token string.
-     */
-    private String generateValidToken() {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", "test-user");
-        claims.put("role", "PARTICIPANT");
-
-        long expirationSeconds = 3600; // 1 hour validity
-
-        return jwtUtil.generateToken(claims, jwtConfig.getSecret(), expirationSeconds);
     }
 
     /**

@@ -1,6 +1,6 @@
 import apiClient from '../api/apiClient';
 import type { AxiosResponse } from 'axios';
-import type { User, ApiResponse, PageResponse } from '../types/index';
+import type { User, UserRole, UserProfile, AdminUser, AuthSession, ApiResponse, PageResponse } from '../types/index';
 import type {
   RegisterRequest,
   LoginRequest,
@@ -9,58 +9,61 @@ import type {
   PaginationParams,
 } from '../types/api';
 
-export interface AuthSession {
-  token: string;
-  userId: string;
-  email: string;
-  role: User['role'];
+export interface AdminUserFilterParams extends PaginationParams {
+  role?: UserRole;
+  keyword?: string;
+  sortBy?: 'createdAt' | 'name' | 'email';
+  order?: 'asc' | 'desc';
 }
 
 export const userService = {
-  register: (data: RegisterRequest): Promise<AxiosResponse<ApiResponse<AuthSession>>> =>
+  provisionJudge: (data: {
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<AxiosResponse<User>> =>
+    apiClient.post('/users/admin/accounts', { ...data, role: 'JUDGE' }),
+  register: (data: RegisterRequest): Promise<AxiosResponse<AuthSession>> =>
     apiClient.post('/users/register', data),
 
-  login: (data: LoginRequest): Promise<AxiosResponse<ApiResponse<AuthSession>>> =>
+  login: (data: LoginRequest): Promise<AxiosResponse<AuthSession>> =>
     apiClient.post('/users/login', data),
 
-  logout: (): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post('/users/logout'),
+  logout: (): Promise<AxiosResponse<ApiResponse<string>>> => apiClient.post('/users/logout'),
 
-  getProfile: (): Promise<AxiosResponse<ApiResponse<User>>> =>
-    apiClient.get('/users/profile'),
+  getProfile: (): Promise<AxiosResponse<UserProfile>> => apiClient.get('/users/profile'),
 
-  updateProfile: (data: UpdateProfileRequest): Promise<AxiosResponse<ApiResponse<User>>> =>
+  updateProfile: (data: UpdateProfileRequest): Promise<AxiosResponse<UserProfile>> =>
     apiClient.put('/users/profile', data),
 
-  uploadAvatar: (formData: FormData): Promise<AxiosResponse<ApiResponse<string>>> =>
+  uploadAvatar: (formData: FormData): Promise<AxiosResponse<UserProfile>> =>
     apiClient.post('/users/profile/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  forgotPassword: (email: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  forgotPassword: (email: string): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.post(`/users/forgot-password?email=${encodeURIComponent(email)}`),
 
-  resetPassword: (data: ResetPasswordRequest): Promise<AxiosResponse<ApiResponse<void>>> =>
+  resetPassword: (data: ResetPasswordRequest): Promise<AxiosResponse<AuthSession>> =>
     apiClient.post('/users/reset-password', data),
 
-  getUserById: (id: string): Promise<AxiosResponse<ApiResponse<User>>> =>
+  getUserById: (id: string): Promise<AxiosResponse<User>> =>
     apiClient.get(`/users/${id}`),
 
-  getUsersByIds: (ids: string[]): Promise<AxiosResponse<ApiResponse<User[]>>> =>
+  getUsersByIds: (ids: string[]): Promise<AxiosResponse<User[]>> =>
     apiClient.post('/users/query-by-ids', ids),
 
-  getUsersByEmails: (emails: string[]): Promise<AxiosResponse<ApiResponse<User[]>>> =>
-    apiClient.post('/users/query-by-emails', emails),
-
-  deleteUser: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  deleteUser: (id: string): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.delete(`/users/${id}`),
 
-  listUsersAdmin: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<PageResponse<User>>>> =>
+  listUsersAdmin: (
+    params?: AdminUserFilterParams,
+  ): Promise<AxiosResponse<PageResponse<AdminUser>>> =>
     apiClient.get('/users/admin/list', { params }),
 
-  oauthGithub: (role: User['role']): string =>
-    `${apiClient.defaults.baseURL}/users/oauth/github?role=${role}`,
+  oauthGithub: (role: RegisterRequest['role']): string =>
+    `${(apiClient.defaults.baseURL ?? '').replace(/\/+$/, '')}/users/oauth/github?role=${encodeURIComponent(role)}`,
 
-  oauthGoogle: (role: User['role']): string =>
-    `${apiClient.defaults.baseURL}/users/oauth/google?role=${role}`,
+  oauthGoogle: (role: RegisterRequest['role']): string =>
+    `${(apiClient.defaults.baseURL ?? '').replace(/\/+$/, '')}/users/oauth/google?role=${encodeURIComponent(role)}`,
 };

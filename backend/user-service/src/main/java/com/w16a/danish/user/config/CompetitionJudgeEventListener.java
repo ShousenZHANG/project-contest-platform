@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 public class CompetitionJudgeEventListener {
 
     private final EmailService emailService;
+    private final NotificationInbox inbox;
     private final FrontendProperties frontendProperties;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -29,6 +30,11 @@ public class CompetitionJudgeEventListener {
      * Handle judge assigned event.
      */
     @RabbitListener(queues = MessagingConstants.JUDGE_ASSIGNED_QUEUE)
+    public void receiveJudgeAssigned(JudgeAssignedMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("JudgeAssignedMessage", eventId, message);
+    }
+
     public void handleJudgeAssigned(JudgeAssignedMessage message) {
         String subject = "🎖️ Judge Assignment Notification – " + message.getCompetitionName();
         String judgeCompetitionUrl = frontendProperties.buildJudgeCompetitionPageUrl(message.getJudgeEmail());
@@ -66,6 +72,11 @@ public class CompetitionJudgeEventListener {
      * Handle judge removed event.
      */
     @RabbitListener(queues = MessagingConstants.JUDGE_REMOVED_QUEUE)
+    public void receiveJudgeRemoved(JudgeRemovedMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("JudgeRemovedMessage", eventId, message);
+    }
+
     public void handleJudgeRemoved(JudgeRemovedMessage message) {
         String subject = "❌ Judge Removal Notification – " + message.getCompetitionName();
         String judgeCompetitionUrl = frontendProperties.buildJudgeCompetitionPageUrl(message.getJudgeEmail());

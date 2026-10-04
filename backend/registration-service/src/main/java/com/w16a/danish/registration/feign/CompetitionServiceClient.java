@@ -17,7 +17,7 @@ import java.util.List;
  * @author Eddy ZHANG
  * @date 2025/04/03
  */
-@FeignClient(name = "competition-service", path = "/competitions", fallback = com.w16a.danish.registration.feign.fallback.CompetitionServiceClientFallback.class)
+@FeignClient(name = "competition-service", path = "/competitions", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.registration.feign.fallback.CompetitionServiceClientFallback.class)
 public interface CompetitionServiceClient {
 
     /**
@@ -26,7 +26,7 @@ public interface CompetitionServiceClient {
      * @param id competition ID
      * @return competition detail response
      */
-    @GetMapping("/{id}")
+    @GetMapping("/internal/{id}")
     ResponseEntity<CompetitionResponseVO> getCompetitionById(@PathVariable("id") String id);
 
     /**
@@ -36,6 +36,10 @@ public interface CompetitionServiceClient {
      * @param ids list of competition IDs
      * @return {@link ResponseEntity }<{@link List }<{@link CompetitionResponseVO }>>
      */
-    @PostMapping("/batch/ids")
+    @PostMapping("/internal/batch/ids")
     ResponseEntity<List<CompetitionResponseVO>> getCompetitionsByIds(@RequestBody List<String> ids);
+
+    @GetMapping("/internal/is-judge")
+    ResponseEntity<Boolean> isUserJudge(@org.springframework.web.bind.annotation.RequestParam("competitionId") String competitionId,
+                                        @org.springframework.web.bind.annotation.RequestParam("userId") String userId);
 }

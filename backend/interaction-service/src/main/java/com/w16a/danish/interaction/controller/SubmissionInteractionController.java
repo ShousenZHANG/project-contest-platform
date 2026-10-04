@@ -1,6 +1,7 @@
 package com.w16a.danish.interaction.controller;
 
 import com.w16a.danish.common.web.ApiResponses;
+import com.w16a.danish.common.security.ServiceOnly;
 import com.w16a.danish.interaction.domain.dto.SubmissionCommentDTO;
 import com.w16a.danish.interaction.domain.vo.InteractionStatisticsVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -48,6 +49,7 @@ public class SubmissionInteractionController {
     @PostMapping("/comments")
     public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> postComment(@Valid @RequestBody SubmissionCommentDTO dto,
                                               @CurrentUser RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
         commentsService.addComment(ctx.userId(), dto);
         return ApiResponses.message("Comment added successfully");
     }
@@ -80,6 +82,8 @@ public class SubmissionInteractionController {
             @PathVariable String id,
             @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionCommentDTO dto) {
+
+        ctx.requireAnyRole("PARTICIPANT");
 
         commentsService.updateComment(id, ctx.userId(), dto);
         return ApiResponses.message("Comment updated successfully");
@@ -125,6 +129,7 @@ public class SubmissionInteractionController {
     @PostMapping("/votes")
     public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> vote(@RequestParam String submissionId,
                                        @CurrentUser RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
         votesService.vote(submissionId, ctx.userId());
         return ApiResponses.message("Voted");
     }
@@ -140,6 +145,7 @@ public class SubmissionInteractionController {
     @DeleteMapping("/votes")
     public ResponseEntity<com.w16a.danish.common.domain.vo.ApiResponse<String>> unvote(@RequestParam String submissionId,
                                          @CurrentUser RequestContext ctx) {
+        ctx.requireAnyRole("PARTICIPANT");
         votesService.unvote(submissionId, ctx.userId());
         return ApiResponses.message("Unvoted");
     }
@@ -187,6 +193,16 @@ public class SubmissionInteractionController {
         InteractionStatisticsVO stats = new InteractionStatisticsVO();
         stats.setVoteCount(votesService.countVotes(submissionId));
         stats.setCommentCount(commentsService.countComments(submissionId));
+        return ResponseEntity.ok(stats);
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/competition-statistics")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    public ResponseEntity<InteractionStatisticsVO> getCompetitionInteractionStatistics(@RequestParam String competitionId) {
+        InteractionStatisticsVO stats = new InteractionStatisticsVO();
+        stats.setVoteCount(votesService.countCompetitionVotes(competitionId));
+        stats.setCommentCount(commentsService.countCompetitionComments(competitionId));
         return ResponseEntity.ok(stats);
     }
 

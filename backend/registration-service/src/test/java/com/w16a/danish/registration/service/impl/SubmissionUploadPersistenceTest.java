@@ -23,8 +23,10 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -48,8 +50,8 @@ import static org.mockito.Mockito.when;
 /** Exercises both upload entry points against real MyBatis-Plus SQL and a local database. */
 class SubmissionUploadPersistenceTest {
 
-    private static final String OLD_FILE = "http://minio/bucket/old.pdf";
-    private static final String NEW_FILE = "http://minio/bucket/new.pdf";
+    private static final String OLD_FILE = "http://minio/submissions/old.pdf";
+    private static final String NEW_FILE = "http://minio/submissions/new.pdf";
     private static final LocalDateTime REVIEWED_AT = LocalDateTime.of(2026, 1, 2, 12, 0);
     private static final MockMultipartFile FILE =
             new MockMultipartFile("file", "new.pdf", "application/pdf", "content".getBytes());
@@ -60,12 +62,17 @@ class SubmissionUploadPersistenceTest {
     private SubmissionNotifier notifier;
     private Connection connection;
     private SqlSession session;
+    private CompetitionResponseVO competition;
+    private com.w16a.danish.common.recovery.DurableTasks tasks;
+    private CompetitionGateway competitions;
+    private com.w16a.danish.registration.notify.UploadRollbackCleanup rollbackCleanup;
+    private LambdaQueryChainWrapper<com.w16a.danish.registration.domain.po.CompetitionTeams> teamQuery;
 
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() throws SQLException {
         JdbcDataSource dataSource = new JdbcDataSource();
-        dataSource.setURL("jdbc:h2:mem:submission_upload_" + UUID.randomUUID());
+        dataSource.setURL("jdbc:h2:mem:submission_upload_" + UUID.randomUUID() + ";MODE=MySQL");
         // Keep one JDBC connection open for the lifetime of this isolated in-memory database.
         connection = dataSource.getConnection();
         try (var statement = connection.createStatement()) {
@@ -85,12 +92,19 @@ class SubmissionUploadPersistenceTest {
                         reviewed_by VARCHAR(36),
                         reviewed_at TIMESTAMP,
                         total_score DECIMAL(10, 2),
+                        revision INT DEFAULT 0,
+                        score_version BIGINT DEFAULT 0,
                         created_at TIMESTAMP,
                         updated_at TIMESTAMP
                     )
                     """);
         }
 
+        try (var ddl=connection.createStatement()) {
+            ddl.execute("CREATE TABLE competitions(id VARCHAR(36) PRIMARY KEY,status VARCHAR(16))");
+            ddl.execute("INSERT INTO competitions VALUES ('c1','ONGOING')");
+            ddl.execute("CREATE TABLE competition_award_runs(competition_id VARCHAR(36) PRIMARY KEY,awarded_at TIMESTAMP)");
+        }
         MybatisConfiguration configuration = new MybatisConfiguration();
         configuration.setEnvironment(new Environment("local", new JdbcTransactionFactory(), dataSource));
         configuration.setMapUnderscoreToCamelCase(true);
@@ -98,8 +112,8 @@ class SubmissionUploadPersistenceTest {
         session = new MybatisSqlSessionFactoryBuilder().build(configuration).openSession(true);
         mapper = session.getMapper(SubmissionRecordsMapper.class);
 
-        CompetitionGateway competitions = mock(CompetitionGateway.class);
-        CompetitionResponseVO competition = new CompetitionResponseVO();
+        competitions = mock(CompetitionGateway.class);
+        competition = new CompetitionResponseVO();
         competition.setName("Competition");
         competition.setStatus(CompetitionStatus.ONGOING);
         when(competitions.require("c1")).thenReturn(competition);
@@ -120,9 +134,24 @@ class SubmissionUploadPersistenceTest {
         when(participants.lambdaQuery()).thenReturn(registrations);
 
         SubmissionRecordsServiceImpl implementation =
-                new SubmissionRecordsServiceImpl(competitions, files, notifier, users);
+                new SubmissionRecordsServiceImpl(competitions, files, notifier, users,
+                        new com.w16a.danish.registration.service.SubmissionScores(mapper),
+                        tasks = mock(com.w16a.danish.common.recovery.DurableTasks.class),
+                        rollbackCleanup = mock(com.w16a.danish.registration.notify.UploadRollbackCleanup.class));
         ReflectionTestUtils.setField(implementation, "baseMapper", mapper);
         ReflectionTestUtils.setField(implementation, "competitionParticipantsService", participants);
+        var organizers = mock(com.w16a.danish.registration.service.ICompetitionOrganizersService.class);
+        LambdaQueryChainWrapper<com.w16a.danish.registration.domain.po.CompetitionOrganizers> organizerQuery = mock(LambdaQueryChainWrapper.class);
+        when(organizerQuery.eq(any(), any())).thenReturn(organizerQuery);
+        when(organizerQuery.exists()).thenReturn(false);
+        when(organizers.lambdaQuery()).thenReturn(organizerQuery);
+        ReflectionTestUtils.setField(implementation, "competitionOrganizersService", organizers);
+        var teamRegistrations = mock(com.w16a.danish.registration.service.ICompetitionTeamsService.class);
+        teamQuery = mock(LambdaQueryChainWrapper.class);
+        when(teamRegistrations.lambdaQuery()).thenReturn(teamQuery);
+        when(teamQuery.eq(any(), any())).thenReturn(teamQuery);
+        when(teamQuery.exists()).thenReturn(true);
+        ReflectionTestUtils.setField(implementation, "competitionTeamsService", teamRegistrations);
         service = implementation;
     }
 
@@ -159,9 +188,11 @@ class SubmissionUploadPersistenceTest {
             assertThat(row.getObject("reviewed_at")).isNull();
             assertThat(row.getObject("review_comments")).isNull();
             assertThat(row.getObject("total_score")).isNull();
+            assertThat(row.getInt("revision")).isEqualTo(4);
             assertThat(row.next()).isFalse();
         }
-        verify(files).deleteFile("bucket", "old.pdf");
+        verify(tasks).enqueue(org.mockito.ArgumentMatchers.eq("SUBMISSION_FILE_DELETE"), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(java.util.Map.of("objectName", "old.pdf")));
+        verify(files, never()).deleteFile(anyString(), anyString());
         verify(notifier).sendSubmissionUploaded(any());
     }
 
@@ -181,6 +212,7 @@ class SubmissionUploadPersistenceTest {
             assertThat(row.getObject("reviewed_at")).isNull();
             assertThat(row.getObject("review_comments")).isNull();
             assertThat(row.getObject("total_score")).isNull();
+            assertThat(row.getInt("revision")).isEqualTo(1);
             assertThat(row.next()).isFalse();
         }
         verify(files, never()).deleteFile(anyString(), anyString());
@@ -204,14 +236,138 @@ class SubmissionUploadPersistenceTest {
             assertThat(row.getTimestamp("reviewed_at").toLocalDateTime()).isEqualTo(REVIEWED_AT);
             assertThat(row.getString("review_comments")).isEqualTo("Approved work");
             assertThat(row.getBigDecimal("total_score")).isEqualByComparingTo("88.50");
+            assertThat(row.getInt("revision")).isEqualTo(3);
         }
         verify(files, never()).deleteFile(anyString(), anyString());
         verify(notifier, never()).sendSubmissionUploaded(any());
     }
 
+    @Test
+    void scoreProjectionRejectsOldVersionsWrongRevisionsAndUnapprovedWorkInRealSql() throws SQLException {
+        seedReviewedSubmission(false);
+        service.updateTotalScore("s1", new BigDecimal("8.25"), 8L, 3);
+        assertScore("8.25", 8L);
+        service.updateTotalScore("s1", new BigDecimal("1.00"), 7L, 3);
+        service.updateTotalScore("s1", new BigDecimal("2.00"), 8L, 3);
+        service.updateTotalScore("s1", new BigDecimal("3.00"), 9L, 2);
+        assertScore("8.25", 8L);
+        try (var sql = connection.createStatement()) {
+            sql.executeUpdate("UPDATE submission_records SET review_status='PENDING',revision=4 WHERE id='s1'");
+        }
+        service.updateTotalScore("s1", new BigDecimal("4.00"), 10L, 4);
+        assertScore("8.25", 8L);
+        try (var sql = connection.createStatement()) {
+            sql.executeUpdate("UPDATE submission_records SET review_status='APPROVED' WHERE id='s1'");
+        }
+        service.updateTotalScore("s1", new BigDecimal("9.00"), 10L, 4);
+        assertScore("9.00", 10L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void deadlinePassingDuringUploadLeavesPersistedSubmissionUnchanged(boolean team) throws SQLException {
+        seedReviewedSubmission(team);
+        competition.setEndDate(LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(1));
+        when(files.uploadSubmission(FILE)).thenAnswer(invocation -> {
+            competition.setEndDate(LocalDateTime.now(java.time.ZoneOffset.UTC).minusSeconds(1));
+            return ResponseEntity.ok(NEW_FILE);
+        });
+        assertThatThrownBy(() -> upload(team, "New title"))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class)
+                .hasMessageContaining("deadline passed while the file was uploading");
+        assertOriginalFileAndRevision();
+        verify(rollbackCleanup).watch("new.pdf");
+        verify(tasks, never()).enqueue(anyString(), any(), any(), any());
+        verify(notifier, never()).sendSubmissionUploaded(any());
+    }
+
+    @Test
+    void scoringOpeningDuringUploadIsRecheckedUnderLifecycleLock() throws SQLException {
+        seedReviewedSubmission(false);
+        when(files.uploadSubmission(FILE)).thenAnswer(invocation -> {
+            try (var sql = connection.createStatement()) {
+                sql.executeUpdate("UPDATE competitions SET status='COMPLETED' WHERE id='c1'");
+            }
+            return ResponseEntity.ok(NEW_FILE);
+        });
+        assertThatThrownBy(() -> upload(false, "New title"))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class)
+                .hasMessageContaining("locked when scoring or awarding starts");
+        assertOriginalFileAndRevision();
+        verify(tasks, never()).enqueue(anyString(), any(), any(), any());
+    }
+
+    @Test
+    void teamMustRegisterBeforeUploadingEvenWhenTheCallerIsAMember() {
+        when(teamQuery.exists()).thenReturn(false);
+        assertThatThrownBy(() -> upload(true, "New title"))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class)
+                .hasMessageContaining("team must register");
+        verify(files, never()).uploadSubmission(any());
+    }
+
+    @Test
+    void individualAndTeamRoutesEnforceTheCompetitionParticipationTypeBeforeUpload() {
+        var participant = new RequestContext("u1", "PARTICIPANT");
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.TEAM);
+        assertThatThrownBy(() -> service.submitWork(participant, "c1", "Title", "Description", FILE))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class).hasMessageContaining("requires a team submission");
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        assertThatThrownBy(() -> service.submitTeamWork(participant, "c1", "t1", "Title", "Description", FILE))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class).hasMessageContaining("requires an individual submission");
+        verify(files, never()).uploadSubmission(any());
+    }
+
+    private void assertOriginalFileAndRevision() throws SQLException {
+        try (var sql = connection.createStatement(); var row = sql.executeQuery("SELECT file_url,revision FROM submission_records WHERE id='s1'")) {
+            assertThat(row.next()).isTrue();
+            assertThat(row.getString("file_url")).isEqualTo(OLD_FILE);
+            assertThat(row.getInt("revision")).isEqualTo(3);
+        }
+    }
+
+    private void assertScore(String score, long version) throws SQLException {
+        try (var sql = connection.createStatement(); var row = sql.executeQuery("SELECT total_score,score_version FROM submission_records WHERE id='s1'")) {
+            assertThat(row.next()).isTrue();
+            assertThat(row.getBigDecimal("total_score")).isEqualByComparingTo(score);
+            assertThat(row.getLong("score_version")).isEqualTo(version);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,COMPLETED", "false,AWARDED", "true,COMPLETED", "true,AWARDED"})
+    void completedResultsCannotBeDeletedEvenByAdministrator(boolean team, String status) throws SQLException {
+        seedReviewedSubmission(team);
+        try (var sql = connection.createStatement()) {
+            sql.executeUpdate("UPDATE competitions SET status='" + status + "' WHERE id='c1'");
+        }
+        var admin = new RequestContext("admin1", "ADMIN");
+        assertThatThrownBy(() -> {
+            if (team) service.deleteTeamSubmission("s1", admin);
+            else service.deleteSubmission("s1", admin);
+        }).isInstanceOf(com.w16a.danish.common.exception.BusinessException.class)
+                .hasMessageContaining("Completed submissions and results are retained");
+        assertOriginalFileAndRevision();
+        verify(tasks, never()).enqueue(anyString(), any(), any(), any());
+    }
+
+    @Test
+    void finalizedAwardRunProtectsResultsEvenWhenCompetitionStatusIsStale() throws SQLException {
+        seedReviewedSubmission(false);
+        try (var sql = connection.createStatement()) {
+            sql.executeUpdate("INSERT INTO competition_award_runs VALUES ('c1',CURRENT_TIMESTAMP)");
+        }
+        assertThatThrownBy(() -> service.deleteSubmissionsByUserAndCompetition("u1", "c1"))
+                .isInstanceOf(com.w16a.danish.common.exception.BusinessException.class)
+                .hasMessageContaining("results are retained");
+        assertOriginalFileAndRevision();
+        verify(tasks, never()).enqueue(anyString(), any(), any(), any());
+    }
+
     private void seedReviewedSubmission(boolean team) {
         SubmissionRecords submission = new SubmissionRecords()
                 .setId("s1")
+                .setRevision(3)
                 .setCompetitionId("c1")
                 .setUserId(team ? null : "u1")
                 .setTeamId(team ? "t1" : null)
@@ -226,6 +382,7 @@ class SubmissionUploadPersistenceTest {
     }
 
     private void upload(boolean team, String title) {
+        competition.setParticipationType(team ? com.w16a.danish.common.domain.enums.ParticipationType.TEAM : com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
         RequestContext participant = new RequestContext("u1", "PARTICIPANT");
         if (team) {
             service.submitTeamWork(participant, "c1", "t1", title, "New description", FILE);

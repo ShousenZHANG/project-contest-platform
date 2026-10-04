@@ -1,266 +1,140 @@
 package com.w16a.danish.judge.service.impl;
 
+import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.common.domain.enums.ParticipationType;
-import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
+import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.InteractionServiceClient;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.feign.UserServiceClient;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import org.springframework.http.HttpStatus;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link DashboardServiceImpl}.
- */
 class DashboardServiceImplTest {
+    private final CompetitionGateway competitions = mock(CompetitionGateway.class);
+    private final SubmissionServiceClient submissions = mock(SubmissionServiceClient.class);
+    private final InteractionServiceClient interactions = mock(InteractionServiceClient.class);
+    private final ICompetitionJudgesService judges = mock(ICompetitionJudgesService.class);
+    private final UserServiceClient users = mock(UserServiceClient.class);
+    private final DashboardServiceImpl service = new DashboardServiceImpl(competitions, submissions, interactions, judges, users);
+    private CompetitionResponseVO competition;
 
-    @InjectMocks
-    private DashboardServiceImpl dashboardService;
-
-    @Mock private CompetitionGateway competitionGateway;
-    @Mock private SubmissionServiceClient registrationServiceClient;
-    @Mock private InteractionServiceClient interactionServiceClient;
-    @Mock private ICompetitionJudgesService competitionJudgesService;
-    @Mock private UserServiceClient userServiceClient;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    @DisplayName("✅ Should return competition statistics for an individual participant successfully")
-    void testGetCompetitionStatistics_ForIndividualParticipant() {
-        // Arrange - Mock competition basic info
-        CompetitionResponseVO competition = new CompetitionResponseVO();
-        competition.setName("BigBrain Contest");
-        competition.setStatus(CompetitionStatus.ONGOING);
+    @BeforeEach void setUp() {
+        competition = new CompetitionResponseVO(); competition.setId("c"); competition.setName("Contest");
+        competition.setIsPublic(true); competition.setStatus(CompetitionStatus.ONGOING);
         competition.setParticipationType(ParticipationType.INDIVIDUAL);
-        when(competitionGateway.require(any())).thenReturn(competition);
-
-        // Arrange - Mock registration statistics
-        RegistrationStatisticsVO registrationStats = new RegistrationStatisticsVO();
-        registrationStats.setIndividualParticipantCount(100);
-        registrationStats.setTeamParticipantCount(20);
-        registrationStats.setTotalRegistrations(120);
-        when(registrationServiceClient.getRegistrationStatistics(any()))
-                .thenReturn(ResponseEntity.ok(registrationStats));
-
-        // Arrange - Mock submission statistics
-        SubmissionStatisticsVO submissionStats = new SubmissionStatisticsVO();
-        submissionStats.setTotalSubmissions(50);
-        submissionStats.setApprovedSubmissions(30);
-        submissionStats.setPendingSubmissions(20);
-        when(registrationServiceClient.getSubmissionStatistics(any()))
-                .thenReturn(ResponseEntity.ok(submissionStats));
-
-        // Arrange - Mock interaction statistics
-        InteractionStatisticsVO interactionStats = new InteractionStatisticsVO();
-        interactionStats.setVoteCount(200L);
-        interactionStats.setCommentCount(50L);
-        when(interactionServiceClient.getInteractionStatistics(any()))
-                .thenReturn(ResponseEntity.ok(interactionStats));
-
-        // Arrange - Mock judge count
-        when(competitionJudgesService.countJudgesByCompetitionId(any()))
-                .thenReturn(5);
-
-        // Arrange - Mock score statistics
-        SubmissionScoreStatisticsVO scoreStats = new SubmissionScoreStatisticsVO();
-        scoreStats.setAverageScore(BigDecimal.valueOf(80));
-        scoreStats.setHighestScore(BigDecimal.valueOf(100));
-        scoreStats.setLowestScore(BigDecimal.valueOf(60));
-        when(registrationServiceClient.getScoreStatistics(any()))
-                .thenReturn(ResponseEntity.ok(scoreStats));
-
-        // Arrange - Mock user's own submission
-        SubmissionInfoVO mySubmission = new SubmissionInfoVO();
-        mySubmission.setTotalScore(BigDecimal.valueOf(88));
-        mySubmission.setReviewStatus("APPROVED");
-        when(registrationServiceClient.getMySubmissionBasic(any(), any()))
-                .thenReturn(ResponseEntity.ok(mySubmission));
-
-        // Arrange - Mock trends
-        when(registrationServiceClient.getParticipantTrend(any()))
-                .thenReturn(ResponseEntity.ok(Map.of("individual", Map.of("2025-01", 10))));
-        when(registrationServiceClient.getSubmissionTrend(any()))
-                .thenReturn(ResponseEntity.ok(Map.of("2025-01", 5)));
-
-        // Act
-        CompetitionDashboardVO dashboard = dashboardService.getCompetitionStatistics("competitionId", "userId");
-
-        // Assert
-        assertThat(dashboard).isNotNull();
-        assertThat(dashboard.getCompetitionName()).isEqualTo("BigBrain Contest");
-        assertThat(dashboard.getParticipationType()).isEqualTo("INDIVIDUAL");
-        assertThat(dashboard.getIndividualParticipantCount()).isEqualTo(100);
-        assertThat(dashboard.getSubmissionCount()).isEqualTo(50);
-        assertThat(dashboard.getVoteCount()).isEqualTo(200);
-        assertThat(dashboard.getJudgeCount()).isEqualTo(5);
-        assertThat(dashboard.getAverageScore()).isEqualTo(BigDecimal.valueOf(80));
-        assertThat(dashboard.getHasSubmitted()).isTrue();
-        assertThat(dashboard.getMyTotalScore()).isEqualTo(BigDecimal.valueOf(88));
+        when(competitions.require("c")).thenReturn(competition);
+        var registration = new RegistrationStatisticsVO(); registration.setIndividualParticipantCount(10); registration.setTeamParticipantCount(5);
+        when(submissions.getRegistrationStatistics("c")).thenReturn(ResponseEntity.ok(registration));
+        var work = new SubmissionStatisticsVO(); work.setTotalSubmissions(20); work.setApprovedSubmissions(15); work.setPendingSubmissions(5);
+        when(submissions.getSubmissionStatistics("c")).thenReturn(ResponseEntity.ok(work));
+        var interaction = new InteractionStatisticsVO(); interaction.setVoteCount(100L); interaction.setCommentCount(30L);
+        when(interactions.getInteractionStatistics("c")).thenReturn(ResponseEntity.ok(interaction));
+        var score = new SubmissionScoreStatisticsVO(); score.setAverageScore(new BigDecimal("8"));
+        when(submissions.getScoreStatistics("c")).thenReturn(ResponseEntity.ok(score));
+        when(submissions.getParticipantTrend("c")).thenReturn(ResponseEntity.ok(Map.of("individual", Map.of("2026-10", 10))));
+        when(submissions.getSubmissionTrend("c")).thenReturn(ResponseEntity.ok(Map.of("2026-10", 5)));
+        when(judges.countJudgesByCompetitionId("c")).thenReturn(3);
     }
 
-    @Test
-    @DisplayName("✅ Should return competition statistics for a team participant successfully")
-    void testGetCompetitionStatistics_ForTeamParticipant() {
-        // Arrange
-        CompetitionResponseVO competition = new CompetitionResponseVO();
+    @Test void publicStatisticsIgnoreAnySuppliedIdentityAndNeverReadPersonalWorks() {
+        var dashboard = service.getCompetitionStatistics("c", "victim");
+        assertThat(dashboard.getCompetitionName()).isEqualTo("Contest");
+        assertThat(dashboard.getSubmissionCount()).isEqualTo(20);
+        assertThat(dashboard.getVoteCount()).isEqualTo(100);
+        assertThat(dashboard.getHasSubmitted()).isNull();
+        assertThat(dashboard.getMyTotalScore()).isNull();
+        assertThat(dashboard.getMyReviewStatus()).isNull();
+        verify(submissions, never()).getMySubmissionBasic(anyString(), anyString());
+        verify(submissions, never()).getTeamSubmissionsBasic(anyString(), anyList());
+        verifyNoInteractions(users);
+    }
+
+    @Test void privateOrUnknownVisibilityRejectsPublicReadsBeforeLoadingAnyStatistics() {
+        for (Boolean visibility : java.util.Arrays.asList(false, null)) {
+            competition.setIsPublic(visibility);
+            assertThatThrownBy(() -> service.getCompetitionStatistics("c", "victim"))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(error -> ((BusinessException) error).getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        verifyNoInteractions(submissions, interactions, judges, users);
+    }
+
+    @Test void authenticatedPublicIndividualReadsOnlyTheCurrentUsersPrivateSubmission() {
+        var own = new SubmissionInfoVO(); own.setReviewStatus("PENDING"); own.setTotalScore(new BigDecimal("8.80"));
+        when(submissions.getMySubmissionBasic("c", "self")).thenReturn(ResponseEntity.ok(own));
+        var dashboard = service.getManagedCompetitionStatistics(new RequestContext("self", "PARTICIPANT"), "c");
+        assertThat(dashboard.getHasSubmitted()).isTrue();
+        assertThat(dashboard.getMyReviewStatus()).isEqualTo("PENDING");
+        assertThat(dashboard.getMyTotalScore()).isEqualByComparingTo("8.80");
+        verify(submissions).getMySubmissionBasic("c", "self");
+    }
+
+    @Test void authenticatedTeamReadsOnlyTheCurrentUsersTeamsInOneBatch() {
         competition.setParticipationType(ParticipationType.TEAM);
-        competition.setStatus(CompetitionStatus.ONGOING);
-
-        when(competitionGateway.require(any())).thenReturn(competition);
-
-        when(userServiceClient.getJoinedTeamIdsByUser(any()))
-                .thenReturn(ResponseEntity.ok(List.of("team-1")));
-
-        SubmissionInfoVO teamSubmission = new SubmissionInfoVO();
-        teamSubmission.setTotalScore(BigDecimal.valueOf(92));
-        teamSubmission.setReviewStatus("APPROVED");
-
-        // One batch read for every team, rather than one call per team.
-        when(registrationServiceClient.getTeamSubmissionsBasic(any(), any()))
-                .thenReturn(ResponseEntity.ok(List.of(teamSubmission)));
-
-        // 🛠 Mock registration stats
-        RegistrationStatisticsVO registrationStats = new RegistrationStatisticsVO();
-        registrationStats.setIndividualParticipantCount(10);
-        registrationStats.setTeamParticipantCount(5);
-        registrationStats.setTotalRegistrations(15);
-
-        when(registrationServiceClient.getRegistrationStatistics(any()))
-                .thenReturn(ResponseEntity.ok(registrationStats));
-
-        // 🛠 Mock submission stats
-        SubmissionStatisticsVO submissionStats = new SubmissionStatisticsVO();
-        submissionStats.setTotalSubmissions(20);
-        submissionStats.setApprovedSubmissions(15);
-        submissionStats.setPendingSubmissions(5);
-
-        when(registrationServiceClient.getSubmissionStatistics(any()))
-                .thenReturn(ResponseEntity.ok(submissionStats));
-
-        // 🛠 Mock interaction stats
-        InteractionStatisticsVO interactionStats = new InteractionStatisticsVO();
-        interactionStats.setVoteCount(100L);
-        interactionStats.setCommentCount(30L);
-
-        when(interactionServiceClient.getInteractionStatistics(any()))
-                .thenReturn(ResponseEntity.ok(interactionStats));
-
-        SubmissionScoreStatisticsVO scoreStats = new SubmissionScoreStatisticsVO();
-        scoreStats.setAverageScore(BigDecimal.valueOf(85));
-        when(registrationServiceClient.getScoreStatistics(any()))
-                .thenReturn(ResponseEntity.ok(scoreStats));
-
-        when(competitionJudgesService.countJudgesByCompetitionId(any())).thenReturn(3);
-
-        // Act
-        CompetitionDashboardVO dashboard = dashboardService.getCompetitionStatistics("competitionId", "userId");
-
-        // Assert
-        assertThat(dashboard).isNotNull();
+        when(users.getJoinedTeamIdsByUser("self")).thenReturn(ResponseEntity.ok(List.of("t1", "t2")));
+        var own = new SubmissionInfoVO(); own.setReviewStatus("REJECTED");
+        when(submissions.getTeamSubmissionsBasic("c", List.of("t1", "t2"))).thenReturn(ResponseEntity.ok(List.of(own)));
+        var dashboard = service.getManagedCompetitionStatistics(new RequestContext("self", "PARTICIPANT"), "c");
         assertThat(dashboard.getHasSubmitted()).isTrue();
-        assertThat(dashboard.getMyTotalScore()).isEqualTo(BigDecimal.valueOf(92));
-        assertThat(dashboard.getCompetitionStatus()).isEqualTo(CompetitionStatus.ONGOING.getValue());
+        assertThat(dashboard.getMyReviewStatus()).isEqualTo("REJECTED");
+        verify(submissions, never()).getTeamSubmissionBasic(anyString(), anyString());
     }
 
-    @Test
-    @DisplayName("❌ Should throw BusinessException if competition not found")
-    void testGetCompetitionStatistics_NotFound() {
-        when(competitionGateway.require(any()))
-                .thenThrow(new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
+    @Test void privateStatisticsRequireActualOrganizerOrAdmin() {
+        competition.setIsPublic(false);
+        when(competitions.isOrganiser("c", "owner")).thenReturn(true);
+        when(submissions.getMySubmissionBasic(anyString(), anyString())).thenReturn(ResponseEntity.ok(null));
+        assertThat(service.getManagedCompetitionStatistics(new RequestContext("owner", "ORGANIZER"), "c").getHasSubmitted()).isFalse();
+        assertThat(service.getManagedCompetitionStatistics(new RequestContext("admin", "ADMIN"), "c").getCompetitionName()).isEqualTo("Contest");
+        assertThatThrownBy(() -> service.getManagedCompetitionStatistics(new RequestContext("stranger", "ORGANIZER"), "c"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Only competition organizers");
+        assertThatThrownBy(() -> service.getManagedCompetitionStatistics(new RequestContext("owner", "PARTICIPANT"), "c"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Only competition organizers");
+    }
 
-        assertThatThrownBy(() -> dashboardService.getCompetitionStatistics("competitionId", "userId"))
+    @Test void missingCompetitionFailsBeforeReadingAggregates() {
+        when(competitions.require("c")).thenThrow(new BusinessException(HttpStatus.NOT_FOUND, "Competition not found"));
+        assertThatThrownBy(() -> service.getCompetitionStatistics("c", "victim")).hasMessageContaining("Competition not found");
+        verifyNoInteractions(submissions, interactions, judges, users);
+    }
+
+    @Test void unavailableOrMalformedAggregateResponseIsNotPublishedAsZeroStatistics() {
+        when(submissions.getSubmissionStatistics("c")).thenReturn(null);
+        assertThatThrownBy(() -> service.getCompetitionStatistics("c", null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Competition not found");
+                .extracting(error -> ((BusinessException) error).getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        when(submissions.getSubmissionStatistics("c")).thenReturn(ResponseEntity.ok(null));
+        assertThatThrownBy(() -> service.getCompetitionStatistics("c", null)).hasMessageContaining("returned no data");
+        verifyNoInteractions(interactions, judges, users);
     }
 
-    @Test
-    @DisplayName("✅ Should return platform dashboard statistics successfully")
-    void testGetPlatformDashboard_Success() {
-        // Arrange: Mock competition list
-        CompetitionResponseVO comp1 = new CompetitionResponseVO();
-        comp1.setParticipationType(ParticipationType.INDIVIDUAL);
-        comp1.setStatus(CompetitionStatus.ONGOING);
-
-        CompetitionResponseVO comp2 = new CompetitionResponseVO();
-        comp2.setParticipationType(ParticipationType.TEAM);
-        comp2.setStatus(CompetitionStatus.COMPLETED);
-
-        when(competitionGateway.listAll()).thenReturn(List.of(comp1, comp2));
-
-        // Arrange: Mock platform participant statistics
-        PlatformParticipantStatisticsVO participantStats = new PlatformParticipantStatisticsVO();
-        participantStats.setTotalParticipants(1000);
-        participantStats.setIndividualParticipants(700);
-        participantStats.setTeamParticipants(300);
-        when(registrationServiceClient.getPlatformParticipantStatistics())
-                .thenReturn(ResponseEntity.ok(participantStats));
-
-        // Arrange: Mock platform submission statistics
-        PlatformSubmissionStatisticsVO submissionStats = new PlatformSubmissionStatisticsVO();
-        submissionStats.setTotalSubmissions(500);
-        submissionStats.setApprovedSubmissions(400);
-        submissionStats.setIndividualSubmissions(300);
-        submissionStats.setTeamSubmissions(200);
-        when(registrationServiceClient.getPlatformSubmissionStatistics())
-                .thenReturn(ResponseEntity.ok(submissionStats));
-
-        // Arrange: Mock interaction statistics
-        InteractionStatisticsVO interactionStats = new InteractionStatisticsVO();
-        interactionStats.setVoteCount(600L);
-        interactionStats.setCommentCount(150L);
-        when(interactionServiceClient.getPlatformInteractionStatistics())
-                .thenReturn(ResponseEntity.ok(interactionStats));
-
-        when(registrationServiceClient.getPlatformParticipantTrend())
-                .thenReturn(ResponseEntity.ok(Map.of(
-                        "individual", Map.of("2025-01", 100)
-                )));
-        when(registrationServiceClient.getPlatformSubmissionTrend())
-                .thenReturn(ResponseEntity.ok(Map.of(
-                        "2025-01", 80
-                )));
-
-        // Act
-        PlatformDashboardVO dashboard = dashboardService.getPlatformDashboard();
-
-        // Assert
-        assertThat(dashboard).isNotNull();
+    @Test void platformCompetitionTotalsExcludePrivateAndUnknownVisibility() {
+        var privateCompetition = new CompetitionResponseVO(); privateCompetition.setIsPublic(false);
+        var awarded = new CompetitionResponseVO(); awarded.setIsPublic(true); awarded.setParticipationType(ParticipationType.TEAM); awarded.setStatus(CompetitionStatus.AWARDED);
+        when(competitions.listAll()).thenReturn(List.of(competition, privateCompetition, awarded));
+        when(submissions.getPlatformParticipantStatistics()).thenReturn(ResponseEntity.ok(new PlatformParticipantStatisticsVO()));
+        when(submissions.getPlatformSubmissionStatistics()).thenReturn(ResponseEntity.ok(new PlatformSubmissionStatisticsVO()));
+        when(interactions.getPlatformInteractionStatistics()).thenReturn(ResponseEntity.ok(new InteractionStatisticsVO()));
+        when(submissions.getPlatformParticipantTrend()).thenReturn(ResponseEntity.ok(Map.of()));
+        when(submissions.getPlatformSubmissionTrend()).thenReturn(ResponseEntity.ok(Map.of()));
+        var dashboard = service.getPlatformDashboard();
         assertThat(dashboard.getTotalCompetitions()).isEqualTo(2);
-        assertThat(dashboard.getIndividualCompetitions()).isEqualTo(1);
-        assertThat(dashboard.getTeamCompetitions()).isEqualTo(1);
         assertThat(dashboard.getActiveCompetitions()).isEqualTo(1);
         assertThat(dashboard.getFinishedCompetitions()).isEqualTo(1);
-        assertThat(dashboard.getTotalParticipants()).isEqualTo(1000);
-        assertThat(dashboard.getIndividualParticipants()).isEqualTo(700);
-        assertThat(dashboard.getTeamParticipants()).isEqualTo(300);
-        assertThat(dashboard.getTotalSubmissions()).isEqualTo(500);
-        assertThat(dashboard.getApprovedSubmissions()).isEqualTo(400);
-        assertThat(dashboard.getTotalVotes()).isEqualTo(600);
-        assertThat(dashboard.getTotalComments()).isEqualTo(150);
-        assertThat(dashboard.getParticipantTrend()).isNotEmpty();
-        assertThat(dashboard.getSubmissionTrend()).isNotEmpty();
+        assertThat(dashboard.getIndividualCompetitions()).isEqualTo(1);
+        assertThat(dashboard.getTeamCompetitions()).isEqualTo(1);
     }
-
 }

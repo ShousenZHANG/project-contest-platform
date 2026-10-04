@@ -22,4 +22,6 @@ public interface ISubmissionVotesService extends IService<SubmissionVotes> {
 
     Long countAllVotes();
 
+    long countCompetitionVotes(String competitionId);
+
 }

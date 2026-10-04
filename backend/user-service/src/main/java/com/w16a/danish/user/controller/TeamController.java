@@ -20,6 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.w16a.danish.common.security.ServiceOnly;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -178,7 +179,9 @@ public class TeamController {
     )
     @GetMapping("/public/{teamId}")
     public ResponseEntity<TeamResponseVO> getTeamById(@PathVariable String teamId) {
-        return ResponseEntity.ok(teamService.getTeamResponseById(teamId));
+        TeamResponseVO team = teamService.getTeamResponseById(teamId);
+        if (team.getMembers() != null) team.getMembers().forEach(member -> member.setEmail(null));
+        return ResponseEntity.ok(team);
     }
 
     @Operation(
@@ -247,7 +250,9 @@ public class TeamController {
     )
     @GetMapping("/{teamId}/creator")
     public ResponseEntity<UserBriefVO> getTeamCreator(@PathVariable String teamId) {
-        return ResponseEntity.ok(teamService.getTeamCreator(teamId));
+        UserBriefVO creator = teamService.getTeamCreator(teamId);
+        creator.setEmail(null);
+        return ResponseEntity.ok(creator);
     }
 
     @Operation(
@@ -285,7 +290,36 @@ public class TeamController {
     @GetMapping("/public/{teamId}/members")
     public ResponseEntity<List<UserBriefVO>> getTeamMembers(@PathVariable String teamId) {
         List<UserBriefVO> members = teamService.getTeamMembers(teamId);
+        members.forEach(member -> member.setEmail(null));
         return ResponseEntity.ok(members);
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"registration-service", "judge-service", "competition-service"})
+    @PostMapping("/internal/brief")
+    public ResponseEntity<List<TeamInfoVO>> getInternalTeamBrief(@RequestBody List<String> teamIds) {
+        return ResponseEntity.ok(teamService.getTeamBriefByIds(teamIds));
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"registration-service", "judge-service", "competition-service"})
+    @GetMapping("/internal/{teamId}/creator")
+    public ResponseEntity<UserBriefVO> getInternalTeamCreator(@PathVariable String teamId) {
+        return ResponseEntity.ok(teamService.getTeamCreator(teamId));
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    @GetMapping("/internal/{teamId}/members")
+    public ResponseEntity<List<UserBriefVO>> getInternalTeamMembers(@PathVariable String teamId) {
+        return ResponseEntity.ok(teamService.getTeamMembers(teamId));
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    @GetMapping("/internal/joined")
+    public ResponseEntity<List<String>> getInternalJoinedTeamIds(@RequestParam String userId) {
+        return ResponseEntity.ok(teamService.getAllJoinedTeamIdsByUser(userId));
     }
 
     @Operation(

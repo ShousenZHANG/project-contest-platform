@@ -7,6 +7,7 @@ import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
+import com.w16a.danish.judge.domain.vo.AwardEligibilityVO;
 import com.w16a.danish.judge.service.ISubmissionWinnersService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +33,19 @@ import lombok.extern.slf4j.Slf4j;
 public class SubmissionWinnersController {
 
     private final ISubmissionWinnersService winnersService;
+
+    @GetMapping("/list")
+    public ResponseEntity<PageResponse<WinnerInfoVO>> listManagedWinners(
+            @CurrentUser RequestContext ctx, @RequestParam String competitionId,
+            @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(winnersService.listManagedWinners(ctx, competitionId, page, size));
+    }
+
+    @GetMapping("/eligibility")
+    public ResponseEntity<AwardEligibilityVO> getAwardEligibility(
+            @CurrentUser RequestContext ctx, @RequestParam String competitionId) {
+        return ResponseEntity.ok(winnersService.getAwardEligibility(ctx, competitionId));
+    }
 
     @Operation(
             summary = "Auto award winners for a competition",

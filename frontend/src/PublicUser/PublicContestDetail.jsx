@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * PublicContestDetail.jsx
  *
@@ -7,21 +8,21 @@
  * Developer: Beiqi Dai, Zhaoyi Yang
  */
 
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
-import defaultImage from "./1.jpg";
-import { competitionService } from "../services/competitionService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap } from "../api/queryFn";
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import defaultImage from './1.jpg';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
 
 function PublicContestDetail() {
   const { id: contestId } = useParams();
@@ -41,7 +42,7 @@ function PublicContestDetail() {
     staleTime: staleTime.medium,
   });
 
-  const error = queryError ? "Failed to load contest details." : null;
+  const error = queryError ? 'Failed to load contest details.' : null;
 
   if (loading) {
     return (
@@ -67,7 +68,7 @@ function PublicContestDetail() {
         <Navbar />
         <div className="min-h-screen bg-muted/20 px-4 py-20 text-center">
           <p className="text-lg font-medium text-destructive">
-            {error || "No contest details available."}
+            {error || 'No contest details available.'}
           </p>
           <Button variant="outline" onClick={() => navigate(-1)} className="mt-4">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -86,11 +87,7 @@ function PublicContestDetail() {
       <Navbar />
       <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
         <div className="mx-auto max-w-6xl">
-          <Button
-            variant="outline"
-            onClick={() => navigate(-1)}
-            className="mb-6"
-          >
+          <Button variant="outline" onClick={() => navigate(-1)} className="mb-6">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to List
           </Button>
@@ -109,9 +106,7 @@ function PublicContestDetail() {
                     size="icon"
                     className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur hover:bg-white"
                     onClick={() =>
-                      setCurrentImageIndex((prev) =>
-                        prev === 0 ? images.length - 1 : prev - 1
-                      )
+                      setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
                     }
                   >
                     <ChevronLeft className="h-5 w-5" />
@@ -121,9 +116,7 @@ function PublicContestDetail() {
                     size="icon"
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 backdrop-blur hover:bg-white"
                     onClick={() =>
-                      setCurrentImageIndex((prev) =>
-                        prev === images.length - 1 ? 0 : prev + 1
-                      )
+                      setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
                     }
                   >
                     <ChevronRight className="h-5 w-5" />
@@ -143,11 +136,23 @@ function PublicContestDetail() {
                   {contestDetail.description}
                 </p>
                 <div className="mt-4">
-                  <Button
-                    onClick={() => navigate(`/work-list?competitionId=${contestId}`)}
-                  >
+                  <Button onClick={() => navigate(`/work-list?competitionId=${contestId}`)}>
                     View Related Works
                   </Button>
+                  {contestDetail.participationType === 'TEAM' && (
+                    <Button
+                      variant="outline"
+                      className="ml-2"
+                      onClick={() => navigate(`/public-teams/${contestId}`)}
+                    >
+                      View registered teams
+                    </Button>
+                  )}
+                  {contestDetail.status === 'AWARDED' && (
+                    <Button className="ml-2" onClick={() => navigate(`/results/${contestId}`)}>
+                      View results
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -156,24 +161,27 @@ function PublicContestDetail() {
                   <h2 className="text-xl font-semibold">Competition Details</h2>
                   <Separator className="bg-primary-foreground/20" />
                   <DetailRow label="Category" value={contestDetail.category} />
-                  <DetailRow label="Public" value={contestDetail.isPublic ? "Yes" : "No"} />
-                  <DetailRow label="Status" value={<Badge variant="secondary">{contestDetail.status}</Badge>} />
+                  <DetailRow label="Public" value={contestDetail.isPublic ? 'Yes' : 'No'} />
+                  <DetailRow
+                    label="Status"
+                    value={<Badge variant="secondary">{contestDetail.status}</Badge>}
+                  />
                   <DetailRow
                     label="Start Date"
-                    value={new Date(contestDetail.startDate).toLocaleString()}
+                    value={parseApiDateTime(contestDetail.startDate).toLocaleString()}
                   />
                   <DetailRow
                     label="End Date"
-                    value={new Date(contestDetail.endDate).toLocaleString()}
+                    value={parseApiDateTime(contestDetail.endDate).toLocaleString()}
                   />
                   <DetailRow
                     label="Allowed Submission Types"
-                    value={contestDetail.allowedSubmissionTypes?.join(", ")}
+                    value={contestDetail.allowedSubmissionTypes?.join(', ')}
                   />
                   <DetailRow label="Participation Type" value={contestDetail.participationType} />
                   <DetailRow
                     label="Scoring Criteria"
-                    value={contestDetail.scoringCriteria?.join(", ")}
+                    value={contestDetail.scoringCriteria?.join(', ')}
                   />
 
                   {contestDetail.introVideoUrl && (
@@ -203,7 +211,7 @@ function DetailRow({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-primary-foreground/15 pb-2 text-sm">
       <span className="font-medium">{label}:</span>
-      <span className="text-right text-primary-foreground/90">{value || "N/A"}</span>
+      <span className="text-right text-primary-foreground/90">{value || 'N/A'}</span>
     </div>
   );
 }

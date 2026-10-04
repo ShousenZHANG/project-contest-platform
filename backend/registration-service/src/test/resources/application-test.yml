@@ -47,5 +47,3 @@ mybatis-plus:
 springdoc:
   swagger-ui:
     enabled: false
-knife4j:
-  enable: false

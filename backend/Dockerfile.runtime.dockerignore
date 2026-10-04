@@ -1,0 +1,7 @@
+# The root build ignores target directories because service images normally
+# build source. This runtime image deliberately copies only verified reactor JARs.
+**
+!backend/
+!backend/*/
+!backend/*/target/
+!backend/*/target/*-0.0.1-SNAPSHOT.jar

@@ -14,15 +14,15 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service", fallback = com.w16a.danish.competition.feign.fallback.UserServiceClientFallback.class)
+@FeignClient(name = "user-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.competition.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
-    @PostMapping("/users/query-by-emails")
+    @PostMapping("/users/internal/query-by-emails")
     ResponseEntity<List<UserBriefVO>> getUsersByEmails(
             @RequestBody List<String> emails
     );
 
-    @PostMapping("/users/query-by-ids")
+    @PostMapping("/users/internal/query-by-ids")
     ResponseEntity<List<UserBriefVO>> getUsersByIds(
             @RequestBody List<String> userIds,
             @RequestParam(required = false) String role
@@ -31,7 +31,7 @@ public interface UserServiceClient {
     /**
      * Query a single user by user ID.
      */
-    @GetMapping("/users/{userId}")
+    @GetMapping("/users/internal/{userId}")
     ResponseEntity<UserBriefVO> getUserBriefById(@PathVariable("userId") String userId);
 
 }

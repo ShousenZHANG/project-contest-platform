@@ -10,6 +10,7 @@ import com.w16a.danish.user.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.feign.FileServiceClient;
+import com.w16a.danish.user.profile.AvatarFiles;
 import com.w16a.danish.user.service.IUsersService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -85,6 +86,9 @@ class UsersControllerTest {
     @MockitoBean
     private FileServiceClient fileServiceClient;
 
+    @MockitoBean
+    private AvatarFiles avatarFiles;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
@@ -108,6 +112,36 @@ class UsersControllerTest {
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.role").value("PARTICIPANT"))
                 .andExpect(jsonPath("$.accessToken").value("mocked-token"));
+    }
+
+    @Test
+    void ordinaryParticipantCannotProvisionJudgeAccount() throws Exception {
+        RegisterRequestDTO request = new RegisterRequestDTO();
+        request.setName("Judge");
+        request.setEmail("judge@example.com");
+        request.setPassword("Password1");
+        request.setRole("JUDGE");
+        mockMvc.perform(post("/users/admin/accounts").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("User-ID", "p1").header("User-Role", "PARTICIPANT"))
+                .andExpect(status().isForbidden());
+        verify(userService, never()).provisionAccount(any(), any());
+    }
+
+    @Test
+    void administratorCanProvisionJudgeWithoutReturnedSessionToken() throws Exception {
+        RegisterRequestDTO request = new RegisterRequestDTO();
+        request.setName("Judge");
+        request.setEmail("judge@example.com");
+        request.setPassword("Password1");
+        request.setRole("JUDGE");
+        when(userService.provisionAccount(any(), any()))
+                .thenReturn(UserBriefVO.builder().id("j1").name("Judge").role("JUDGE").build());
+        mockMvc.perform(post("/users/admin/accounts").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .header("User-ID", "a1").header("User-Role", "ADMIN"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("JUDGE"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist());
     }
 
     @Test
@@ -170,15 +204,15 @@ class UsersControllerTest {
     void testUploadAvatarAndUpdateProfile() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "avatar.png", MediaType.IMAGE_PNG_VALUE, "test image content".getBytes());
 
-        when(fileServiceClient.uploadAvatar(any(MultipartFile.class))).thenReturn(ResponseEntity.ok("http://mockurl/avatar.png"));
-        when(userService.getUserProfile(anyString())).thenReturn(new UserProfileVO());
-        when(userService.updateUserProfile(anyString(), any(UpdateUserDTO.class))).thenReturn(new UserProfileVO());
+        when(avatarFiles.replace(eq("1"), any(MultipartFile.class))).thenReturn(new UserProfileVO());
 
         mockMvc.perform(multipart("/users/profile/avatar")
                         .file(file)
                         .header("User-ID", "1")
                         .header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk());
+        verify(avatarFiles).replace(eq("1"), any(MultipartFile.class));
+        verifyNoInteractions(fileServiceClient);
     }
 
     @Test
@@ -228,6 +262,8 @@ class UsersControllerTest {
         when(userService.getUsersByIds(anyList(), isNull())).thenReturn(Collections.singletonList(new UserBriefVO()));
 
         mockMvc.perform(post("/users/query-by-ids")
+                        .header("User-ID", "viewer")
+                        .header("User-Role", "PARTICIPANT")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(List.of("1"))))
                 .andExpect(status().isOk());
@@ -238,7 +274,7 @@ class UsersControllerTest {
     void testGetUserBriefById() throws Exception {
         when(userService.getUserBriefById("1")).thenReturn(new UserBriefVO());
 
-        mockMvc.perform(get("/users/1"))
+        mockMvc.perform(get("/users/1").header("User-ID", "viewer").header("User-Role", "PARTICIPANT"))
                 .andExpect(status().isOk());
     }
 
@@ -248,6 +284,8 @@ class UsersControllerTest {
         when(userService.getUsersByEmails(anyList())).thenReturn(Collections.singletonList(new UserBriefVO()));
 
         mockMvc.perform(post("/users/query-by-emails")
+                        .header("User-ID", "administrator")
+                        .header("User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(List.of("test@example.com"))))
                 .andExpect(status().isOk());
@@ -288,7 +326,7 @@ class UsersControllerTest {
                 .thenReturn(new UserResponseVO("userId", "Test User", "test@example.com", "PARTICIPANT", "jwt-token", 3600L));
 
         mockMvc.perform(get("/users/oauth/callback/github")
-                        .sessionAttr("oauth_state", "mockState")
+                        .sessionAttr("oauth_state_github", "mockState:PARTICIPANT")
                         .param("code", "mock-code")
                         .param("state", "mockState:PARTICIPANT"))
                 .andExpect(status().is3xxRedirection())
@@ -299,7 +337,7 @@ class UsersControllerTest {
     @DisplayName("❌ Should reject GitHub OAuth callback if state mismatch")
     void testHandleGithubCallback_StateMismatch() throws Exception {
         mockMvc.perform(get("/users/oauth/callback/github")
-                        .sessionAttr("oauth_state", "correctState")
+                        .sessionAttr("oauth_state_github", "correctState:PARTICIPANT")
                         .param("code", "mockCode")
                         .param("state", "wrongState:PARTICIPANT"))
                 .andExpect(status().isForbidden());
@@ -326,7 +364,7 @@ class UsersControllerTest {
                 .thenReturn(new UserResponseVO("userId", "Test User", "test@example.com", "PARTICIPANT", "jwt-token", 3600L));
 
         mockMvc.perform(get("/users/oauth/callback/google")
-                        .sessionAttr("oauth_state", "mockState")
+                        .sessionAttr("oauth_state_google", "mockState:PARTICIPANT")
                         .param("code", "mockCode")
                         .param("state", "mockState:PARTICIPANT"))
                 .andExpect(status().is3xxRedirection())
@@ -337,7 +375,7 @@ class UsersControllerTest {
     @DisplayName("❌ Should reject Google OAuth callback if state mismatch")
     void testHandleGoogleCallback_StateMismatch() throws Exception {
         mockMvc.perform(get("/users/oauth/callback/google")
-                        .sessionAttr("oauth_state", "correctState")
+                        .sessionAttr("oauth_state_google", "correctState:PARTICIPANT")
                         .param("code", "mockCode")
                         .param("state", "wrongState:PARTICIPANT"))
                 .andExpect(status().isForbidden());
@@ -359,28 +397,35 @@ class UsersControllerTest {
     }
 
     @Test
-    @DisplayName("✅ Should upload avatar and delete old avatar if exists")
-    void testUploadAvatarWithOldAvatarDelete() throws Exception {
+    @DisplayName("Avatar upload delegates its complete transaction to the avatar module")
+    void testUploadAvatarDelegatesToDomainModule() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "avatar.png", MediaType.IMAGE_PNG_VALUE, "test image".getBytes());
 
-        UserProfileVO profileWithOldAvatar = new UserProfileVO();
-        profileWithOldAvatar.setAvatarUrl("http://mock-bucket/mock-folder/old-avatar.png");
-
-        when(fileServiceClient.uploadAvatar(any(MultipartFile.class)))
-                .thenReturn(ResponseEntity.ok("http://mock-bucket/mock-folder/new-avatar.png"));
-        when(userService.getUserProfile(anyString()))
-                .thenReturn(profileWithOldAvatar);
-        when(userService.updateUserProfile(anyString(), any(UpdateUserDTO.class)))
-                .thenReturn(new UserProfileVO());
+        var updated = new UserProfileVO(); updated.setAvatarUrl("https://files/user-avatar/new.png");
+        when(avatarFiles.replace(eq("1"), any(MultipartFile.class))).thenReturn(updated);
 
         mockMvc.perform(multipart("/users/profile/avatar")
                         .file(file)
                         .header("User-ID", "1")
                         .header("User-Role", "PARTICIPANT"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.avatarUrl").value("https://files/user-avatar/new.png"));
+        verify(avatarFiles).replace(eq("1"), any(MultipartFile.class));
+        verifyNoInteractions(fileServiceClient, userService);
 
-        verify(fileServiceClient, times(1)).deleteFile("mock-folder", "old-avatar.png");
+    }
 
+    @Test void providerCancellationConsumesStateAndReturnsSafeFrontendMessage() throws Exception {
+        for (String provider : List.of("github", "google")) {
+            var session = new org.springframework.mock.web.MockHttpSession();
+            session.setAttribute("oauth_state_" + provider, "state:PARTICIPANT");
+            mockMvc.perform(get("/users/oauth/callback/" + provider).session(session)
+                            .param("state", "state:PARTICIPANT").param("error", "untrusted-provider-details"))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("#error=")))
+                    .andExpect(header().string("Location", org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("untrusted-provider-details"))));
+            org.assertj.core.api.Assertions.assertThat(session.getAttribute("oauth_state_" + provider)).isNull();
+        }
+        verifyNoInteractions(userService);
     }
 
 }

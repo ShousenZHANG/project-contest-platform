@@ -1,102 +1,101 @@
-/**
- * TeamListPage.jsx
- *
- * Public-facing list of teams registered for a contest.
- * Migrated from MUI to shadcn/ui + Tailwind.
- *
- * Role: Public User
- * Developer: Ziqi Yi (migrated)
- */
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Users } from "lucide-react";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import { registrationService } from "../services/registrationService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap, toMessage } from "../api/queryFn";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import EmptyState from "@/shared/components/EmptyState";
+import React from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Users } from 'lucide-react';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import { registrationService } from '../services/registrationService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card, CardContent } from '../components/ui/card';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import EmptyState from '../shared/components/EmptyState';
+import Pagination from '../shared/components/Pagination';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
 
-function TeamListPage() {
+export default function TeamListPage() {
   const { contestId } = useParams();
-  const navigate = useNavigate();
-  const params = { page: 1, size: 100 };
-
-  const {
-    data: teams = [],
-    isPending: loading,
-    error: queryError,
-  } = useQuery({
-    queryKey: [...queryKeys.registrations.all, "teams", contestId, params],
+  const state = usePagedSearchParams();
+  const params = { page: state.page, size: 12, ...(state.keyword && { keyword: state.keyword }) };
+  const query = useQuery({
+    queryKey: [...queryKeys.registrations.all, 'teams', contestId, params],
     queryFn: () => unwrap(registrationService.getRegisteredTeams(contestId, params)),
-    select: (payload) => (payload && payload.data) || [],
-    enabled: Boolean(contestId),
     staleTime: staleTime.short,
   });
-
-  const error = queryError ? toMessage(queryError) : null;
-
+  const items = query.data?.data || [];
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background px-4 py-10">
-        <div className="mx-auto max-w-5xl">
-          <Button variant="outline" onClick={() => navigate(-1)} className="mb-6">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Contest
-          </Button>
-
-          <h1 className="mb-8 text-3xl font-bold tracking-tight text-foreground">
-            Registered Teams
-          </h1>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : error ? (
-            <p className="py-12 text-center text-destructive">{error}</p>
-          ) : teams.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No teams registered yet."
-              description="Teams will appear here once they sign up for the contest."
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+        <Button asChild variant="outline">
+          <Link to={`/publiccontest-detail/${contestId}`}>Back to Contest</Link>
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">Registered Teams</h1>
+        <form onSubmit={state.submitSearch} className="flex flex-wrap items-end gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Label htmlFor="team-search">Search teams</Label>
+            <Input
+              id="team-search"
+              type="search"
+              value={state.searchInput}
+              onChange={(event) => state.setSearchInput(event.target.value)}
+              className="h-11 text-base"
             />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {teams.map((team, index) => (
-                <Card
-                  key={team.id || index}
-                  onClick={() =>
-                    navigate(`/public-team-detail/${contestId}/${team.id}`, {
-                      state: {
-                        teamName: team.name,
-                        teamDescription: team.description,
-                      },
-                    })
-                  }
-                  className="group cursor-pointer border-border/60 motion-card"
-                >
-                  <CardContent className="flex items-center gap-3 p-5">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-primary/15 to-primary/5 text-primary">
-                      <Users className="h-5 w-5" />
-                    </span>
-                    <h3 className="line-clamp-2 text-base font-semibold text-foreground transition-colors group-hover:text-primary">
-                      {team.name || "Unnamed Team"}
-                    </h3>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+          <Button type="submit" className="h-11">
+            Search
+          </Button>
+        </form>
+        {query.isPending ? (
+          <PageSkeleton rows={3} />
+        ) : query.error ? (
+          <PageError
+            error={query.error}
+            onRetry={() => query.refetch()}
+            retrying={query.isFetching}
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No teams registered yet."
+            description="Teams will appear here once they sign up for the contest."
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((team) => (
+              <Card key={team.id}>
+                <CardContent className="space-y-3 p-5">
+                  <Users aria-hidden="true" className="h-6 w-6 text-primary" />
+                  <h2 className="break-words text-lg font-semibold">
+                    <Link
+                      to={`/public-team-detail/${contestId}/${team.id}`}
+                      state={{ teamName: team.name, teamDescription: team.description }}
+                      className="hover:text-primary"
+                    >
+                      {team.name}
+                    </Link>
+                  </h2>
+                  <p className="break-words text-sm text-muted-foreground">{team.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        {!query.error && !query.isPending && (
+          <Pagination
+            page={state.page}
+            pages={query.data?.pages}
+            total={query.data?.total ?? items.length}
+            onPageChange={state.setPage}
+            busy={query.isFetching}
+          />
+        )}
       </div>
       <Footer />
     </>
   );
 }
-
-export default TeamListPage;

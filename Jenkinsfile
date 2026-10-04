@@ -1,92 +1,84 @@
 pipeline {
-    agent any
+    // The Jenkins controller uses its own JDK. Build agents provide project tools.
+    agent { label "${params.BUILD_AGENT_LABEL ?: 'java25-node24-docker'}" }
 
-    environment {
-        JWT_SECRET           = credentials('JWT_SECRET')
-        MAIL_PASSWORD        = credentials('MAIL_PASSWORD')
-        MAIL_USERNAME        = credentials('MAIL_USERNAME')
-        GITHUB_CLIENT_SECRET = credentials('GITHUB_CLIENT_SECRET')
-        GITHUB_CLIENT_ID     = credentials('GITHUB_CLIENT_ID')
-        GOOGLE_CLIENT_SECRET = credentials('GOOGLE_CLIENT_SECRET')
-        GOOGLE_CLIENT_ID     = credentials('GOOGLE_CLIENT_ID')
+    parameters {
+        string(name: 'BUILD_AGENT_LABEL', defaultValue: 'java25-node24-docker',
+            description: 'Linux build agent with JDK 25, Node 24, Python 3, Trivy and Docker Compose.')
+        booleanParam(name: 'DEPLOY', defaultValue: false,
+            description: 'Explicitly deploy after every build/test gate passes.')
+        string(name: 'DEPLOY_ENV_CREDENTIALS_ID', defaultValue: 'competition-platform-deployment-env',
+            description: 'Jenkins Secret File containing the complete configured .env.example values.')
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
     }
 
     stages {
         stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Build Toolchain') {
             steps {
-                echo 'Cloning repository...'
-                checkout scm
+                sh '''set -eu
+java --version
+java --version | head -n 1 | grep -Eq '^(openjdk|java) 25([. +]|$)'
+node -e 'if (Number(process.versions.node.split(".")[0]) !== 24) throw new Error("Node 24 required")'
+python3 --version
+docker compose version
+'''
             }
         }
 
         stage('Backend Build & Test') {
-            steps {
-                echo 'Building and testing all backend modules...'
-                sh './mvnw -B verify'
-            }
+            steps { sh './mvnw -B verify' }
         }
 
         stage('Frontend Build & Test') {
             steps {
-                echo 'Installing dependencies, running tests, and building frontend...'
                 sh 'cd frontend && npm ci && npm test -- --ci --runInBand --forceExit && npm run build'
             }
         }
 
         stage('Security Scan') {
             steps {
-                echo 'Running security scan (non-blocking)...'
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    sh 'which trivy && trivy fs --exit-code 0 --severity HIGH,CRITICAL . || true'
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    sh 'trivy fs --skip-dirs .git --exit-code 1 --severity HIGH,CRITICAL .'
                 }
             }
         }
 
-        stage('Generate .env') {
-            steps {
-                echo 'Generating .env file with Jenkins credentials...'
-                writeFile file: '.env', text: """
-JWT_SECRET=${env.JWT_SECRET}
-MAIL_PASSWORD=${env.MAIL_PASSWORD}
-MAIL_USERNAME=${env.MAIL_USERNAME}
-GITHUB_CLIENT_SECRET=${env.GITHUB_CLIENT_SECRET}
-GITHUB_CLIENT_ID=${env.GITHUB_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${env.GOOGLE_CLIENT_SECRET}
-GOOGLE_CLIENT_ID=${env.GOOGLE_CLIENT_ID}
-                """.stripIndent()
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                echo 'Building Docker images...'
-                sh 'docker compose pull'
-                sh 'docker compose build'
-            }
-        }
-
         stage('Deploy') {
-            steps {
-                echo 'Deploying all services...'
-                sh 'docker compose down || true'
-                sh 'docker compose up -d'
+            when {
+                expression { params.DEPLOY && currentBuild.currentResult == 'SUCCESS' }
             }
-        }
-
-        stage('Post-deploy Check') {
             steps {
-                echo 'Checking running containers...'
-                sh 'docker compose ps'
+                script {
+                    if (!params.DEPLOY_ENV_CREDENTIALS_ID?.trim()) {
+                        error('Deployment requires a complete Jenkins Secret File environment credential.')
+                    }
+                    withCredentials([file(credentialsId: params.DEPLOY_ENV_CREDENTIALS_ID,
+                        variable: 'PLATFORM_DEPLOY_ENV')]) {
+                        sh '''set -eu
+test -s "$PLATFORM_DEPLOY_ENV"
+python3 infra/deploy/validate_env.py "$PLATFORM_DEPLOY_ENV"
+docker compose --env-file "$PLATFORM_DEPLOY_ENV" config --quiet
+docker compose --env-file "$PLATFORM_DEPLOY_ENV" pull --ignore-buildable
+docker compose --env-file "$PLATFORM_DEPLOY_ENV" build
+docker compose --env-file "$PLATFORM_DEPLOY_ENV" up -d --wait --wait-timeout 600
+docker compose --env-file "$PLATFORM_DEPLOY_ENV" ps
+'''
+                    }
+                }
             }
         }
     }
 
     post {
-        success {
-            echo 'Deploy succeeded!'
-        }
-        failure {
-            echo 'Deploy failed! Please check build logs.'
-        }
+        success { echo 'Build and test gates passed. Deployment runs only when explicitly requested.' }
+        unsuccessful { echo 'One or more gates require attention; inspect the stage results.' }
     }
 }

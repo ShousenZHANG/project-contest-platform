@@ -27,10 +27,14 @@ public class SubmissionJudgeVO {
     @Schema(description = "Judge's user ID", example = "judge-567e8910-a12b-45d8-bc2f-9950e4d1ff3a")
     private String judgeId;
 
+    private Integer submissionRevision;
+    private Integer scoreSchemaVersion;
+    private boolean requiresRescore;
+
     @Schema(description = "Judge's overall comments for the submission", example = "Very innovative and well-presented.")
     private String judgeComments;
 
-    @Schema(description = "Total score assigned by the judge", example = "85.50")
+    @Schema(description = "Total score on a 0–10 scale; absent for legacy or replaced-file evaluations", example = "8.50")
     private BigDecimal totalScore;
 
     @Schema(description = "Submission judging created timestamp", example = "2025-06-01T12:00:00")

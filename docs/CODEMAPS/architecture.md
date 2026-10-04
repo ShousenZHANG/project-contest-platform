@@ -1,150 +1,115 @@
-<!-- Verified: 2026-10-04; scan baseline: 8074df1; architecture baseline: ca246ff -->
 # Architecture map
 
-Start at the [map index](README.md). This map describes the scanned implementation;
-[audit findings](audit-2026-10-04.md) separate intended rules from actual behavior.
+Updated 2026-10-04 for the accepted public-platform optimization. The
+[initial audit](audit-2026-10-04.md) is historical evidence; current release evidence
+and remaining gates live in the [runbook](../production-readiness-2026-10-04.md).
 
-## Runtime topology
+## Runtime and trust
 
 ```mermaid
 flowchart LR
-  Browser["React 19 / Vite 8 :3000"] --> Gateway["api-gateway :8080"]
-  Gateway --> User["user-service :8081"]
-  Gateway --> Competition["competition-service :8082"]
-  Gateway --> File["file-service :8083"]
-  Gateway --> Registration["registration-service :8084"]
-  Gateway --> Interaction["interaction-service :8085"]
-  Gateway --> Judge["judge-service :8086"]
-  User --> DB[("Shared MySQL 8 database")]
-  Competition --> DB
-  Registration --> DB
-  Interaction --> DB
-  Judge --> DB
-  Gateway --> Redis[("Redis: JWT checks")]
-  User --> Redis
-  File --> MinIO[("MinIO objects :9000")]
-  Browser -. "returned object URLs" .-> MinIO
-  Competition --> MQ[("RabbitMQ events")]
-  Registration --> MQ
-  Judge --> MQ
-  MQ --> User
-  User --> SMTP["SMTP mail"]
-  Gateway -. "route resolution" .-> Nacos[("Nacos discovery :8848")]
-  Services["Seven backend services"] -. "registration" .-> Nacos
-  Services -. "Micrometer tracing" .-> Zipkin["Zipkin :9411"]
+    Browser[React 19 / Vite / Node 24] --> Gateway[JWT Gateway :8080]
+    Gateway --> User[User / Team :8081]
+    Gateway --> Competition[Competition :8082]
+    Gateway --> File[File :8083]
+    Gateway --> Registration[Registration / Submission :8084]
+    Gateway --> Interaction[Vote / Comment :8085]
+    Gateway --> Judge[Score / Winner :8086]
+    User --> Redis[(Redis)]
+    Gateway --> Redis
+    User --> DB[(Shared MySQL)]
+    Competition --> DB
+    Registration --> DB
+    Interaction --> DB
+    Judge --> DB
+    File --> ObjectStore[(Private Submission objects)]
+    DB --> Tasks[Service-owned task workers]
+    Tasks --> Rabbit[RabbitMQ]
+    Rabbit --> User
+    User --> Mail[SMTP]
 ```
 
-[Compose](../../docker-compose.yml) defines 14 default containers: seven backend
-services, frontend, and six infrastructure services. Jenkins is additional and
-uses the `ci` profile. The frontend Docker image serves a static SPA; its local
-Vite proxy is not a production reverse proxy. Five data services share one schema
-and overlapping tables; see the [data map](data.md).
+Five data services share one schema. File-service has no domain database. Internal
+Feign traffic bypasses the edge gateway, uses Nacos discovery and scoped service
+credentials; [ADR-0008](../adr/0008-service-credentials-and-private-submissions.md)
+records the shared signing-secret tradeoff. Nacos admin and service credentials
+are separate. Infrastructure management interfaces bind loopback, and backend
+service ports stay inside the Compose network.
 
-## Code boundaries
+[JwtAuthFilter](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/filters/JwtAuthFilter.java)
+rejects internal and ambiguous paths before the public whitelist, disables forged
+identity/service headers, and injects verified user identity. Discovery aliases are
+disabled; explicit documentation routes remain. Downstream user `RequestContext`
+still depends on trusted gateway/network delivery, while service-only routes verify
+their own credential.
 
-| Area | Entry point | Responsibility |
-| --- | --- | --- |
-| Browser | [main.jsx](../../frontend/src/main.jsx), [App.jsx](../../frontend/src/App.jsx) | Providers, lazy routes, public/authenticated layouts |
-| Session | [authTokenManager.js](../../frontend/src/auth/authTokenManager.js), [AuthContext.jsx](../../frontend/src/context/AuthContext.jsx) | Stable account snapshot/generation, local expiry and server logout |
-| Server state | [QueryProvider.jsx](../../frontend/src/providers/QueryProvider.jsx), [queryKeys.js](../../frontend/src/api/queryKeys.js) | One cache lifetime per identity; isolate old callbacks and block delayed writes |
-| HTTP adapter | [apiClient.js](../../frontend/src/api/apiClient.js), [services](../../frontend/src/services) | Gateway base URL, captured identity, stale-response rejection, domain API calls |
-| Edge | [JwtAuthFilter.java](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/filters/JwtAuthFilter.java), [configuration](../../backend/api-gateway/src/main/resources/application.yml) | JWT verification, public URL policy, identity, routing |
-| Contracts | [common-lib](../../backend/common-lib/src/main/java/com/w16a/danish/common) | RequestContext, errors, enums, DTO/VO contracts |
-| Domain | [backend map](backend.md) | Controllers, guards, persistence, Feign/gateway seams |
-| Operations | [dependencies map](dependencies.md) | Java/Node, Docker, CI, deployment |
-
-Seven backend services execute independently. `common-lib` and the coverage
-aggregate are Maven modules without runtime ports. Controllers call MyBatis-Plus
-services. OpenFeign provides cross-service calls; registration-service and
-judge-service hide competition responses behind `CompetitionGateway`, following
-[ADR-0003](../adr/0003-cross-service-gateway-seam.md).
-
-## Business flow
+## Business authority
 
 ```mermaid
 flowchart TD
-  Account["User account and role"] --> Competition["Organizer creates Competition"]
-  Competition --> Registration["Participant or creator registers Team"]
-  Registration --> Upload["Submission upload / replacement"]
-  Upload --> Object["file-service writes MinIO object"]
-  Upload --> Submission["registration-service records PENDING Submission"]
-  Submission --> Review["Organizer Review: APPROVED / REJECTED"]
-  Review --> Gallery["Public approved gallery"]
-  Review --> Score["Assigned judge supplies criterion scores"]
-  Score --> Total["Judge records and remote submission totalScore"]
-  Total --> Award["Organizer triggers automatic Winner selection"]
-  Award --> Winners["Commit Winner rows"]
-  Winners --> Status["After commit: Competition becomes AWARDED"]
-  Winners --> Email["After commit: publish award event"]
-  Gallery --> Interaction["Vote / comment"]
+    Signup[Public Participant / Organizer] --> Registration[Type-matched Registration before deadline]
+    Admin[Admin provisions Judge] --> Assignment[Organizer assigns existing Judge]
+    Registration --> Upload[ONGOING: registered entrant uploads]
+    Upload --> Review[ONGOING: Organizer Review]
+    Review --> End[Organizer ends Competition]
+    End --> Score[COMPLETED: current approved revision / complete 0-10 criteria]
+    Assignment --> Score
+    Score --> Eligibility[Every approved entry has 3 distinct valid Judges]
+    Eligibility --> Award[Atomic Winner snapshot / idempotent award run]
+    Award --> Final[AWARDED: frozen results and assignments]
 ```
 
-| Stage | Owner | Actual enforcement and side effects |
+The deadline closes registration and upload independently of manual status.
+Configured criteria/type/dates/file types freeze at start. Review and Submission
+writes freeze at COMPLETED. A shared Competition run lock serializes these writes
+and awarding; locked current-status reads avoid MySQL repeatable-read stale snapshots.
+See [ADR-0006](../adr/0006-scoring-and-competition-lifecycle.md).
+
+## Code seams
+
+| Area | Authority | Supporting seam |
 | --- | --- | --- |
-| Competition | competition-service | Enum has UPCOMING, ONGOING, COMPLETED, AWARDED, CANCELED. Status write validates the enum but lacks actor/transition checks. |
-| Registration | registration-service | Individual/Team tables and creator/participant guards; synchronous RabbitMQ publication. |
-| Submission | registration-service + file-service | Remote upload then shared local write/reset; four Review/Score fields explicitly clear in SQL. Old-object deletion follows successful SQL update. Individual and Team submission keep different status guards. |
-| Score | judge-service | Submitted criterion weights determine the judge total. Assignment is checked against requested competition, but score writes do not validate submission membership/APPROVED. Recalculated total is sent to registration after commit. |
-| Winner | judge-service | Rank scored submissions, commit Winner rows, then update status/notify. Does not enforce documented COMPLETED prerequisite or the scored-list UI's minimum judge count. |
-| Interaction | interaction-service | Reads User/Submission through Feign; schema enforces one vote per user per submission. |
+| Account privilege | user-service | Public role whitelist, Admin provisioning, stable OAuth subject bindings, explicit bootstrap CLI |
+| Competition lifecycle | competition-service | CompetitionLifecycle and shared run lock |
+| Submission revision and access | registration-service | SubmissionDownloads, streamed gateway downloads, rollback/file cleanup |
+| Scoring | judge-service | ScoringPolicy, current revision/schema and valid Judge SQL reads |
+| Award eligibility and snapshot | judge-service | All APPROVED entries, persisted award run, tie ranking |
+| Cross-service reads | CompetitionGateway | Feign/status/missing-value normalization, ADR-0003 |
+| External effects | DurableTasks | Local transaction enqueue, leases/retry/DEAD, ADR-0007 |
+| Notification protocol | common-lib messaging | Seven payloads and historical wire IDs, ADR-0005 |
+| Browser session | authTokenManager + QueryProvider | Generation-bound cache and requests, ADR-0004 |
+| Design and data fetching | Existing Radix/token and Query layers | ADR-0001 and ADR-0002 |
 
-[CONTEXT.md](../../CONTEXT.md) defines domain vocabulary. Its stronger claims
-about scoring eligibility, awarding prerequisites, galleries, and notification
-failure isolation have implementation gaps documented in the audit.
+## Response and visibility
 
-## Authentication and trust
+`ApiResponses` supplies standard success/error envelopes. Paged reads and several
+VO/Boolean endpoints retain bare responses; file-service compatibility uploads
+retain raw strings. Frontend `unwrap` and route-contract tests cover these shapes.
 
-The gateway strips inbound `User-ID`/`User-Role` on every request. Authenticated
-routes verify JWT signature, expiry, Redis blacklist, and latest stored token,
-then inject trusted identity. `@CurrentUser RequestContext` reads those headers.
+Submission DTOs expose application download paths. Public views require public
+Competitions and approved work and omit internal Review comments. Application
+downloads check ownership, Team membership, actual Organizer, assigned Judge or
+the public-approved case, then stream only a known bucket/key. No historical URL
+host is fetched.
 
-JWT authentication does not enforce role or object authorization. Prefix routes
-forward complete `/users/**`, `/submissions/**`, `/files/**`, etc.; discovery
-routes are also enabled. `@Operation(hidden = true)` hides API documentation,
-not reachability. Internal writes and generic file deletion lack protection at
-the controller/service boundary. Public registration also assigns a requested
-role, including Admin; restricting choices in the browser does not constrain
-direct API requests.
+Competition metadata has separate public, managed and Admin-inventory reads.
+Public profile views redact email; trusted internal lookups use scoped service
+routes. Public dashboards cannot derive personal score/Review from an arbitrary
+user ID. Comment/vote access requires public approved work; mutations require the
+Participant role, while comment moderation checks its actual Competition scope.
+OAuth requires a stable provider subject and verified email metadata and never
+implicitly links a local account by email. Privileged accounts use password login.
 
-## HTTP contracts
+## Recovery and verification
 
-- `ApiResponse<T>` is the usual success/error envelope.
-- `PageResponse<T>` is returned directly by paginated endpoints.
-- Login/registration return raw `UserResponseVO`; internal endpoints return bare
-  values; file uploads return raw URLs.
-- [queryFn.js](../../frontend/src/api/queryFn.js) and
-  [serviceUtils.js](../../frontend/src/services/serviceUtils.js) normalize shapes.
+Domain transactions insert effects into the shared durable task table. Notifications
+use confirmed persistent Rabbit publication; user-service persists inbox deduplication
+and email work before ack. Score projection includes both version and revision.
+File deletion follows committed replacement/deletion; failed upload cleanup has a
+new transaction. SMTP remains at least once after ambiguous success.
 
-The frontend service contract test matches HTTP verb and path to controllers.
-It does not validate permissions, payloads, response fields, or whether a static
-homepage ID names a real Competition/Submission.
-
-## Cross-service calls and events
-
-| Caller | Collaborators |
-| --- | --- |
-| user-service | registration-service, file-service, GitHub/Google OAuth, Redis, SMTP |
-| competition-service | user-service, file-service, RabbitMQ |
-| registration-service | user-service, file-service, CompetitionGateway, RabbitMQ |
-| judge-service | user-service, registration-service, interaction-service, CompetitionGateway, RabbitMQ |
-| interaction-service | user-service, registration-service |
-| file-service | MinIO |
-
-RabbitMQ exchanges are `competition.topic`, `registration.topic`, `judge.topic`;
-seven payload types and topology constants live in
-[common-lib messaging](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging).
-The shared converter preserves historical AMQP type IDs
-([ADR-0005](../adr/0005-notification-wire-contracts.md)); user-service consumes
-events and sends emails through one configured JSON converter. Most publishers call
-`convertAndSend` without catching failures. Award publication and score
-propagation use transaction callbacks, but have no persistent outbox/durable
-retry. See [data consistency](data.md).
-
-## Verification boundary
-
-[Dated evidence](audit-2026-10-04.md) records tests and reproduced defects. JVM
-tests and browser fixtures do not establish live
-gateway/Nacos/MySQL/MinIO behavior. Docker Desktop's Linux engine was unavailable;
-live stack health, OAuth, SMTP, and broker/object-store state remain unverified.
-Participant/authenticated browser fixtures stub APIs; public accessibility scans
-can inspect a fallback surface when their unstubbed backend request fails.
+Flyway V1/V2/V3 and Nacos bootstrap complete before runtime services. Test reports,
+isolated real infrastructure and public deployment are different evidence layers;
+consult the runbook for what was actually checked statically. No services, builds,
+tests or migrations were run in this delivery. Local MinIO source fallback is
+not a statement that the archived upstream is maintained for public deployment.

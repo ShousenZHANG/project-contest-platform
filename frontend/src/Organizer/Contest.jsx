@@ -1,3 +1,4 @@
+import { CATEGORIES } from '../shared/competitionCategories';
 /**
  * @file Contest.jsx
  * @description
@@ -12,16 +13,22 @@ import { toast } from 'sonner';
 import { competitionService } from '../services/competitionService';
 import { queryKeys } from '../api/queryKeys';
 import { unwrap } from '../api/queryFn';
+import PageError from '../shared/components/PageError';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
 import { z } from 'zod';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { toUtcDateTime } from '../lib/dateTime';
 
 const contestSchema = z
   .object({
-    contestName: z.string().trim().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
+    contestName: z
+      .string()
+      .trim()
+      .min(3, 'Name must be at least 3 characters')
+      .max(100, 'Name is too long'),
     contestDescription: z.string().trim().min(10, 'Description must be at least 10 characters'),
     category: z.string().min(1, 'Please select a category'),
     startDate: z.string().min(1, 'Start date is required'),
@@ -33,16 +40,6 @@ const contestSchema = z
     message: 'End date must be on or after the start date',
     path: ['endDate'],
   });
-
-const CATEGORIES = [
-  'Design & Creativity',
-  'Programming & Technology',
-  'Business & Entrepreneurship',
-  'Mathematics & Science',
-  'Humanities & Social Sciences',
-  'Music & Performing Arts',
-  'Others',
-];
 
 const SUBMISSION_FORMATS = ['PDF', 'ZIP', 'CODE', 'Image', 'Text'];
 
@@ -68,6 +65,8 @@ function OrganizerContest() {
   useDocumentTitle('Create Contest');
   const [newCriteria, setNewCriteria] = useState('');
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { email } = useParams();
@@ -78,10 +77,10 @@ function OrganizerContest() {
   };
 
   const addCriteria = () => {
-    if (newCriteria.trim() !== '') {
+    if (newCriteria.trim() !== '' && !contestData.scoringCriteria.includes(newCriteria.trim())) {
       setContestData((prev) => ({
         ...prev,
-        scoringCriteria: [...prev.scoringCriteria, newCriteria],
+        scoringCriteria: [...prev.scoringCriteria, newCriteria.trim()],
       }));
       setNewCriteria('');
     }
@@ -103,16 +102,8 @@ function OrganizerContest() {
     }));
   };
 
-  const getAutoStatus = () => {
-    const now = new Date();
-    const start = new Date(contestData.startDate + 'T00:00:00');
-    const end = new Date(contestData.endDate + 'T23:59:59');
-    if (now < start) return 'UPCOMING';
-    if (now >= start && now <= end) return 'ONGOING';
-    return 'COMPLETED';
-  };
-
   const handleSave = async () => {
+    if (saving) return;
     const result = contestSchema.safeParse(contestData);
     if (!result.success) {
       const fieldErrors = result.error.flatten().fieldErrors;
@@ -122,19 +113,17 @@ function OrganizerContest() {
       return;
     }
     setErrors({});
+    setSaving(true);
+    setSaveError(null);
     try {
       const payload = {
         name: contestData.contestName,
         description: contestData.contestDescription,
         category: contestData.category,
-        startDate: new Date(contestData.startDate + 'T10:00:00Z')
-          .toISOString()
-          .replace('.000', ''),
-        endDate: new Date(contestData.endDate + 'T18:00:00Z')
-          .toISOString()
-          .replace('.000', ''),
+        startDate: toUtcDateTime(contestData.startDate),
+        endDate: toUtcDateTime(contestData.endDate),
         isPublic: contestData.isPublic === 'Public',
-        status: getAutoStatus(),
+        status: 'UPCOMING',
         allowedSubmissionTypes: contestData.submissionFormats,
         scoringCriteria: contestData.scoringCriteria,
         participationType: contestData.participationType,
@@ -146,10 +135,13 @@ function OrganizerContest() {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all });
       navigate(`/OrganizerContestList/${email}`);
     } catch (error) {
+      setSaveError(error);
       toast.error(
         'Failed to create contest: ' +
-          (error.response?.data?.message || 'Server error. Please try again.')
+          (error.response?.data?.message || 'Server error. Please try again.'),
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -215,9 +207,7 @@ function OrganizerContest() {
                   </option>
                 ))}
               </select>
-              {errors.category && (
-                <p className="text-xs text-destructive">{errors.category[0]}</p>
-              )}
+              {errors.category && <p className="text-xs text-destructive">{errors.category[0]}</p>}
             </div>
 
             <div className="space-y-2">
@@ -238,7 +228,7 @@ function OrganizerContest() {
               <Label htmlFor="startDate">Start Date</Label>
               <Input
                 id="startDate"
-                type="date"
+                type="datetime-local"
                 name="startDate"
                 value={contestData.startDate}
                 onChange={handleChange}
@@ -253,15 +243,13 @@ function OrganizerContest() {
               <Label htmlFor="endDate">End Date</Label>
               <Input
                 id="endDate"
-                type="date"
+                type="datetime-local"
                 name="endDate"
                 value={contestData.endDate}
                 onChange={handleChange}
                 data-testid="end-date"
               />
-              {errors.endDate && (
-                <p className="text-xs text-destructive">{errors.endDate[0]}</p>
-              )}
+              {errors.endDate && <p className="text-xs text-destructive">{errors.endDate[0]}</p>}
             </div>
           </div>
 
@@ -340,20 +328,23 @@ function OrganizerContest() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="status">Computed Status</Label>
-            <Input id="status" value={getAutoStatus()} disabled className="bg-muted" />
+            <Label htmlFor="status">Initial status</Label>
+            <Input id="status" value="UPCOMING" disabled className="bg-muted" />
+            <p className="text-sm text-muted-foreground">
+              Dates use your local timezone. Start and end the competition from My Contests.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-border bg-background py-3">
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/OrganizerContestList/${email}`)}
-        >
+        <Button variant="outline" onClick={() => navigate(`/OrganizerContestList/${email}`)}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>Create Contest</Button>
+        {saveError && <PageError error={saveError} />}
+        <Button onClick={handleSave} disabled={saving} aria-busy={saving}>
+          {saving ? 'Saving…' : 'Create Contest'}
+        </Button>
       </div>
     </div>
   );

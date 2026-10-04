@@ -9,6 +9,7 @@ import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.registration.gateway.CompetitionGateway;
 import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
 import com.w16a.danish.registration.service.ISubmissionAnalyticsService;
+import com.w16a.danish.registration.service.SubmissionScores;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,7 @@ public class SubmissionAnalyticsServiceImpl
         implements ISubmissionAnalyticsService {
 
     private final CompetitionGateway competitionGateway;
+    private final SubmissionScores scores;
 
     @Override
     public SubmissionStatisticsVO getSubmissionStatistics(String competitionId) {
@@ -93,6 +95,7 @@ public class SubmissionAnalyticsServiceImpl
     @Override
     public PlatformSubmissionStatisticsVO getPlatformSubmissionStatistics() {
         List<SubmissionRecords> all = this.lambdaQuery()
+                .inSql(SubmissionRecords::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
                 .select(SubmissionRecords::getId, SubmissionRecords::getReviewStatus, SubmissionRecords::getTeamId)
                 .list();
 
@@ -125,6 +128,7 @@ public class SubmissionAnalyticsServiceImpl
     @Override
     public Map<String, Integer> getPlatformSubmissionTrend() {
         List<SubmissionRecords> all = this.lambdaQuery()
+                .inSql(SubmissionRecords::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
                 .select(SubmissionRecords::getCreatedAt)
                 .list();
 
@@ -148,25 +152,24 @@ public class SubmissionAnalyticsServiceImpl
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .eq(SubmissionRecords::getReviewStatus, "APPROVED")
                 .isNotNull(SubmissionRecords::getTotalScore)
-                .select(SubmissionRecords::getTotalScore)
                 .list();
 
+        var currentScores = scores.visibleScores(scored).values();
+
         SubmissionScoreStatisticsVO stats = new SubmissionScoreStatisticsVO();
-        if (scored.isEmpty()) {
+        if (currentScores.isEmpty()) {
             return stats;
         }
 
         BigDecimal sum = BigDecimal.ZERO;
         BigDecimal max = null;
         BigDecimal min = null;
-        for (SubmissionRecords r : scored) {
-            BigDecimal s = r.getTotalScore();
-            if (s == null) continue;
+        for (BigDecimal s : currentScores) {
             sum = sum.add(s);
             if (max == null || s.compareTo(max) > 0) max = s;
             if (min == null || s.compareTo(min) < 0) min = s;
         }
-        stats.setAverageScore(sum.divide(BigDecimal.valueOf(scored.size()), 2, RoundingMode.HALF_UP));
+        stats.setAverageScore(sum.divide(BigDecimal.valueOf(currentScores.size()), 2, RoundingMode.HALF_UP));
         stats.setHighestScore(max);
         stats.setLowestScore(min);
         return stats;
@@ -174,12 +177,14 @@ public class SubmissionAnalyticsServiceImpl
 
     @Override
     public List<SubmissionInfoVO> getScoredSubmissions(String competitionId) {
-        return this.lambdaQuery()
+        List<SubmissionRecords> records = this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .isNotNull(SubmissionRecords::getTotalScore)
-                .list()
-                .stream()
-                .map(this::toVO)
+                .list();
+        var visible = scores.visibleScores(records);
+        return records.stream()
+                .filter(record -> visible.containsKey(record.getId()))
+                .map(record -> toVO(record, visible.get(record.getId())))
                 .toList();
     }
 
@@ -188,30 +193,30 @@ public class SubmissionAnalyticsServiceImpl
         if (CollUtil.isEmpty(submissionIds)) {
             return List.of();
         }
-        return this.lambdaQuery()
+        List<SubmissionRecords> records = this.lambdaQuery()
                 .in(SubmissionRecords::getId, submissionIds)
-                .list()
-                .stream()
-                .map(this::toVO)
-                .toList();
+                .list();
+        var visible = scores.visibleScores(records);
+        return records.stream().map(record -> toVO(record, visible.get(record.getId()))).toList();
     }
 
-    private SubmissionInfoVO toVO(SubmissionRecords r) {
+    private SubmissionInfoVO toVO(SubmissionRecords r, BigDecimal visibleScore) {
         SubmissionInfoVO vo = new SubmissionInfoVO();
         vo.setId(r.getId());
+        vo.setRevision(r.getRevision());
         vo.setCompetitionId(r.getCompetitionId());
         vo.setUserId(r.getUserId());
         vo.setTeamId(r.getTeamId());
         vo.setTitle(r.getTitle());
         vo.setDescription(r.getDescription());
         vo.setFileName(r.getFileName());
-        vo.setFileUrl(r.getFileUrl());
+        vo.setFileUrl("/submissions/" + r.getId() + "/download");
         vo.setFileType(r.getFileType());
         vo.setReviewStatus(r.getReviewStatus());
         vo.setReviewComments(r.getReviewComments());
         vo.setReviewedBy(r.getReviewedBy());
         vo.setReviewedAt(r.getReviewedAt());
-        vo.setTotalScore(r.getTotalScore());
+        vo.setTotalScore(visibleScore);
         vo.setCreatedAt(r.getCreatedAt());
         return vo;
     }

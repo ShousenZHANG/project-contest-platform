@@ -29,6 +29,8 @@ public interface IUsersService extends IService<Users> {
      */
     UserResponseVO register(RegisterRequestDTO registerDTO);
 
+    UserBriefVO provisionAccount(RequestContext administrator, RegisterRequestDTO registerDTO);
+
     /**
      * Authenticates a user and generates a token.
      *

@@ -66,8 +66,15 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         try {
             competition = competitionGateway.require(competitionId);
 
+            if (competition.getParticipationType() != com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "This competition requires team registration");
+            }
+
             if (!CompetitionStatus.isRegistrable(competition.getStatus())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Registration is only allowed for UPCOMING or ONGOING competitions");
+            }
+            if (competition.getEndDate() != null && !competition.getEndDate().isAfter(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))) {
+                throw new BusinessException(HttpStatus.CONFLICT, "Registration deadline has passed");
             }
         } catch (BusinessException ex) {
             throw ex;
@@ -78,6 +85,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             );
         }
 
+        lockOpenRegistrations(competitionId);
         boolean alreadyRegistered = lambdaQuery()
                 .eq(CompetitionParticipants::getCompetitionId, competitionId)
                 .eq(CompetitionParticipants::getUserId, userId)
@@ -128,6 +136,8 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.NOT_FOUND, "You have not registered for this competition");
         }
 
+        lockCancelableRegistrations(competitionId);
+
         boolean hasSubmission = submissionService.lambdaQuery()
                 .eq(SubmissionRecords::getUserId, userId)
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
@@ -162,6 +172,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             String order
     ) {
         ctx.requireAnyRole("PARTICIPANT");
+        requirePage(page, size);
         String userId = ctx.userId();
 
         List<CompetitionParticipants> participants = lambdaQuery()
@@ -217,8 +228,8 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         all = all.stream().sorted(comparator).toList();
 
         int total = all.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
+        int toIndex = (int) Math.min((long) fromIndex + size, total);
         List<CompetitionParticipationVO> pagedList = all.subList(fromIndex, toIndex);
 
         return new PageResponse<>(pagedList, total, page, size, (int) Math.ceil((double) total / size));
@@ -235,6 +246,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             String order
     ) {
         ctx.requireAnyRole("ORGANIZER");
+        requirePage(page, size);
         String organizerId = ctx.userId();
 
         boolean isOwner = competitionOrganizersService.lambdaQuery()
@@ -261,8 +273,11 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         List<String> userIds = new ArrayList<>(userRegisteredAtMap.keySet());
 
         // safe check
-        ResponseEntity<List<UserBriefVO>> response = userServiceClient.getUsersByIds(userIds, "PARTICIPANT");
-        List<UserBriefVO> userList = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+        List<UserBriefVO> userList = new ArrayList<>();
+        for (int start = 0; start < userIds.size(); start += 100) {
+            userList.addAll(requireUserReply(userServiceClient.getUsersByIds(
+                    userIds.subList(start, Math.min(start + 100, userIds.size())), "PARTICIPANT"), "getUsersByIds"));
+        }
 
         List<ParticipantInfoVO> allParticipants = userList.stream()
                 .map(user -> {
@@ -298,8 +313,8 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
         // pagination
         int total = allParticipants.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
+        int toIndex = (int) Math.min((long) fromIndex + size, total);
         List<ParticipantInfoVO> pagedList = allParticipants.subList(fromIndex, toIndex);
 
         return new PageResponse<>(pagedList, total, page, size, (int) Math.ceil((double) total / size));
@@ -328,6 +343,8 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         if (existing == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Participant is not registered for this competition");
         }
+
+        lockCancelableRegistrations(competitionId);
 
         boolean hasSubmission = submissionService.lambdaQuery()
                 .eq(SubmissionRecords::getUserId, participantUserId)
@@ -389,6 +406,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             if (competition.getParticipationType() != ParticipationType.TEAM) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "This competition only supports team registration.");
             }
+            if (competition.getEndDate() != null && !competition.getEndDate().isAfter(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))) {
+                throw new BusinessException(HttpStatus.CONFLICT, "Registration deadline has passed");
+            }
 
         } catch (BusinessException e) {
             throw e;
@@ -396,6 +416,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to validate competition: " + e.getMessage());
         }
 
+        lockOpenRegistrations(competitionId);
         boolean alreadyRegistered = competitionTeamsService.lambdaQuery()
                 .eq(CompetitionTeams::getCompetitionId, competitionId)
                 .eq(CompetitionTeams::getTeamId, teamId)
@@ -457,6 +478,8 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.NOT_FOUND, "This team is not registered for the competition.");
         }
 
+        lockCancelableRegistrations(competitionId);
+
         // Step 3: Delete all submissions made by the team for this competition
         boolean hasTeamSubmission = submissionService.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
@@ -464,10 +487,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
                 .exists();
 
         if (hasTeamSubmission) {
-            submissionService.lambdaUpdate()
-                    .eq(SubmissionRecords::getCompetitionId, competitionId)
-                    .eq(SubmissionRecords::getTeamId, teamId)
-                    .remove();
+            submissionService.deleteSubmissionsByTeamAndCompetition(teamId, competitionId);
         }
 
         // Step 4: Remove team registration record from competition_teams
@@ -478,7 +498,11 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
     }
 
     @Override
-    public boolean isTeamRegistered(String competitionId, String teamId) {
+    public boolean isTeamRegistered(String competitionId, String teamId, RequestContext ctx) {
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
+        if (!Boolean.TRUE.equals(competition.getIsPublic()) && !canReadCompetition(competitionId, ctx)) {
+            requireTeamAccess(teamId, ctx);
+        }
         // Check whether the team is already registered for the given competition
         return competitionTeamsService.lambdaQuery()
                 .eq(CompetitionTeams::getCompetitionId, competitionId)
@@ -495,7 +519,7 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             String sortBy,
             String order
     ) {
-
+        requirePage(page, size);
         // Step 1: Query all registered teams for the competition from competition_teams
         List<CompetitionTeams> competitionTeams = competitionTeamsService.lambdaQuery()
                 .eq(CompetitionTeams::getCompetitionId, competitionId)
@@ -513,8 +537,11 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
                 .toList();
 
         // Step 3: Call user-service to get team brief info
-        ResponseEntity<List<TeamInfoVO>> response = userServiceClient.getTeamBriefByIds(teamIds);
-        List<TeamInfoVO> allTeams = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+        List<TeamInfoVO> allTeams = new ArrayList<>();
+        for (int start = 0; start < teamIds.size(); start += 100) {
+            allTeams.addAll(requireUserReply(userServiceClient.getTeamBriefByIds(
+                    teamIds.subList(start, Math.min(start + 100, teamIds.size()))), "getTeamBriefByIds"));
+        }
 
         // Step 4: Apply keyword filtering if needed
         if (StrUtil.isNotBlank(keyword)) {
@@ -540,17 +567,29 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
 
         // Step 6: Pagination
         int total = allTeams.size();
-        int fromIndex = Math.min((page - 1) * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
+        int toIndex = (int) Math.min((long) fromIndex + size, total);
         List<TeamInfoVO> pagedList = allTeams.subList(fromIndex, toIndex);
 
         return new PageResponse<>(pagedList, total, page, size, (int) Math.ceil((double) total / size));
     }
 
     @Override
-    public PageResponse<CompetitionParticipationVO> getCompetitionsRegisteredByTeam(
-            String teamId, int page, int size, String keyword, String sortBy, String order) {
+    public PageResponse<TeamInfoVO> getManagedTeamsByCompetitionWithSearch(
+            String competitionId, RequestContext ctx, int page, int size, String keyword, String sortBy, String order) {
+        requirePage(page, size);
+        competitionGateway.require(competitionId);
+        if (!canReadCompetition(competitionId, ctx)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized for this competition");
+        }
+        return getTeamsByCompetitionWithSearch(competitionId, page, size, keyword, sortBy, order);
+    }
 
+    @Override
+    public PageResponse<CompetitionParticipationVO> getCompetitionsRegisteredByTeam(
+            String teamId, RequestContext ctx, int page, int size, String keyword, String sortBy, String order) {
+        requirePage(page, size);
+        requireTeamAccess(teamId, ctx);
         List<CompetitionTeams> registrations = competitionTeamsService.lambdaQuery()
                 .eq(CompetitionTeams::getTeamId, teamId)
                 .list();
@@ -613,12 +652,12 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         result = result.stream().sorted(comparator).toList();
 
         int total = result.size();
-        int fromIndex = Math.min((page - 1) * size, total);
+        int fromIndex = (int) Math.min((long) (page - 1) * size, total);
         if (fromIndex >= total) {
             return new PageResponse<>(Collections.emptyList(), total, page, size, (int) Math.ceil((double) total / size));
         }
 
-        int toIndex = Math.min(fromIndex + size, total);
+        int toIndex = (int) Math.min((long) fromIndex + size, total);
         List<CompetitionParticipationVO> paged = result.subList(fromIndex, toIndex);
 
         return new PageResponse<>(paged, total, page, size, (int) Math.ceil((double) total / size));
@@ -648,10 +687,9 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
             throw new BusinessException(HttpStatus.NOT_FOUND, "The team is not registered for this competition.");
         }
 
-        submissionService.lambdaUpdate()
-                .eq(SubmissionRecords::getCompetitionId, competitionId)
-                .eq(SubmissionRecords::getTeamId, teamId)
-                .remove();
+        lockCancelableRegistrations(competitionId);
+
+        submissionService.deleteSubmissionsByTeamAndCompetition(teamId, competitionId);
 
         boolean removed = competitionTeamsService.removeById(record.getId());
         if (!removed) {
@@ -687,5 +725,68 @@ public class CompetitionParticipantsServiceImpl extends ServiceImpl<CompetitionP
         return competitionTeamsService.lambdaQuery()
                 .eq(CompetitionTeams::getTeamId, teamId)
                 .exists();
+    }
+
+    private static <T> T requireUserReply(ResponseEntity<T> reply, String operation) {
+        if (reply == null || !reply.getStatusCode().is2xxSuccessful() || reply.getBody() == null) {
+            throw new com.w16a.danish.common.exception.ServiceUnavailableException("user-service", operation);
+        }
+        return reply.getBody();
+    }
+
+    private boolean canReadCompetition(String competitionId, RequestContext ctx) {
+        if (ctx.isAdmin()) return true;
+        if (ctx.isOrganizer()) {
+            return competitionOrganizersService.lambdaQuery()
+                    .eq(CompetitionOrganizers::getCompetitionId, competitionId)
+                    .eq(CompetitionOrganizers::getUserId, ctx.userId()).exists();
+        }
+        if (ctx.isJudge()) return competitionGateway.isAssignedJudge(competitionId, ctx.userId());
+        return ctx.isParticipant() && (lambdaQuery()
+                .eq(CompetitionParticipants::getCompetitionId, competitionId)
+                .eq(CompetitionParticipants::getUserId, ctx.userId()).exists()
+                || baseMapper.hasRegisteredTeamMembership(competitionId, ctx.userId()));
+    }
+
+    private void requireTeamAccess(String teamId, RequestContext ctx) {
+        if (ctx.isAdmin()) return;
+        UserBriefVO creator = requireUserReply(userServiceClient.getTeamCreator(teamId), "getTeamCreator");
+        if (StrUtil.isBlank(creator.getId())) {
+            throw new com.w16a.danish.common.exception.ServiceUnavailableException("user-service", "getTeamCreator");
+        }
+        if (Objects.equals(ctx.userId(), creator.getId())) return;
+        if (!requireUserReply(userServiceClient.isUserInTeam(ctx.userId(), teamId), "isUserInTeam")) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to view this team's registrations");
+        }
+    }
+
+    private static void requirePage(int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
+    }
+
+    private void lockCancelableRegistrations(String competitionId) {
+        baseMapper.ensureLifecycleLock(competitionId);
+        var awardedAt = baseMapper.lockLifecycle(competitionId);
+        String status = baseMapper.competitionStatus(competitionId);
+        if (status == null) throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        if (awardedAt != null || !("UPCOMING".equals(status) || "ONGOING".equals(status) || "CANCELED".equals(status))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Completed registrations and results are retained");
+        }
+    }
+
+    private void lockOpenRegistrations(String competitionId) {
+        baseMapper.ensureLifecycleLock(competitionId);
+        var awardedAt = baseMapper.lockLifecycle(competitionId);
+        String status = baseMapper.competitionStatus(competitionId);
+        if (status == null) throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        if (awardedAt != null || !("UPCOMING".equals(status) || "ONGOING".equals(status))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Competition registration closed before the registration was saved");
+        }
+        var deadline = baseMapper.competitionEndDate(competitionId);
+        if (deadline != null && !deadline.isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Registration deadline has passed");
+        }
     }
 }

@@ -3,6 +3,7 @@ package com.w16a.danish.judge.domain.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -26,13 +27,11 @@ public class CriterionScoreDTO {
 
     @NotNull(message = "score is required")
     @DecimalMin(value = "0.0", message = "score must be >= 0")
-    @DecimalMax(value = "100.0", message = "score must be <= 100")
-    @Schema(description = "Score assigned for this criterion", example = "8.5", required = true)
+    @DecimalMax(value = "10.0", message = "score must be <= 10")
+    @Digits(integer = 2, fraction = 2, message = "score must have at most two decimal places")
+    @Schema(description = "Criterion score from 0 to 10, with at most two decimal places", example = "8.5", required = true)
     private BigDecimal score;
 
-    @NotNull(message = "weight is required")
-    @DecimalMin(value = "0.0", message = "weight must be >= 0")
-    @DecimalMax(value = "100.0", message = "weight must be <= 100")
-    @Schema(description = "Weight of this criterion", example = "0.4", required = true)
+    @Schema(description = "Legacy field; ignored. The server assigns equal weights.", deprecated = true)
     private BigDecimal weight;
 }

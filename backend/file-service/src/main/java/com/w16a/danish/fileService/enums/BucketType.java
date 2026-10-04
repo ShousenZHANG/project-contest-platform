@@ -15,7 +15,7 @@ import lombok.Getter;
 public enum BucketType {
     USER_AVATAR("user-avatar", true),
     COMPETITION_ASSETS("competition-assets", true),
-    SUBMISSIONS("submissions", true);
+    SUBMISSIONS("submissions", false);
 
     private final String bucketName;
     private final boolean publicRead;

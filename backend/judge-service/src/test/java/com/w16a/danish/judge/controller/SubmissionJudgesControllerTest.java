@@ -6,13 +6,14 @@ import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
+import com.w16a.danish.judge.domain.vo.JudgingSubmissionVO;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -162,5 +163,45 @@ class SubmissionJudgesControllerTest {
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    void contextContractReturnsAuthoritativeCriteriaAndWritePermission() throws Exception {
+        JudgingSubmissionVO context = new JudgingSubmissionVO();
+        context.setId("s"); context.setCompetitionId("c"); context.setCompetitionStatus("COMPLETED");
+        context.setScoringCriteria(List.of("Innovation")); context.setCanScore(true); context.setHasScored(false);
+        when(submissionJudgesService.getJudgingSubmission(any(RequestContext.class), eq("c"), eq("s"))).thenReturn(context);
+        mockMvc.perform(get("/judges/submissions/s").param("competitionId", "c")
+                        .header("User-ID", "judge").header("User-Role", "JUDGE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value("s"))
+                .andExpect(jsonPath("$.competitionStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.scoringCriteria[0]").value("Innovation"))
+                .andExpect(jsonPath("$.canScore").value(true)).andExpect(jsonPath("$.hasScored").value(false));
+    }
+
+    @Test
+    void clientWeightIsOptionalButScoreAboveTenIsInvalid() throws Exception {
+        String body = """
+                {"competitionId":"c","submissionId":"s","scores":[{"criterion":"A","score":10}]}
+                """;
+        mockMvc.perform(post("/judges/score").header("User-ID", "judge").header("User-Role", "JUDGE")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/judges/score").header("User-ID", "judge").header("User-Role", "JUDGE")
+                        .contentType(MediaType.APPLICATION_JSON).content(body.replace("\"score\":10", "\"score\":10.01")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void participantCannotReadJudgeContextOrWriteScores() throws Exception {
+        mockMvc.perform(get("/judges/submissions/s").param("competitionId", "c")
+                        .header("User-ID", "participant").header("User-Role", "PARTICIPANT"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/judges/score").header("User-ID", "participant").header("User-Role", "PARTICIPANT")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"competitionId":"c","submissionId":"s","scores":[{"criterion":"A","score":5}]}
+                                """))
+                .andExpect(status().isForbidden());
     }
 }

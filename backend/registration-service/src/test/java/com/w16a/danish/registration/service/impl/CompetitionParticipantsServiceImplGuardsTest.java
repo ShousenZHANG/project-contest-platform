@@ -97,7 +97,9 @@ class CompetitionParticipantsServiceImplGuardsTest {
                 return participantQuery;
             }
         };
-        ReflectionTestUtils.setField(real, "baseMapper", mock(CompetitionParticipantsMapper.class));
+        var mapper = mock(CompetitionParticipantsMapper.class);
+        when(mapper.competitionStatus(anyString())).thenReturn("ONGOING");
+        ReflectionTestUtils.setField(real, "baseMapper", mapper);
         service = spy(real);
     }
 
@@ -144,6 +146,7 @@ class CompetitionParticipantsServiceImplGuardsTest {
         @DisplayName("A completed competition is closed to new entrants")
         void closedCompetitionIsRefused() {
             CompetitionResponseVO c = new CompetitionResponseVO();
+            c.setParticipationType(ParticipationType.INDIVIDUAL);
             c.setStatus(CompetitionStatus.COMPLETED);
             when(competitionGateway.require("c1")).thenReturn(c);
 
@@ -164,6 +167,7 @@ class CompetitionParticipantsServiceImplGuardsTest {
         @DisplayName("Registering twice is a conflict, not a second row")
         void duplicateRegistrationIsRefused() {
             CompetitionResponseVO c = new CompetitionResponseVO();
+            c.setParticipationType(ParticipationType.INDIVIDUAL);
             c.setStatus(CompetitionStatus.ONGOING);
             when(competitionGateway.require("c1")).thenReturn(c);
             when(participantQuery.exists()).thenReturn(true);
@@ -177,6 +181,7 @@ class CompetitionParticipantsServiceImplGuardsTest {
         @DisplayName("A failed insert is reported rather than silently succeeding")
         void failedSaveIsReported() {
             CompetitionResponseVO c = new CompetitionResponseVO();
+            c.setParticipationType(ParticipationType.INDIVIDUAL);
             c.setStatus(CompetitionStatus.ONGOING);
             when(competitionGateway.require("c1")).thenReturn(c);
             when(participantQuery.exists()).thenReturn(false);
@@ -191,6 +196,7 @@ class CompetitionParticipantsServiceImplGuardsTest {
         @DisplayName("A missing user stops the notification instead of sending a blank one")
         void missingUserStopsTheNotification() {
             CompetitionResponseVO c = new CompetitionResponseVO();
+            c.setParticipationType(ParticipationType.INDIVIDUAL);
             c.setStatus(CompetitionStatus.UPCOMING);
             when(competitionGateway.require("c1")).thenReturn(c);
             when(participantQuery.exists()).thenReturn(false);

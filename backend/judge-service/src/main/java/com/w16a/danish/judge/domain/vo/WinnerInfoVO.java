@@ -27,7 +27,7 @@ public class WinnerInfoVO {
     @Schema(description = "List of awards won by this submission", example = "[\"Champion\", \"Best in Innovation\"]")
     private List<String> awards;
 
-    @Schema(description = "Total score given to the submission", example = "92.5")
+    @Schema(description = "Immutable award score from 0 to 10; absent for legacy results", example = "9.25")
     private BigDecimal totalScore;
 
     @Schema(description = "Name of the user or team that submitted", example = "Team Alpha" /* or "John Doe"*/)

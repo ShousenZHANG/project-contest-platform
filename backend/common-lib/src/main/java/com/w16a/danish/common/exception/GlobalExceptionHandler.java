@@ -6,6 +6,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import jakarta.validation.ConstraintViolationException;
+import feign.FeignException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -54,6 +59,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Missing or invalid Authorization header"));
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class, ConstraintViolationException.class})
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRequest(Exception ex) {
+        log.warn("Invalid request: {}", ex.getClass().getSimpleName());
+        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid request parameters or body"));
+    }
+
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDownstreamException(FeignException ex) {
+        // Feign messages include remote URLs, query tokens and response bodies. Never echo or log them.
+        HttpStatus status = switch (ex.status()) {
+            case 400 -> HttpStatus.BAD_REQUEST;
+            case 401 -> HttpStatus.UNAUTHORIZED;
+            case 403 -> HttpStatus.FORBIDDEN;
+            case 404 -> HttpStatus.NOT_FOUND;
+            case 409 -> HttpStatus.CONFLICT;
+            case 422 -> HttpStatus.valueOf(422);
+            case 429 -> HttpStatus.TOO_MANY_REQUESTS;
+            default -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+        log.warn("Downstream request failed [{}]", ex.status());
+        return ResponseEntity.status(status).body(ApiResponse.error(status == HttpStatus.SERVICE_UNAVAILABLE
+                ? "A required service is unavailable. Please retry later." : status.getReasonPhrase()));
     }
 
     /**

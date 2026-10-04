@@ -29,7 +29,7 @@ public class RegisterRequestDTO {
     @NotBlank(message = "Password cannot be blank")
     private String password;
 
-    @Schema(description = "User role", example = "ADMIN")
+    @Schema(description = "Public account role (PARTICIPANT or ORGANIZER)", example = "PARTICIPANT")
     @NotBlank(message = "Role cannot be blank")
     private String role;
 

@@ -12,18 +12,18 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author Eddy
  * @date 2025/04/21
  */
-@FeignClient(name = "interaction-service", fallback = com.w16a.danish.judge.feign.fallback.InteractionServiceClientFallback.class)
+@FeignClient(name = "interaction-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.judge.feign.fallback.InteractionServiceClientFallback.class)
 public interface InteractionServiceClient {
 
     /**
-     * Get vote and comment statistics for a specific submission.
+     * Get vote and comment totals for a specific competition.
      *
-     * @param submissionId ID of the submission
+     * @param competitionId ID of the competition
      * @return InteractionStatisticsVO containing vote count and comment count
      */
-    @GetMapping("/interactions/statistics")
+    @GetMapping("/interactions/internal/competition-statistics")
     ResponseEntity<InteractionStatisticsVO> getInteractionStatistics(
-            @RequestParam("submissionId") String submissionId
+            @RequestParam("competitionId") String competitionId
     );
 
     /**

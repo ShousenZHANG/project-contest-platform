@@ -1,8 +1,7 @@
 package com.w16a.danish.judge.service.impl;
 
-import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.mapper.CompetitionJudgesMapper;
+import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.springframework.test.util.ReflectionTestUtils;
-
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -28,6 +27,9 @@ class CompetitionJudgesServiceImplTest {
     @Mock
     private CompetitionJudgesMapper competitionJudgesMapper;
 
+    @Mock
+    private SubmissionJudgesMapper submissionJudgesMapper;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -39,12 +41,7 @@ class CompetitionJudgesServiceImplTest {
     void testCountJudgesByCompetitionId_WithJudges() {
         // Arrange
         String competitionId = "comp-001";
-        LambdaQueryChainWrapper<CompetitionJudges> queryWrapper = mock(LambdaQueryChainWrapper.class);
-
-        // Mock lambdaQuery and chain behavior
-        doReturn(queryWrapper).when(competitionJudgesService).lambdaQuery();
-        when(queryWrapper.eq(any(), eq(competitionId))).thenReturn(queryWrapper);
-        when(queryWrapper.count()).thenReturn(3L);
+        when(submissionJudgesMapper.selectValidJudgeIds(competitionId)).thenReturn(Set.of("j1", "j2", "j3"));
 
         // Act
         int judgeCount = competitionJudgesService.countJudgesByCompetitionId(competitionId);
@@ -58,12 +55,7 @@ class CompetitionJudgesServiceImplTest {
     void testCountJudgesByCompetitionId_NoJudges() {
         // Arrange
         String competitionId = "comp-002";
-        LambdaQueryChainWrapper<CompetitionJudges> queryWrapper = mock(LambdaQueryChainWrapper.class);
-
-        // Mock lambdaQuery and chain behavior
-        doReturn(queryWrapper).when(competitionJudgesService).lambdaQuery();
-        when(queryWrapper.eq(any(), eq(competitionId))).thenReturn(queryWrapper);
-        when(queryWrapper.count()).thenReturn(0L);
+        when(submissionJudgesMapper.selectValidJudgeIds(competitionId)).thenReturn(Set.of());
 
         // Act
         int judgeCount = competitionJudgesService.countJudgesByCompetitionId(competitionId);

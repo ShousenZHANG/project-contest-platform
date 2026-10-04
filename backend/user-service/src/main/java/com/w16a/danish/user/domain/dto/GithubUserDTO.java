@@ -11,6 +11,8 @@ import lombok.Data;
 @Data
 @Schema(name = "GithubUserDTO", description = "Github user DTO")
 public class GithubUserDTO {
+    private Long id;
+
     @Schema(description = "Github user ID")
     private String login;
 
@@ -18,4 +20,3 @@ public class GithubUserDTO {
     private String email;
 
 }
-

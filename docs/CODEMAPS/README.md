@@ -3,11 +3,19 @@
 
 This is the navigation entry point for Questora. The initial scan at `8074df1`
 inventoried 597 tracked files, 252 backend main Java files, 48 backend test Java
-files and 180 frontend source files. After the architecture pass based on
-`ca246ff`, current source inventory is 245 backend main Java files, 51 backend
-test Java files and 158 frontend source files (including the new session tests).
+files and 180 frontend source files. The preceding architecture pass produced
+245 backend main / 51 test Java files and 158 frontend source files. The current
+public-platform pass adds role, scoring, lifecycle, privacy and durable recovery
+boundaries; final inventory and static review evidence are recorded in the runbook.
 The maps follow controllers, services, schema, browser routes, auth/cache,
 Docker images and CI; the dated scan keeps its original verification evidence.
+
+Final static inventory: 275 backend main Java files, 82 backend test Java files,
+and 168 frontend source files, including 165 JS/JSX/TS/TSX files (124 production,
+41 test/helper). Java syntax and explicit project imports, frontend syntax/imports/
+HTTP route shapes, TypeScript noEmit, configuration syntax and local map links were
+checked. No application, test suite, project build or deployment was run for this
+delivery; source inventory is not runtime acceptance evidence.
 
 ## Maps
 
@@ -16,10 +24,11 @@ Docker images and CI; the dated scan keeps its original verification evidence.
 | [Architecture](architecture.md) | Topology, trust, HTTP contracts, complete business flow |
 | [Backend](backend.md) | Controllers, service guards, Feign/gateway seams, notifications |
 | [Frontend](frontend.md) | Route/role matrix, API services, session/cache, shared UI, tests |
-| [Data](data.md) | Sixteen tables, shared persistence, indexes, MinIO, Redis, events |
+| [Data](data.md) | Twenty business tables, migrations, stable OAuth identities, shared locks, private files and recovery |
 | [Dependencies and deployment](dependencies.md) | Locked versions, build commands, Compose, CI/CD, deployment risks |
 | [Scan evidence and findings](audit-2026-10-04.md) | Verification, reproduced failures, uncertainty, branch cleanup |
 | [Architecture cleanup](../architecture-cleanup-2026-10-04.md) | Deleted code, deeper module boundaries, regression checks and remaining work |
+| [Public-platform optimization](../production-readiness-2026-10-04.md) | Accepted plan, current evidence, migration and release/restore gates |
 
 ## Where to start for a change
 
@@ -45,19 +54,22 @@ Docker images and CI; the dated scan keeps its original verification evidence.
 - [ADR-0003](../adr/0003-cross-service-gateway-seam.md): gateway seam.
 - [ADR-0004](../adr/0004-session-lifetime-boundary.md): session cache/request lifetime.
 - [ADR-0005](../adr/0005-notification-wire-contracts.md): shared notification wire compatibility.
+- [ADR-0006](../adr/0006-scoring-and-competition-lifecycle.md): current revision, score units, eligibility and lifecycle.
+- [ADR-0007](../adr/0007-durable-domain-effects.md): persistent effects, inbox and migrations.
+- [ADR-0008](../adr/0008-service-credentials-and-private-submissions.md): internal credentials and object access.
 
 Keep maps synchronized with routes, contracts, data boundaries, and operations.
 State whether evidence is static, isolated runtime, browser, or live deployment.
 
 ## Current assessment
 
-The platform has substantial workflows and automated tests, but the scan found
-authorization/privacy defects outside those tests. Public Admin registration
-and two unprotected controller writes were reproduced in isolation. Submission
-file privacy, Score/Winner guards and Judge navigation still need attention before
-a real competition. Cross-account cache/request isolation and persisted Submission
-review/score reset were fixed in the [architecture pass](../architecture-cleanup-2026-10-04.md).
-See the [audit](audit-2026-10-04.md) for unresolved authorization/privacy findings.
+The initial scan reproduced privilege, internal-write, Submission privacy and
+Score/Winner defects outside the former tests. The current pass implements their
+guards, private download paths, Judge UI and durable effects, preserving the earlier
+session isolation and persisted review reset. Current static review evidence and limits
+belong to the [runbook](../production-readiness-2026-10-04.md); the dated audit preserves
+its pre-change reproductions. This delivery did not run services, tests or builds;
+the release gates remain separate from static source review.
 
 ## Branch policy
 

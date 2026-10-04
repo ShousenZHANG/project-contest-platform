@@ -9,9 +9,8 @@
 
 import apiClient from '../api/apiClient';
 import type { AxiosResponse } from 'axios';
-import type { Competition, ApiResponse } from '../types/index';
+import type { Competition, User, ApiResponse, PageResponse } from '../types/index';
 import type {
-  CompetitionListResponse,
   CreateCompetitionRequest,
   UpdateCompetitionRequest,
   PaginationParams,
@@ -22,17 +21,26 @@ export interface AssignJudgesRequest {
   judgeEmails: string[];
 }
 
+export interface CompetitionFilterParams extends PaginationParams {
+  keyword?: string;
+  status?: Competition['status'];
+  category?: string;
+  participationType?: Competition['participationType'];
+}
+
 export const competitionService = {
   /** Paged, filterable list. `GET /competitions/list` */
-  list: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<CompetitionListResponse>>> =>
+  list: (params?: CompetitionFilterParams): Promise<AxiosResponse<PageResponse<Competition>>> =>
     apiClient.get('/competitions/list', { params }),
 
-  /** Public catalogue. `GET /competitions/public/all` */
-  getPublicAll: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<CompetitionListResponse>>> =>
-    apiClient.get('/competitions/public/all', { params }),
+  listAdmin: (params?: CompetitionFilterParams): Promise<AxiosResponse<PageResponse<Competition>>> =>
+    apiClient.get('/competitions/admin/list', { params }),
 
-  getById: (id: string): Promise<AxiosResponse<ApiResponse<Competition>>> =>
+  getById: (id: string): Promise<AxiosResponse<Competition>> =>
     apiClient.get(`/competitions/${id}`),
+
+  getManagedById: (id: string): Promise<AxiosResponse<Competition>> =>
+    apiClient.get(`/competitions/managed/${id}`),
 
   /**
    * Every competition the signed-in organizer owns.
@@ -40,48 +48,56 @@ export const competitionService = {
    * The path really is `achieve` — see CompetitionsController. It reads as a
    * typo for `archive` but it is the published contract.
    */
-  getMyOrganized: (params?: PaginationParams): Promise<AxiosResponse<ApiResponse<Competition[]>>> =>
+  getMyOrganized: (
+    params?: CompetitionFilterParams,
+  ): Promise<AxiosResponse<PageResponse<Competition>>> =>
     apiClient.get('/competitions/achieve/my', { params }),
 
-  getByIds: (ids: string[]): Promise<AxiosResponse<ApiResponse<Competition[]>>> =>
+  getByIds: (ids: string[]): Promise<AxiosResponse<Competition[]>> =>
     apiClient.post('/competitions/batch/ids', ids),
 
-  create: (data: CreateCompetitionRequest): Promise<AxiosResponse<ApiResponse<Competition>>> =>
+  create: (data: CreateCompetitionRequest): Promise<AxiosResponse<Competition>> =>
     apiClient.post('/competitions', data),
 
-  update: (id: string, data: UpdateCompetitionRequest): Promise<AxiosResponse<ApiResponse<Competition>>> =>
+  update: (
+    id: string,
+    data: UpdateCompetitionRequest,
+  ): Promise<AxiosResponse<Competition>> =>
     apiClient.put(`/competitions/update/${id}`, data),
 
-  updateStatus: (id: string, status: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.put(`/competitions/${id}/status`, null, { params: { status } }),
-
-  delete: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  delete: (id: string): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.delete(`/competitions/delete/${id}`),
 
-  isOrganizer: (competitionId: string): Promise<AxiosResponse<ApiResponse<boolean>>> =>
+  isOrganizer: (competitionId: string): Promise<AxiosResponse<boolean>> =>
     apiClient.get('/competitions/is-organizer', { params: { competitionId } }),
 
-  uploadMedia: (id: string, formData: FormData): Promise<AxiosResponse<ApiResponse<string[]>>> =>
+  uploadMedia: (id: string, formData: FormData): Promise<AxiosResponse<Competition>> =>
     apiClient.post(`/competitions/${id}/media`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
   /** Removes one image; the target is identified by its URL, not an id. */
-  deleteImage: (id: string, imageUrl: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  deleteImage: (id: string, imageUrl: string): Promise<AxiosResponse<Competition>> =>
     apiClient.delete(`/competitions/${id}/media/image`, { params: { imageUrl } }),
 
-  deleteVideo: (id: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  deleteVideo: (id: string): Promise<AxiosResponse<Competition>> =>
     apiClient.delete(`/competitions/${id}/media/video`),
 
-  assignJudges: (competitionId: string, data: AssignJudgesRequest): Promise<AxiosResponse<ApiResponse<void>>> =>
+  assignJudges: (
+    competitionId: string,
+    data: AssignJudgesRequest,
+  ): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.post(`/competitions/${competitionId}/assign-judges`, data),
 
   getJudges: (
     competitionId: string,
-    params?: PaginationParams
-  ): Promise<AxiosResponse<ApiResponse<unknown[]>>> =>
+    params?: PaginationParams,
+  ): Promise<AxiosResponse<PageResponse<User>>> =>
     apiClient.get(`/competitions/${competitionId}/judges`, { params }),
 
-  removeJudge: (competitionId: string, judgeId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+  removeJudge: (
+    competitionId: string,
+    judgeId: string,
+  ): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.delete(`/competitions/${competitionId}/judges/${judgeId}`),
 };

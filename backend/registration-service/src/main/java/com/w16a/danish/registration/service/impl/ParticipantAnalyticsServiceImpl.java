@@ -77,6 +77,7 @@ public class ParticipantAnalyticsServiceImpl
     public PlatformParticipantStatisticsVO getPlatformParticipantStatistics() {
         int individualParticipants = Math.toIntExact(
                 this.lambdaQuery()
+                        .inSql(CompetitionParticipants::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
                         .isNotNull(CompetitionParticipants::getUserId)
                         .count()
         );
@@ -94,10 +95,12 @@ public class ParticipantAnalyticsServiceImpl
     @Override
     public Map<String, Map<String, Integer>> getPlatformParticipantTrend() {
         List<CompetitionParticipants> individualRegistrations = this.lambdaQuery()
+                .inSql(CompetitionParticipants::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
                 .select(CompetitionParticipants::getCreatedAt)
                 .list();
 
         List<CompetitionTeams> teamRegistrations = competitionTeamsService.lambdaQuery()
+                .inSql(CompetitionTeams::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
                 .select(CompetitionTeams::getJoinedAt)
                 .list();
 

@@ -48,7 +48,7 @@ public class CompetitionParticipationVO {
     @Schema(description = "Has the participant submitted work", example = "true")
     private Boolean hasSubmitted;
 
-    @Schema(description = "Final score (if evaluated)", example = "85.50")
+    @Schema(description = "Current score from 0 to 10; null when awaiting reassessment", example = "8.50")
     private BigDecimal totalScore;
 
 }

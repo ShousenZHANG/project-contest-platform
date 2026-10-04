@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 
 
@@ -113,5 +114,107 @@ class FileStorageServiceImplTest {
         assertThatThrownBy(() -> fileStorageService.deleteFile("bucket", "objectName"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("File deletion failed");
+    }
+
+    @Test
+    void startupRemovesHistoricalPublicPolicyFromExistingSubmissionsBucket() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(true);
+        fileStorageService.reconcileSubmissionPrivacy();
+        ArgumentCaptor<DeleteBucketPolicyArgs> policy = ArgumentCaptor.forClass(DeleteBucketPolicyArgs.class);
+        verify(minioClient).deleteBucketPolicy(policy.capture());
+        assertThat(policy.getValue().bucket()).isEqualTo("submissions");
+        verify(minioClient, never()).setBucketPolicy(any());
+        verify(minioClient, never()).makeBucket(any());
+    }
+
+    @Test
+    void newSubmissionsBucketNeverGetsAnonymousReadPolicy() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(false);
+        fileStorageService.reconcileSubmissionPrivacy();
+        verify(minioClient).makeBucket(any());
+        verify(minioClient).deleteBucketPolicy(any());
+        verify(minioClient, never()).setBucketPolicy(any());
+    }
+
+    @Test
+    void startupFailsClosedIfExistingBucketCannotBeSecured() throws Exception {
+        when(minioClient.bucketExists(any())).thenThrow(new IllegalStateException("unavailable"));
+        assertThatThrownBy(fileStorageService::reconcileSubmissionPrivacy)
+                .isInstanceOf(IllegalStateException.class).hasMessage("Cannot secure submissions bucket");
+    }
+
+    @Test
+    void newPublicAssetBucketStillGetsPublicReadPolicy() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(false);
+        when(minioPropertiesConfig.getPublicEndpoint()).thenReturn("http://localhost:9000");
+        fileStorageService.uploadCompetitionPromo(new MockMultipartFile("file", "promo.png", "image/png", "image".getBytes()));
+        ArgumentCaptor<SetBucketPolicyArgs> policy = ArgumentCaptor.forClass(SetBucketPolicyArgs.class);
+        verify(minioClient).setBucketPolicy(policy.capture());
+        assertThat(policy.getValue().bucket()).isEqualTo("competition-assets");
+        assertThat(policy.getValue().config()).contains("s3:GetObject");
+        verify(minioClient, never()).deleteBucketPolicy(any());
+    }
+
+    @Test
+    void existingPublicAssetBucketPolicyIsUntouched() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(true);
+        when(minioPropertiesConfig.getPublicEndpoint()).thenReturn("http://localhost:9000");
+        fileStorageService.uploadCompetitionPromo(new MockMultipartFile("file", "promo.png", "image/png", "image".getBytes()));
+        verify(minioClient, never()).setBucketPolicy(any());
+        verify(minioClient, never()).deleteBucketPolicy(any());
+    }
+
+    @Test
+    void privateReadUsesOnlyTheSubmissionBucketAndReturnsAnUnbufferedResource() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(true);
+        GetObjectResponse stream = mock(GetObjectResponse.class);
+        when(minioClient.getObject(any())).thenReturn(stream);
+        var resource = fileStorageService.readSubmission("entry.pdf");
+        assertThat(resource.getInputStream()).isSameAs(stream);
+        ArgumentCaptor<GetObjectArgs> object = ArgumentCaptor.forClass(GetObjectArgs.class);
+        verify(minioClient).getObject(object.capture());
+        assertThat(object.getValue().bucket()).isEqualTo("submissions");
+        assertThat(object.getValue().object()).isEqualTo("entry.pdf");
+        verify(minioClient).deleteBucketPolicy(any());
+    }
+
+    @Test
+    void malformedObjectKeysAreRejectedBeforeStorageAccess() {
+        for (String key : new String[]{null, "", "../avatar.png", "user-avatar/entry.png", "entry.pdf/", "."}) {
+            assertThatThrownBy(() -> fileStorageService.readSubmission(key))
+                    .isInstanceOf(BusinessException.class).hasMessage("Invalid submission object name");
+        }
+        verifyNoInteractions(minioClient);
+    }
+
+    @Test
+    void privateReadReportsStorageOutage() throws Exception {
+        when(minioClient.bucketExists(any())).thenThrow(new IllegalStateException("unavailable"));
+        assertThatThrownBy(() -> fileStorageService.readSubmission("entry.pdf"))
+                .isInstanceOf(BusinessException.class).hasMessage("Submission storage unavailable");
+    }
+
+    @Test
+    void missingPrivateObjectIsReportedAsNotFound() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(true);
+        var error = mock(io.minio.messages.ErrorResponse.class);
+        when(error.code()).thenReturn("NoSuchKey");
+        var exception = mock(io.minio.errors.ErrorResponseException.class);
+        when(exception.errorResponse()).thenReturn(error);
+        when(minioClient.getObject(any())).thenThrow(exception);
+        assertThatThrownBy(() -> fileStorageService.readSubmission("entry.pdf"))
+                .isInstanceOf(BusinessException.class).hasMessage("Submission file not found");
+    }
+
+    @Test
+    void minioAccessFailureDoesNotRevealPrivateObjectDetails() throws Exception {
+        when(minioClient.bucketExists(any())).thenReturn(true);
+        var error = mock(io.minio.messages.ErrorResponse.class);
+        when(error.code()).thenReturn("AccessDenied");
+        var exception = mock(io.minio.errors.ErrorResponseException.class);
+        when(exception.errorResponse()).thenReturn(error);
+        when(minioClient.getObject(any())).thenThrow(exception);
+        assertThatThrownBy(() -> fileStorageService.readSubmission("entry.pdf"))
+                .isInstanceOf(BusinessException.class).hasMessage("Submission storage unavailable");
     }
 }

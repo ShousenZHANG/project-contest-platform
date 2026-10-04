@@ -33,6 +33,7 @@ class CompetitionTeamsServiceImplTest {
         // Mock lambdaQuery
         LambdaQueryChainWrapper<CompetitionTeams> lambdaQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(lambdaQuery).when(competitionTeamsService).lambdaQuery();
+        when(lambdaQuery.inSql(any(), anyString())).thenReturn(lambdaQuery);
         when(lambdaQuery.count()).thenReturn(5L); // Mock default behavior
     }
 
@@ -42,6 +43,7 @@ class CompetitionTeamsServiceImplTest {
         // Arrange
         LambdaQueryChainWrapper<CompetitionTeams> lambdaQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(lambdaQuery).when(competitionTeamsService).lambdaQuery();
+        when(lambdaQuery.inSql(any(), anyString())).thenReturn(lambdaQuery);
         when(lambdaQuery.count()).thenReturn(8L); // Suppose we have 8 team participants
 
         // Act
@@ -57,6 +59,7 @@ class CompetitionTeamsServiceImplTest {
         // Arrange
         LambdaQueryChainWrapper<CompetitionTeams> lambdaQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(lambdaQuery).when(competitionTeamsService).lambdaQuery();
+        when(lambdaQuery.inSql(any(), anyString())).thenReturn(lambdaQuery);
         when(lambdaQuery.count()).thenReturn(0L); // No teams
 
         // Act
@@ -72,6 +75,7 @@ class CompetitionTeamsServiceImplTest {
         // Arrange
         LambdaQueryChainWrapper<CompetitionTeams> lambdaQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(lambdaQuery).when(competitionTeamsService).lambdaQuery();
+        when(lambdaQuery.inSql(any(), anyString())).thenReturn(lambdaQuery);
         when(lambdaQuery.count()).thenThrow(new RuntimeException("Database error"));
 
         // Act & Assert

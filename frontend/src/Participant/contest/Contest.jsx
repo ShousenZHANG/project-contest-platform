@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * Contest.jsx
  *
@@ -10,7 +11,16 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, List, X, RefreshCw, ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  List,
+  X,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Trophy,
+} from 'lucide-react';
 import { competitionService } from '../../services/competitionService';
 import { queryKeys, staleTime } from '../../api/queryKeys';
 import { unwrap, toMessage } from '../../api/queryFn';
@@ -40,7 +50,7 @@ function Contest() {
 
   const handleCategoryChange = (category) => {
     setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
     );
   };
 
@@ -63,7 +73,7 @@ function Contest() {
 
   const formatDateRange = (start, end) => {
     if (!start || !end) return 'N/A';
-    return `${new Date(start).toLocaleDateString()} ~ ${new Date(end).toLocaleDateString()}`;
+    return `${parseApiDateTime(start).toLocaleDateString()} ~ ${parseApiDateTime(end).toLocaleDateString()}`;
   };
 
   const handleCardClick = (contest) => {

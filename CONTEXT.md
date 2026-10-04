@@ -1,200 +1,115 @@
 # Domain model
 
-The vocabulary this codebase runs on. Where two names exist for one idea, the winner is stated
-and the loser is named so you can recognise it in the wild.
-
-Keep this file current. If you introduce a term, add it here; if you sharpen one, edit it here.
-
----
+The vocabulary of the Competition platform. Implementation maps live in
+[docs/CODEMAPS](docs/CODEMAPS/README.md). Use these terms in code, interfaces and issues.
 
 ## Actors
 
-Four roles, carried on every authenticated request as the `User-Role` header and read through
-`RequestContext` in `common-lib`.
+| Role | Responsibility |
+| --- | --- |
+| Participant | Registers individually or with a Team, submits work, votes and comments |
+| Organizer | Creates and runs a Competition, assigns Judges, reviews Submissions |
+| Judge | Scores approved Submissions in Competitions to which they are assigned |
+| Admin | Provisions privileged accounts and manages the platform |
 
-| Role | Does |
-|---|---|
-| **Participant** | Registers for competitions, submits work, votes and comments |
-| **Organizer** | Creates and runs competitions, assigns judges, reviews submissions |
-| **Judge** | Scores submissions they are assigned to |
-| **Admin** | Manages accounts and reads platform-wide reporting |
+Each account has one fixed role. Public signup offers Participant and Organizer.
+Judge and Admin accounts require an Admin. An Organizer cannot judge their own
+Competition; assigning a Judge requires an account whose role is Judge.
 
-A person's role is fixed per account. Organizers do not judge their own competitions; the
-`Registration` and `Judge assignment` paths both refuse that overlap.
+## Competition
 
----
+A contest owned by an Organizer. Its participation type is INDIVIDUAL or TEAM;
+Registration and Submission must match that type.
 
-## Core terms
+The Organizer explicitly advances **UPCOMING → ONGOING → COMPLETED → AWARDED**.
+An unfinished Competition may instead be CANCELED. AWARDED and CANCELED are final.
 
-### Competition
-The central aggregate. Owned by an Organizer, lives in `competition-service`.
+Registration is open in UPCOMING and ONGOING until the deadline. Upload and Review
+are open only in ONGOING. Scoring and awarding are open only in COMPLETED. The
+deadline closes registrations and uploads even if the Organizer has not ended
+the Competition. Ending freezes its Submissions and Review decisions.
 
-Moves through **UPCOMING → ONGOING → COMPLETED → AWARDED**, and can be **CANCELED** from any of
-them (`CompetitionStatus`). Two of these gate behaviour rather than just describing it:
+Scoring criteria, participation type, dates and allowed file types are fixed once
+the Competition starts. Awarding freezes results and Judge assignments.
 
-- Registration is only allowed while UPCOMING or ONGOING (`CompetitionStatus.isRegistrable`)
-- Winners can only be awarded once COMPLETED; awarding moves it to AWARDED
+An Organizer's Competitions use the published `/competitions/achieve/my` contract.
+“achieve” is historical spelling, not a new domain term.
 
-A Competition is either **INDIVIDUAL** or **TEAM** (`ParticipationType`). That choice decides
-whether Registrations attach to a User or to a Team, and it cannot be mixed.
+## Registration
 
-> **Naming trap.** An Organizer's own competitions are served from
-> `GET /competitions/achieve/my`. "achieve" is a misspelling of "archive" that reached the
-> published contract and is now permanent. Do not repeat it in new endpoints; do not rename it in
-> the old one.
+A Participant or Team entering a Competition. Individual Registration belongs to
+a Participant; Team Registration belongs to a Team. Only a Team's creator may
+register or withdraw it. Organizer removal and Participant withdrawal are distinct
+operations with different notifications. Completed Registration history is retained.
 
-### Registration
-A Participant, or a Team, entering a Competition. Lives in `registration-service`.
+## Team
 
-Two shapes, deliberately separate rather than unified:
+A group of Participants owned by its creator. A Team exists independently of a
+Competition. Its creator manages membership and Registration, and cannot leave
+their own Team.
 
-- **Individual registration** — `competition_participants`, one row per user per competition
-- **Team registration** — `competition_teams`, one row per team per competition
+## Submission
 
-Only a Team's creator may register it. An Organizer can remove either kind, which is a different
-operation from a Participant cancelling their own — the notification differs, so the two are
-distinct methods rather than one with a flag.
+A Participant's or Team's work entered after Registration. There is one current
+Submission per entrant per Competition. Replacing its file creates a new
+**Submission revision**, clears Review and displayed total, and requires fresh
+Review and Score decisions. Earlier revision scores do not qualify the current work.
 
-### Submission
-A Participant's or Team's entry into a Competition. One per participant per competition; a new
-upload replaces the old file.
+The historical entity `SubmissionRecords` means Submission. Use Submission in new
+domain names and prose.
 
-> **Naming trap.** The persistent entity is `SubmissionRecords`; the value objects are
-> `SubmissionInfoVO`, `SubmissionResponseVO`. In prose and in new names, use **Submission**.
-> `SubmissionRecord` is the table's name, not the domain's.
+Files are private. The owner or Team, the Competition's Organizer, an assigned
+Judge for approved work, and Admin have access. An APPROVED Submission in a public
+Competition may also be downloaded publicly. Public galleries include approved
+individual and Team work and omit internal Review comments.
 
-Carries a **review status** — `PENDING`, `APPROVED` or `REJECTED` — set by an Organizer, not a
-Judge. Only APPROVED submissions appear in public galleries.
+## Review
 
-### Review vs Score
-Two different judgements, easily confused because both produce a "status" on a Submission:
+An Organizer's admissibility decision: PENDING, APPROVED or REJECTED. A Review is
+different from a Score. Only APPROVED work can be scored or appear publicly.
+Review decisions freeze when the Competition enters COMPLETED.
 
-- **Review** — an *Organizer* deciding whether a Submission is admissible. Produces the review
-  status above.
-- **Score** — a *Judge* rating an admissible Submission against the Competition's scoring
-  criteria. Produces `submission_judge_scores` rows and a `totalScore`.
+## Score and Scoring criterion
 
-A Submission can be APPROVED and unscored. It cannot be scored without being APPROVED.
+A Scoring criterion is a distinct label configured before the Competition starts.
+A Judge scores every criterion on a **0–10 scale**. The Judge's total is the equal
+arithmetic mean, rounded once to two decimal places.
 
-### Scoring criterion
-A free-text label on the Competition (`scoringCriteria`). Judges score each criterion; the total
-is the weighted mean, with weights currently equal — `1.0 / criteria.size()`, decided at the call
-site, not stored.
+A Submission's final score is the mean of its current valid Judges' totals.
+Each assigned Judge contributes once per current revision. Legacy scores without
+a known scale are not treated as current 0–10 scores; unfinished Competitions need
+rescoring. A missing score means unavailable, not zero.
 
-### Winner
-A Submission selected for an award once a Competition is COMPLETED. Lives in `judge-service`.
+## Award eligibility and Winner
 
-Selection is **automatic** — `POST /winners/auto-award` ranks by total score. There is no manual
-override. The endpoint reads as an action, not a resource, because it is one.
+Every APPROVED Submission needs scores from at least **three distinct valid assigned
+Judges** before automatic awarding. One incomplete approved entry blocks the whole
+Competition.
 
-> **Naming trap.** "Award" and "Winner" are the same idea. The entity is `SubmissionWinners`, the
-> notifier is `AwardNotifier`. Prefer **Winner** for the record and **awarding** for the act.
+A Winner is an immutable automatic-awarding result. Ranking uses final totals and
+competition ranking for ties: 1, 1, 3. Repeated awarding creates no new Winners.
+There is no manual score override. Prefer Winner for the record and awarding for
+the act; `SubmissionWinners` and `AwardNotifier` are historical implementation names.
 
-### Team
-A group of Participants, owned by its creator. Lives in `user-service`, not
-`registration-service`, because a Team exists independently of any Competition.
+## Interaction
 
-Only the creator can edit it, delete it, remove members, or register it for a Competition. A
-creator cannot leave their own team.
+A vote or comment on a Submission. A Participant may vote once per Submission;
+a duplicate vote is a conflict. Interaction does not determine the Judge score.
 
-### Interaction
-Votes and comments on a Submission. Lives in `interaction-service`. One vote per user per
-submission; a second vote is a 409, not an error the user needs to see.
+## Notification
 
----
-
-## Service boundaries
-
-| Service | Port | Owns |
-|---|---|---|
-| api-gateway | 8080 | JWT validation, routing, identity headers |
-| user-service | 8081 | Users, roles, OAuth, Teams |
-| competition-service | 8082 | Competitions, organizer and judge assignment |
-| file-service | 8083 | MinIO objects |
-| registration-service | 8084 | Registrations, Submissions, participant reporting |
-| interaction-service | 8085 | Votes, comments |
-| judge-service | 8086 | Scores, Winners, dashboards |
-
-Cross-service reads go through a **gateway** — see `CompetitionGateway` in registration-service
-and judge-service. Callers do not touch Feign clients, `ResponseEntity` or HTTP status codes
-directly; the gateway decides what a missing entity means.
-
----
-
-## Events
-
-Every notification the platform emits. All are fire-and-forget over RabbitMQ; a failed publish
-never fails the request that triggered it. Publishers live in each service's `notify/` package —
-not `config/`, which holds the exchange and routing-key declarations they read from.
-
-| Emitted by | Event | Message | Triggered when |
-|---|---|---|---|
-| competition-service | `sendJudgeAssigned` | `JudgeAssignedMessage` | An Organizer assigns a Judge |
-| competition-service | `sendJudgeRemoved` | `JudgeRemovedMessage` | An Organizer removes a Judge |
-| registration-service | `sendRegisterSuccess` | `RegisterSuccessMessage` | A Participant or Team registers |
-| registration-service | `sendParticipantRemoved` | `ParticipantRemovedMessage` | An Organizer removes a Participant |
-| registration-service | `sendSubmissionUploaded` | `SubmissionUploadedMessage` | A Submission is uploaded or replaced |
-| registration-service | `sendSubmissionReviewed` | `SubmissionReviewedMessage` | An Organizer approves or rejects a Submission |
-| judge-service | `sendAwardWinner` | `AwardWinnerMessage` | Auto-award selects a Winner |
-
-user-service consumes these and sends the email. Nothing else subscribes.
-
-The four notifier classes are deliberately **not** merged into one. Two of them sit in
-registration-service and could be, but registration events and submission events are different
-domain concepts — merging would group by mechanism instead of by domain, against every other
-boundary in this file.
-
----
-
-## Conventions
-
-**Response envelope.** Most endpoints return `ApiResponse<T>` (`{ success, data, error }`) from
-`common-lib`. Three exceptions, all deliberate:
-
-- Paged reads return `PageResponse<T>` (`{ data, total, page, pages }`) with no envelope
-- Internal (`/internal/**`) endpoints return bare values, since only Feign reads them
-- file-service returns raw URL strings, for Feign and browser compatibility
-
-The frontend's `unwrap()` in `src/api/queryFn.js` handles all four shapes.
-
-**Errors.** `BusinessException(HttpStatus, message)` from `common-lib`, translated by
-`GlobalExceptionHandler`. Domain failures carry their own status; do not wrap them in 500s.
-
-**Reporting is separate from writing.** `SubmissionAnalyticsService` and
-`ParticipantAnalyticsService` hold the read-only counting and trending. Registration and
-submission services hold the writes. Add new reports to the analytics services.
-
----
-
-## Frontend vocabulary
-
-**Query keys** come from `src/api/queryKeys.js` and nowhere else. Two spellings of one key are two
-cache entries that drift apart silently.
-
-**Service modules** in `src/services/` are the only place a URL literal belongs. Every path there
-is checked against its controller by `src/Tests/serviceRoutes.test.js`, which reads the Java
-controllers directly. A route with nothing behind it fails the build — several used to exist, and
-pointed at endpoints that had never been written.
-
-**staleTime tiers** — `live` (vote counts), `short` (lists), `medium` (detail pages), `long`
-(profiles). Pick by how fast the data actually goes stale.
-
-**Motion classes** — `motion-page` (route fade), `motion-card` (hover lift), `motion-dialog`,
-`motion-sheet`, `motion-popover`. Durations live in `--motion-*` tokens in `src/index.css`; a
-component that writes its own `duration-*` has left the system. Reduced motion is handled once,
-globally, so no component checks for it.
-
-**Colour tokens** are chosen for contrast, not for looks. Every one of them clears WCAG AA (4.5:1)
-both as a fill under its `-foreground` and as text on the background, in light and dark mode.
-Changing one means re-measuring it — `e2e/a11y.spec.js` will fail otherwise. A new token needs
-its `-foreground` twin bridged in `@theme`, or the utility silently does nothing.
-
----
+A recorded consequence: Judge assigned or removed, Registration accepted or removed,
+Submission uploaded or reviewed, or Winner selected. A committed action retains its
+Notification for retry after a delivery failure. Email may arrive more than once
+after an ambiguous SMTP result.
 
 ## Decisions on record
 
-`docs/adr/` holds decisions that should not be re-litigated:
-
-- **ADR-0001** — the shadcn/ui + Tailwind design system, and the twelve design choices behind it
-- **ADR-0002** — data fetching on React Query, with the query-key contract and optimistic-write policy
-- **ADR-0003** — the cross-service gateway seam
+- [ADR-0001](docs/adr/0001-frontend-design-system.md): frontend design system.
+- [ADR-0002](docs/adr/0002-react-query-data-layer.md): query and mutation contracts.
+- [ADR-0003](docs/adr/0003-cross-service-gateway-seam.md): cross-service gateway seam.
+- [ADR-0004](docs/adr/0004-session-lifetime-boundary.md): account session lifetime.
+- [ADR-0005](docs/adr/0005-notification-wire-contracts.md): historical notification wire IDs.
+- [ADR-0006](docs/adr/0006-scoring-and-competition-lifecycle.md): score and lifecycle invariants.
+- [ADR-0007](docs/adr/0007-durable-domain-effects.md): external effects and migrations.
+- [ADR-0008](docs/adr/0008-service-credentials-and-private-submissions.md): service credentials and files.

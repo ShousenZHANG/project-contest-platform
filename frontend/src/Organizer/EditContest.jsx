@@ -1,3 +1,4 @@
+import { CATEGORIES } from '../shared/competitionCategories';
 /**
  * @file EditContest.jsx
  * @description
@@ -18,16 +19,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
-
-const CATEGORIES = [
-  'Design & Creativity',
-  'Programming & Technology',
-  'Business & Entrepreneurship',
-  'Mathematics & Science',
-  'Humanities & Social Sciences',
-  'Music & Performing Arts',
-  'Others',
-];
+import { toLocalDateTime, toUtcDateTime } from '../lib/dateTime';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
 
 const SUBMISSION_FORMATS = ['PDF', 'ZIP', 'CODE', 'Image', 'Text'];
 
@@ -39,7 +33,11 @@ const SELECT_CLASS =
 
 const editContestSchema = z
   .object({
-    contestName: z.string().trim().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
+    contestName: z
+      .string()
+      .trim()
+      .min(3, 'Name must be at least 3 characters')
+      .max(100, 'Name is too long'),
     contestDescription: z.string().trim().min(10, 'Description must be at least 10 characters'),
     category: z.string().min(1, 'Please select a category'),
     startDate: z.string().min(1, 'Start date is required'),
@@ -75,9 +73,14 @@ function EditContest() {
 
   const queryClient = useQueryClient();
 
-  const { data: competition } = useQuery({
-    queryKey: queryKeys.competitions.detail(competitionId),
-    queryFn: () => unwrap(competitionService.getById(competitionId)),
+  const {
+    data: competition,
+    isPending,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(competitionId),
+    queryFn: () => unwrap(competitionService.getManagedById(competitionId)),
     enabled: Boolean(competitionId),
     staleTime: staleTime.medium,
   });
@@ -92,8 +95,8 @@ function EditContest() {
       contestName: competition.name,
       contestDescription: competition.description,
       category: competition.category,
-      startDate: competition.startDate.slice(0, 10),
-      endDate: competition.endDate.slice(0, 10),
+      startDate: toLocalDateTime(competition.startDate),
+      endDate: toLocalDateTime(competition.endDate),
       isPublic: competition.isPublic ? 'Public' : 'Private',
       scoringCriteria: competition.scoringCriteria || [],
       submissionFormats: competition.allowedSubmissionTypes || [],
@@ -117,10 +120,10 @@ function EditContest() {
   };
 
   const addCriteria = () => {
-    if (newCriteria.trim() !== '') {
+    if (newCriteria.trim() !== '' && !contestData.scoringCriteria.includes(newCriteria.trim())) {
       setContestData((prev) => ({
         ...prev,
-        scoringCriteria: [...prev.scoringCriteria, newCriteria],
+        scoringCriteria: [...prev.scoringCriteria, newCriteria.trim()],
       }));
       setNewCriteria('');
     }
@@ -142,15 +145,6 @@ function EditContest() {
     }));
   };
 
-  const getAutoStatus = () => {
-    const now = new Date();
-    const start = new Date(contestData.startDate + 'T00:00:00');
-    const end = new Date(contestData.endDate + 'T23:59:59');
-    if (now < start) return 'UPCOMING';
-    if (now >= start && now <= end) return 'ONGOING';
-    return 'COMPLETED';
-  };
-
   const handleUpdate = async () => {
     const result = editContestSchema.safeParse(contestData);
     if (!result.success) {
@@ -162,25 +156,32 @@ function EditContest() {
     }
     setErrors({});
 
-    const start = new Date(contestData.startDate + 'T10:00:00Z');
-    const end = new Date(contestData.endDate + 'T18:00:00Z');
-
     updateContest.mutate({
       name: contestData.contestName,
       description: contestData.contestDescription,
       category: contestData.category,
-      startDate: start.toISOString().replace('.000', ''),
-      endDate: end.toISOString().replace('.000', ''),
+      ...(competition.status === 'UPCOMING' && {
+        startDate: toUtcDateTime(contestData.startDate),
+        endDate: toUtcDateTime(contestData.endDate),
+      }),
       isPublic: contestData.isPublic === 'Public',
-      status: getAutoStatus(),
-      allowedSubmissionTypes: contestData.submissionFormats,
-      scoringCriteria: contestData.scoringCriteria,
-      participationType: contestData.participationType,
-      imageUrls: [],
-      introVideoUrl: '',
+      ...(competition.status === 'UPCOMING' && {
+        allowedSubmissionTypes: contestData.submissionFormats,
+        scoringCriteria: contestData.scoringCriteria,
+        participationType: contestData.participationType,
+      }),
     });
   };
 
+  if (!competitionId) return <PageError error={new Error('Choose a competition to edit.')} />;
+  if (isPending) return <PageSkeleton rows={4} />;
+  if (queryError || !competition)
+    return (
+      <PageError
+        error={queryError || new Error('Competition not found.')}
+        onRetry={() => refetch()}
+      />
+    );
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <div className="mb-6">
@@ -244,9 +245,7 @@ function EditContest() {
                   </option>
                 ))}
               </select>
-              {errors.category && (
-                <p className="text-xs text-destructive">{errors.category[0]}</p>
-              )}
+              {errors.category && <p className="text-xs text-destructive">{errors.category[0]}</p>}
             </div>
 
             <div className="space-y-2">
@@ -254,6 +253,7 @@ function EditContest() {
               <select
                 id="participationType"
                 name="participationType"
+                disabled={competition.status !== 'UPCOMING'}
                 value={contestData.participationType}
                 onChange={handleChange}
                 className={SELECT_CLASS}
@@ -270,7 +270,8 @@ function EditContest() {
               <Label htmlFor="startDate">Start Date</Label>
               <Input
                 id="startDate"
-                type="date"
+                type="datetime-local"
+                disabled={competition.status !== 'UPCOMING'}
                 name="startDate"
                 value={contestData.startDate}
                 onChange={handleChange}
@@ -285,15 +286,14 @@ function EditContest() {
               <Label htmlFor="endDate">End Date</Label>
               <Input
                 id="endDate"
-                type="date"
+                type="datetime-local"
+                disabled={competition.status !== 'UPCOMING'}
                 name="endDate"
                 value={contestData.endDate}
                 onChange={handleChange}
                 aria-invalid={Boolean(errors.endDate)}
               />
-              {errors.endDate && (
-                <p className="text-xs text-destructive">{errors.endDate[0]}</p>
-              )}
+              {errors.endDate && <p className="text-xs text-destructive">{errors.endDate[0]}</p>}
             </div>
           </div>
 
@@ -302,10 +302,15 @@ function EditContest() {
             <div className="flex gap-2">
               <Input
                 value={newCriteria}
+                disabled={competition.status !== 'UPCOMING'}
                 onChange={(e) => setNewCriteria(e.target.value)}
                 placeholder="Enter scoring criteria"
               />
-              <Button type="button" onClick={addCriteria}>
+              <Button
+                type="button"
+                onClick={addCriteria}
+                disabled={competition.status !== 'UPCOMING'}
+              >
                 Add
               </Button>
             </div>
@@ -322,6 +327,7 @@ function EditContest() {
                       variant="ghost"
                       size="icon"
                       onClick={() => removeCriteria(i)}
+                      disabled={competition.status !== 'UPCOMING'}
                       aria-label="Remove criterion"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -345,6 +351,7 @@ function EditContest() {
                 >
                   <input
                     type="checkbox"
+                    disabled={competition.status !== 'UPCOMING'}
                     checked={contestData.submissionFormats.includes(format)}
                     onChange={() => handleFormatChange(format)}
                     className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
@@ -378,20 +385,28 @@ function EditContest() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="status">Computed Status</Label>
-            <Input id="status" value={getAutoStatus()} disabled className="bg-muted" />
+            <Label htmlFor="status">Competition status</Label>
+            <Input id="status" value={competition.status} disabled className="bg-muted" />
+            <p className="text-sm text-muted-foreground">
+              Dates use your local timezone. Criteria, entry type and schedule are locked after
+              opening.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-border bg-background py-3">
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/OrganizerContestList/${email}`)}
-        >
+        {updateContest.error && <PageError error={updateContest.error} />}
+        <Button variant="outline" onClick={() => navigate(`/OrganizerContestList/${email}`)}>
           Cancel
         </Button>
-        <Button onClick={handleUpdate}>Update Contest</Button>
+        <Button
+          onClick={handleUpdate}
+          disabled={updateContest.isPending || ['AWARDED', 'CANCELED'].includes(competition.status)}
+          aria-busy={updateContest.isPending}
+        >
+          {updateContest.isPending ? 'Updating…' : 'Update Contest'}
+        </Button>
       </div>
     </div>
   );

@@ -37,6 +37,3 @@ springdoc:
     enabled: false
   api-docs:
     enabled: false
-
-knife4j:
-  enable: false

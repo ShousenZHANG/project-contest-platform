@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * Rating.jsx
  *
@@ -10,12 +11,11 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { ExternalLink } from 'lucide-react';
 import { judgeService } from '../services/judgeService';
 import { competitionService } from '../services/competitionService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap, toMessage } from '../api/queryFn';
+import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -27,27 +27,36 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Separator } from '../components/ui/separator';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import Pagination from '../shared/components/Pagination';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function Rating() {
+  useDocumentTitle('Judge scoring queue');
   const [detailId, setDetailId] = useState(null);
   const navigate = useNavigate();
+  const state = usePagedSearchParams();
 
-  const listParams = { page: 1, size: 100 };
+  const listParams = { page: state.page, size: 10 };
 
   const {
-    data: competitions = [],
+    data: competitionPage,
     isPending,
     error,
+    refetch,
+    isFetching,
   } = useQuery({
-    queryKey: [...queryKeys.judges.all, 'myCompetitions', listParams],
+    queryKey: queryKeys.judges.competitions(listParams),
     queryFn: () => unwrap(judgeService.getMyCompetitions(listParams)),
-    select: (payload) => (payload && payload.data) || [],
     staleTime: staleTime.short,
   });
+  const competitions = competitionPage?.data || [];
 
-  const { data: selectedComp = null } = useQuery({
-    queryKey: queryKeys.competitions.detail(detailId),
-    queryFn: () => unwrap(competitionService.getById(detailId)),
+  const { data: selectedComp = null, isPending: detailPending, error: detailError, refetch: retryDetail, isFetching: detailFetching } = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(detailId),
+    queryFn: () => unwrap(competitionService.getManagedById(detailId)),
     enabled: Boolean(detailId),
     staleTime: staleTime.medium,
   });
@@ -62,14 +71,15 @@ function Rating() {
   return (
     <>
       <div className="p-6">
-        <h2 className="mb-4 text-xl font-semibold text-foreground">
+        <h1 className="mb-4 text-xl font-semibold text-foreground">
           Competitions Assigned to You as Judge
-        </h2>
+        </h1>
 
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Assigned competitions">
               <table className="w-full text-sm">
+                <caption className="sr-only">Competitions assigned to the current Judge</caption>
                 <thead className="border-b bg-muted/40">
                   <tr className="text-left">
                     <th className="px-4 py-3 font-medium">#</th>
@@ -82,47 +92,59 @@ function Rating() {
                 <tbody>
                   {isPending && (
                     <tr>
-                      <td colSpan={99} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                      <td
+                        colSpan={99}
+                        className="px-3 py-8 text-center text-sm text-muted-foreground"
+                      >
                         Loading your competitions...
                       </td>
                     </tr>
                   )}
                   {!isPending && error && (
                     <tr>
-                      <td colSpan={99} className="px-3 py-8 text-center text-sm text-destructive" role="alert">
-                        {toMessage(error)}
+                      <td
+                        colSpan={99}
+                        className="px-3 py-8 text-center text-sm text-destructive"
+                        role="alert"
+                      >
+                        <PageError error={error} onRetry={() => refetch()} retrying={isFetching} />
                       </td>
                     </tr>
                   )}
-                  {!isPending && !error && competitions.map((comp, index) => (
-                    <tr key={comp.id} className="border-b last:border-b-0 hover:bg-muted/20">
-                      <td className="px-4 py-3">{index + 1}</td>
-                      <td className="px-4 py-3">
-                        <Button
-                          variant="link"
-                          className="h-auto p-0 text-primary"
-                          onClick={() => fetchCompetitionDetail(comp.id)}
-                        >
-                          {comp.name}
-                        </Button>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-md truncate">{comp.description}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={comp.status === 'COMPLETED' ? 'success' : 'secondary'}>
-                          {comp.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          size="sm"
-                          disabled={comp.status !== 'COMPLETED'}
-                          onClick={() => navigate(`/JudgeSubmissions/${comp.id}`)}
-                        >
-                          Review
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {!isPending &&
+                    !error &&
+                    competitions.map((comp, index) => (
+                      <tr key={comp.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                        <td className="px-4 py-3">{(state.page - 1) * 10 + index + 1}</td>
+                        <td className="px-4 py-3">
+                          <Button
+                            variant="link"
+                            className="min-h-11 text-left text-primary"
+                            onClick={() => fetchCompetitionDetail(comp.id)}
+                          >
+                            {comp.name}
+                          </Button>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-md truncate">
+                          {comp.description}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={comp.status === 'COMPLETED' ? 'success' : 'secondary'}>
+                            {comp.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            size="sm"
+                            className="min-h-11"
+                            disabled={!['COMPLETED', 'AWARDED'].includes(comp.status)}
+                            onClick={() => navigate(`/JudgeSubmissions/${comp.id}`)}
+                          >
+                            {comp.status === 'AWARDED' ? 'View scores' : 'Open scoring queue'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
                   {!isPending && !error && competitions.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
@@ -135,33 +157,46 @@ function Rating() {
             </div>
           </CardContent>
         </Card>
+        {!isPending && !error && <Pagination page={state.page} pages={competitionPage?.pages} total={competitionPage?.total ?? competitions.length}
+          onPageChange={state.setPage} busy={isFetching} />}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span>{selectedComp?.name}</span>
-              {selectedComp?.status && (
-                <Badge variant="default">{selectedComp.status}</Badge>
-              )}
+              <span>{selectedComp?.name || 'Competition details'}</span>
+              {selectedComp?.status && <Badge variant="default">{selectedComp.status}</Badge>}
             </DialogTitle>
           </DialogHeader>
+          {detailPending ? <PageSkeleton rows={3} /> : detailError ? <PageError error={detailError} onRetry={() => retryDetail()} retrying={detailFetching} /> : null}
           {selectedComp && (
             <div className="space-y-3 text-sm">
               <p>{selectedComp.description}</p>
               <Separator />
-              <p><strong>Category:</strong> {selectedComp.category}</p>
-              <p><strong>Participation:</strong> {selectedComp.participationType}</p>
-              <p><strong>Start:</strong> {new Date(selectedComp.startDate).toLocaleString()}</p>
-              <p><strong>End:</strong> {new Date(selectedComp.endDate).toLocaleString()}</p>
-              <p><strong>Public:</strong> {selectedComp.isPublic ? 'Yes' : 'No'}</p>
+              <p>
+                <strong>Category:</strong> {selectedComp.category}
+              </p>
+              <p>
+                <strong>Participation:</strong> {selectedComp.participationType}
+              </p>
+              <p>
+                <strong>Start:</strong> {parseApiDateTime(selectedComp.startDate).toLocaleString()}
+              </p>
+              <p>
+                <strong>End:</strong> {parseApiDateTime(selectedComp.endDate).toLocaleString()}
+              </p>
+              <p>
+                <strong>Public:</strong> {selectedComp.isPublic ? 'Yes' : 'No'}
+              </p>
               <Separator />
               <div>
                 <p className="font-medium">Scoring Criteria:</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {selectedComp.scoringCriteria?.map((item, idx) => (
-                    <Badge key={idx} variant="outline">{item}</Badge>
+                    <Badge key={idx} variant="outline">
+                      {item}
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -169,7 +204,9 @@ function Rating() {
                 <p className="font-medium">Allowed Submission Types:</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {selectedComp.allowedSubmissionTypes?.map((item, idx) => (
-                    <Badge key={idx} variant="secondary">{item}</Badge>
+                    <Badge key={idx} variant="secondary">
+                      {item}
+                    </Badge>
                   ))}
                 </div>
               </div>

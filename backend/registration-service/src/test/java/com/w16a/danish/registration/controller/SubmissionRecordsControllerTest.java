@@ -2,6 +2,7 @@ package com.w16a.danish.registration.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.common.context.RequestContext;
+import com.w16a.danish.common.security.ServiceTokenService;
 import com.w16a.danish.registration.domain.dto.SubmissionReviewDTO;
 import com.w16a.danish.registration.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
@@ -12,7 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -32,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ✅ Unit tests for SubmissionRecordsController.
  * Focus on verifying API endpoints behavior without real database.
  */
-@SpringBootTest
+@SpringBootTest(properties = "service.auth.secret=test-service-secret-at-least-32-characters")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SubmissionRecordsControllerTest {
@@ -40,11 +41,17 @@ class SubmissionRecordsControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ServiceTokenService tokens;
+
     @MockitoBean
     private ISubmissionRecordsService submissionService;
 
     @MockitoBean
     private ISubmissionAnalyticsService analyticsService;
+
+    @MockitoBean
+    private com.w16a.danish.registration.gateway.CompetitionGateway competitionGateway;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -52,6 +59,9 @@ class SubmissionRecordsControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        var competition = new com.w16a.danish.common.domain.vo.CompetitionResponseVO();
+        competition.setIsPublic(true);
+        when(competitionGateway.require(anyString())).thenReturn(competition);
     }
 
     @Test
@@ -138,6 +148,7 @@ class SubmissionRecordsControllerTest {
     @Test
     @DisplayName("✅ Check if user is organizer of a submission successfully")
     void testIsUserOrganizerOfSubmission() throws Exception {
+        when(submissionService.isPublicApproved("sub-1")).thenReturn(true);
         when(submissionService.isUserOrganizerOfSubmission(any(), any()))
                 .thenReturn(true);
 
@@ -218,9 +229,18 @@ class SubmissionRecordsControllerTest {
                 .thenReturn(true);
 
         mockMvc.perform(get("/submissions/internal/exists-by-team")
+                        .header(ServiceTokenService.HEADER, tokens.issue("user-service", "registration-service-test", "internal:read"))
                         .param("teamId", "team-1"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("true"));
+    }
+
+    @Test
+    void browserIdentityCannotAccessInternalSubmissionLookup() throws Exception {
+        mockMvc.perform(get("/submissions/internal/exists-by-team").param("teamId", "team-1")
+                        .header("User-ID", "admin").header("User-Role", "ADMIN"))
+                .andExpect(status().isForbidden());
+        verify(submissionService, never()).existsByTeamId(any());
     }
 
     @Test

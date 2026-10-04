@@ -1,350 +1,82 @@
 # Backend code map
 
-Updated from the working tree on **2026-10-04**, after the architecture cleanup. Current inventory: **245 production Java files, 51 test Java files, 7 executable services, 10 REST controllers, 114 controller endpoint declarations, 17 Feign clients, 2 domain gateways, 4 notification publishers**. The initial scan before this cleanup contained 252 production / 48 test Java files. Counts exclude generated `target/` output; current run totals and coverage belong in the [scan report](README.md).
-
-This map describes implementation, including differences from [CONTEXT.md](../../CONTEXT.md). B01-B03 retain their isolated runtime reproductions using real business methods/MockMvc with mocked persistence, Redis or service collaborators: `.git/audit/2026-10-04/AuditProbe.java` and `security-probes.log`. The original B15 SQL-generation probe (`SubmissionResetSqlProbe.java` / `submission-reset-sql.log`) records the pre-cleanup failure; B15 is now corrected and covered by real MyBatis-Plus/H2 writes and independent JDBC reads. Messaging checks exercise JSON conversion and a Boot-configured listener with mocked mail/connection dependencies. B01-B14 were not fixed in this cleanup. None of this verifies a deployed gateway/MySQL/MinIO/RabbitMQ/SMTP stack; configured coverage floors below are not measured coverage.
-
-## Service topology
-
-```mermaid
-flowchart LR
-  Browser[Frontend] --> Gateway[api-gateway :8080]
-  Gateway --> User[user-service :8081]
-  Gateway --> Competition[competition-service :8082]
-  Gateway --> File[file-service :8083]
-  Gateway --> Registration[registration-service :8084]
-  Gateway --> Interaction[interaction-service :8085]
-  Gateway --> Judge[judge-service :8086]
-  Competition --> User
-  Competition --> File
-  Registration --> Competition
-  Registration --> User
-  Registration --> File
-  Judge --> Competition
-  Judge --> Registration
-  Judge --> User
-  Judge --> Interaction
-  Interaction --> User
-  Interaction --> Registration
-  User --> Registration
-  User --> File
-  File --> MinIO
-  Gateway --> Redis
-  User --> Redis
-  Competition --> RabbitMQ
-  Registration --> RabbitMQ
-  Judge --> RabbitMQ
-  RabbitMQ --> User
-  User --> SMTP
-```
-
-Sibling-service calls use Nacos discovery and Feign directly, bypassing the edge gateway. Six domain services share one MySQL database. Registration-service reads `competition_organizers` locally; judge-service reads `competition_judges` locally. [Schema](../../mysql-init/create_table.sql) foreign keys/cascades span logical ownership; the service boundaries do not provide physical database isolation.
-
-| Module | Production / test Java | Entry point | Main responsibility |
-|---|---:|---|---|
-| api-gateway | 6 / 2 | [GatewayApplication](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/GatewayApplication.java) | Routes, JWT verification, identity header sanitization, CORS |
-| user-service | 62 / 10 | [UserServiceApplication](../../backend/user-service/src/main/java/com/w16a/danish/user/UserServiceApplication.java) | Accounts, roles, OAuth, password resets, Teams, notification emails |
-| competition-service | 29 / 5 | [CompetitionServiceApplication](../../backend/competition-service/src/main/java/com/w16a/danish/competition/CompetitionServiceApplication.java) | Competitions, ownership, media, judge assignments, lifecycle writes |
-| file-service | 8 / 3 | [FileServiceApplication](../../backend/file-service/src/main/java/com/w16a/danish/fileService/FileServiceApplication.java) | File validation and MinIO upload/delete |
-| registration-service | 46 / 11 | [RegistrationServiceApplication](../../backend/registration-service/src/main/java/com/w16a/danish/registration/RegistrationServiceApplication.java) | Registrations, Submissions, Organizer Review, participant/submission analytics |
-| interaction-service | 18 / 3 | [InteractionServiceApplication](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/InteractionServiceApplication.java) | Comments, replies, votes, interaction reporting |
-| judge-service | 50 / 10 | [JudgeServiceApplication](../../backend/judge-service/src/main/java/com/w16a/danish/judge/JudgeServiceApplication.java) | Judge Score, score aggregation, automatic awarding, dashboards |
-| common-lib | 26 / 7 | Library, no server | RequestContext, shared DTO/VO/enums, notification contracts/conversion, responses, exceptions, MVC resolution |
-| coverage-report | 0 / 0 | [Aggregate POM](../../backend/coverage-report/pom.xml) | JaCoCo aggregate report in Maven `verify` |
-
-The parent [pom.xml](../../pom.xml) declares Java 23, Spring Boot 3.4.3, Spring Cloud 2024.0.1 and Alibaba Cloud 2023.0.3.2. Ports, discovery, route predicates and anonymous whitelist are in [gateway application.yml](../../backend/api-gateway/src/main/resources/application.yml). Service configurations use Docker infrastructure names. See [dependencies map](dependencies.md) for deployment wiring.
-
-## Identity and response boundaries
-
-- [JwtAuthFilter](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/filters/JwtAuthFilter.java) removes inbound `User-ID`/`User-Role` on every request. Protected paths require Bearer JWT; verified claims become downstream headers. Public whitelist matching runs before JWT parsing, so a token on a public path does not establish a downstream RequestContext.
-- [Gateway JwtUtil](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/util/JwtUtil.java) checks Redis blacklist, signature, `exp` and latest token when its Redis record exists. Missing `jwt:token:<userId>` does not itself reject JWT. Redis exceptions produce authentication failure.
-- [RequestContextArgumentResolver](../../backend/common-lib/src/main/java/com/w16a/danish/common/context/RequestContextArgumentResolver.java) requires both headers and trusts their origin; it does not verify JWT. [RequestContext](../../backend/common-lib/src/main/java/com/w16a/danish/common/context/RequestContext.java) supplies role guards. Controllers opt in with `@CurrentUser`; service methods enforce role/ownership checks.
-- Sibling endpoints have no separate service-identity authentication. Network isolation and explicit guards matter. Edge routes do **not** exclude `/internal/`; the name and OpenAPI `hidden=true` annotation provide no access boundary (B02-B03).
-- [ApiResponses](../../backend/common-lib/src/main/java/com/w16a/danish/common/web/ApiResponses.java) and [GlobalExceptionHandler](../../backend/common-lib/src/main/java/com/w16a/danish/common/exception/GlobalExceptionHandler.java) implement `{success,data,error}` and domain status codes. Paged reads and many detail/Boolean/VO reads are bare values. Files return raw strings; OAuth redirects. Bare responses are not limited to internal endpoints.
-
-## Domain seams
-
-| Domain | Start here | Storage / behavior |
-|---|---|---|
-| Accounts | [UsersServiceImpl](../../backend/user-service/src/main/java/com/w16a/danish/user/service/impl/UsersServiceImpl.java), [PasswordUtil](../../backend/user-service/src/main/java/com/w16a/danish/user/util/PasswordUtil.java), [JwtUtil](../../backend/user-service/src/main/java/com/w16a/danish/user/util/JwtUtil.java) | `users`, `roles`, `user_roles`; bcrypt, Redis sessions/reset tokens, GitHub/Google OAuth |
-| Teams | [TeamServiceImpl](../../backend/user-service/src/main/java/com/w16a/danish/user/service/impl/TeamServiceImpl.java) | `team`, `team_members`; creator-only edit/member removal, creator/Admin delete with remote registration/Submission checks; creator cannot leave |
-| Competitions | [CompetitionsServiceImpl](../../backend/competition-service/src/main/java/com/w16a/danish/competition/service/impl/CompetitionsServiceImpl.java) | `competitions`, `competition_organizers`, `competition_judges`; normal writes use ownership/Admin checks; status action lacks caller guard |
-| Registrations | [CompetitionParticipantsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/CompetitionParticipantsServiceImpl.java) | `competition_participants`, `competition_teams`; Participant-only writes, creator-only Team registration/cancel; Organizer removal; individual removal lacks Team removal's Admin exception |
-| Submissions/Review | [SubmissionRecordsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java) | `submission_records`; both upload shapes share one internal persistence path; replacement sets PENDING and persists null total/Review metadata (B15 corrected); Admin or competition Organizer reviews; individual delete owner/Organizer/Admin, Team delete member/Admin |
-| Reporting | [ParticipantAnalyticsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/ParticipantAnalyticsServiceImpl.java), [SubmissionAnalyticsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionAnalyticsServiceImpl.java) | Read counts/trends; scored query checks non-null total, not approval/Judge count |
-| Interactions | [SubmissionCommentsServiceImpl](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/service/impl/SubmissionCommentsServiceImpl.java), [SubmissionVotesServiceImpl](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/service/impl/SubmissionVotesServiceImpl.java) | `submission_comments`, `submission_votes`; edit owner-only, delete owner/Admin/Organizer; duplicate vote 409 with DB unique key |
-| Judge Score | [SubmissionJudgesServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java), [SubmissionJudgeScoresServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgeScoresServiceImpl.java) | `submission_judges`, `submission_judge_scores`; initial assignment/deadline checks; client criteria/weights; mean Judge total propagated after commit |
-| Winners | [SubmissionWinnersServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java) | `submission_winners`; Organizer/Admin permission; total ranking/criterion awards; replaces winners, status/email after commit |
-| Dashboard | [DashboardServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/DashboardServiceImpl.java) | Remote competitions/registrations/Submissions/interactions and local judging data |
-| Files | [FileStorageServiceImpl](../../backend/file-service/src/main/java/com/w16a/danish/fileService/service/impl/FileStorageServiceImpl.java), [FileValidator](../../backend/file-service/src/main/java/com/w16a/danish/fileService/util/FileValidator.java) | UUID names/safe suffixes; image/basic validation; bucket policy; caller-supplied object deletion |
-
-Normal writes use Controller → service interface → implementation → MyBatis-Plus mapper, adding Feign/publishers for remote work. Competition reads follow [ADR-0003](../adr/0003-cross-service-gateway-seam.md):
-
-- [registration CompetitionGateway](../../backend/registration-service/src/main/java/com/w16a/danish/registration/gateway/CompetitionGateway.java): `require`, `find`, `findAll`.
-- [judge CompetitionGateway](../../backend/judge-service/src/main/java/com/w16a/danish/judge/gateway/CompetitionGateway.java): those methods plus `listAll`, `isOrganiser`, `updateStatus`.
-
-Other entities still appear as Feign/ResponseEntity calls in business services. Judge competition fallbacks throw 503 for single reads/status writes and degrade batch/authorization reads. Registration competition/user/file fallbacks throw 503, including batch reads; this differs from the ADR's general batch policy.
-
-### Feign dependency map
-
-There are 13 sibling-service clients and 4 external OAuth clients.
-
-| Consumer | Sibling clients | External clients |
-|---|---|---|
-| user-service | FileServiceClient, SubmissionServiceClient in [feign/](../../backend/user-service/src/main/java/com/w16a/danish/user/feign/) | GithubOAuthClient, GithubUserClient, GoogleOAuthClient, GoogleUserClient |
-| competition-service | FileServiceClient, UserServiceClient in [feign/](../../backend/competition-service/src/main/java/com/w16a/danish/competition/feign/) | None |
-| registration-service | CompetitionServiceClient, UserServiceClient, FileServiceClient in [feign/](../../backend/registration-service/src/main/java/com/w16a/danish/registration/feign/) | None |
-| interaction-service | UserServiceClient, RegistrationServiceClient in [feign/](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/feign/) | None |
-| judge-service | CompetitionServiceClient, UserServiceClient, SubmissionServiceClient, InteractionServiceClient in [feign/](../../backend/judge-service/src/main/java/com/w16a/danish/judge/feign/) | None |
-
-### Notification map
-
-| Publisher | Exchange / routing keys | user-service consumer |
-|---|---|---|
-| [CompetitionNotifier](../../backend/competition-service/src/main/java/com/w16a/danish/competition/notify/CompetitionNotifier.java) | `competition.topic`: `judge.assigned`, `judge.removed` | [CompetitionJudgeEventListener](../../backend/user-service/src/main/java/com/w16a/danish/user/config/CompetitionJudgeEventListener.java) |
-| [RegistrationNotifier](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/RegistrationNotifier.java) | `registration.topic`: `register.success`, `register.removed` | [RegistrationEventListener](../../backend/user-service/src/main/java/com/w16a/danish/user/config/RegistrationEventListener.java) |
-| [SubmissionNotifier](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/SubmissionNotifier.java) | `registration.topic`: `submission.uploaded`, `submission.reviewed` | RegistrationEventListener |
-| [AwardNotifier](../../backend/judge-service/src/main/java/com/w16a/danish/judge/notify/AwardNotifier.java) | `judge.topic`: `award.winner` | [AwardWinnerEventListener](../../backend/user-service/src/main/java/com/w16a/danish/user/config/AwardWinnerEventListener.java) |
-
-Publishers call persistent `RabbitTemplate.convertAndSend` without catching exceptions. Registration/Submission/assignment publishing runs inside local transactions; awards publish after commit. The four notifier modules remain separate by domain.
-
-The wire contract now has one source: [MessagingConstants](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging/MessagingConstants.java#L9) supplies the existing 3 topic-exchange names, 7 durable-queue names and 7 routing keys to all declarations, publishers and listeners. Seven shared [message DTOs](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging/message/) replace fourteen producer/consumer copies. [NotificationMessageConverter.create](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging/NotificationMessageConverter.java#L34) retains JSON fields and the existing LocalDateTime representation, reads historical producer and user-service class-name aliases, and [always emits the historical producer type ID](../../backend/common-lib/src/main/java/com/w16a/danish/common/messaging/NotificationMessageConverter.java#L51). Queued messages and rolling updates therefore do not require the deleted Java classes to be present in a new consumer.
-
-Each module still owns its Spring broker declarations: [competition](../../backend/competition-service/src/main/java/com/w16a/danish/competition/config/CompetitionRabbitMQConfig.java#L24), [registration](../../backend/registration-service/src/main/java/com/w16a/danish/registration/config/RabbitMQConfig.java#L24), [judge](../../backend/judge-service/src/main/java/com/w16a/danish/judge/config/JudgeRabbitMQConfig.java#L26) and [user](../../backend/user-service/src/main/java/com/w16a/danish/user/config/RabbitMQConfig.java#L26). User-service now has [one JSON converter bean](../../backend/user-service/src/main/java/com/w16a/danish/user/config/RabbitMQConfig.java#L62); the duplicate RabbitListenerConfig was removed, with `@EnableRabbit` retained on RabbitMQConfig. The Boot listener test confirms conversion reaches an actual annotated listener without opening a broker connection; live queue delivery and SMTP remain unverified.
-
-## Registration → Submission → Review → Score → Award
-
-1. **Create/assign:** Organizer/Admin creates a Competition and ownership row. `assignJudges` resolves emails and inserts assignments. It filters duplicates but does not enforce Judge role or reject the Competition's Organizer.
-2. **Register:** individual `register` requires Participant and UPCOMING/ONGOING, then inserts `competition_participants`, without an INDIVIDUAL type guard. `registerTeam` additionally requires creator and TEAM type. Both publish notifications. Cancellation removes Submission rows; schema cascades remove dependents where defined.
-3. **Submit:** individual upload verifies registration, permits UPCOMING/ONGOING, checks end date, uploads and inserts/replaces a Submission. Individual and Team paths both call [persistUploadedSubmission](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L724), which persists PENDING and null totalScore/Review metadata using four explicit ALWAYS field strategies (B15 corrected). Replacement writes must succeed before the old file is deleted; deletion still precedes transaction commit and later remote/MQ calls. Team upload checks membership/ONGOING/end date but omits registration/type guards. MinIO/MQ do not share the MySQL transaction.
-4. **Organizer Review:** loads Submission, checks Admin or competition ownership, accepts APPROVED/REJECTED, records reviewer/time/comments and resolves recipients. Approved lists filter Review; public single-Team detail does not.
-5. **Judge Score:** verifies assignment against body competitionId and accepts COMPLETED or elapsed end date. It rejects a second Judge/Submission record but never verifies that Submission's Competition/APPROVED state. It sums supplied `score * weight`; mean of Judge totals is written remotely after commit. Update loads the caller's record but omits current assignment/lifecycle guards and aggregates body submissionId.
-6. **Award:** scored-list requires 3 Judge records; autoAward omits that filter and COMPLETED/approval checks. It takes non-null totals, ranks with ties, keeps one detail per Submission/criterion, selects criterion awards and replaces Winners. AWARDED status/email follow commit; no durable retry/outbox exists.
-
-## Findings and reproduction targets
-
-B01-B03 were reproduced in isolated business/MockMvc probes with mocked collaborators. B04-B14 remain static findings whose reproduction targets below have not been executed. B15's original SQL-generation failure has been corrected and covered by local H2 JDBC regressions; its row distinguishes that result from a live MySQL acceptance check. Priorities express expected impact, not an assertion about an unknown deployment.
-
-| ID / priority | Evidence | Reproduction target / consequence |
-|---|---|---|
-| B01 / P1; isolated runtime | [registration L85-L125](../../backend/user-service/src/main/java/com/w16a/danish/user/service/impl/UsersServiceImpl.java#L85) assigns any existing role; [schema L43-L48](../../mysql-init/create_table.sql#L43) seeds Admin/Judge. OAuth separately restricts roles. | Actual `register(role=Admin)` saved roleId=1 and generated Admin JWT claims. Anonymous POST `/users/register` is whitelisted; privileged self-registration needs denial. Live DB/JWT flow remains untested. |
-| B02 / P1; isolated runtime | [internal total-score L445-L451](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/SubmissionRecordsController.java#L445) lacks identity/role guards; [gateway routes L49-L57](../../backend/api-gateway/src/main/resources/application.yml#L49) forward `/submissions/**`. | MockMvc PUT `/submissions/internal/audit-submission/total-score?score=999.00` with Participant headers returned 200 and invoked write. Ordinary JWT suffices at the edge by static route analysis. Internal reads similarly lack ownership/approval guards. |
-| B03 / P1; isolated runtime | [status controller L416-L422](../../backend/competition-service/src/main/java/com/w16a/danish/competition/controller/CompetitionsController.java#L416) passes no context; [service L630-L653](../../backend/competition-service/src/main/java/com/w16a/danish/competition/service/impl/CompetitionsServiceImpl.java#L630) checks enum/existence only. | MockMvc Participant PUT `/competitions/audit-competition/status?status=AWARDED` returned 200 and invoked write. Edge/service analysis permits ordinary users to change others' lifecycle; transition guards are absent. |
-| B04 / P1; static | [file controller L44-L48](../../backend/file-service/src/main/java/com/w16a/danish/fileService/controller/FileUploadController.java#L44), [delete L147-L159](../../backend/file-service/src/main/java/com/w16a/danish/fileService/service/impl/FileStorageServiceImpl.java#L147) trust bucket/object without ownership. | Participant JWT DELETE `/files/delete?bucket=<bucket>&objectName=<another-known-object>` can remove another user's object and leave a broken DB URL. |
-| B05 / P1; static | [judgeSubmission L59-L119](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java#L59) checks assignment to body competitionId, never loads Submission/approval. [Schema L202-L216](../../mysql-init/create_table.sql#L202) has independent FKs. | Judge assigned to ended Competition A supplies A plus PENDING/REJECTED Submission B, including another Competition; score can be stored/propagated to B. |
-| B06 / P1; static | [CriterionScoreDTO L27-L40](../../backend/judge-service/src/main/java/com/w16a/danish/judge/domain/dto/CriterionScoreDTO.java#L27) permits weight up to 100; [calculation L85-L89](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java#L85) trusts products. | Assigned Judge sends score=100, weight=2 for an arbitrary criterion; DTO permits total=200. No configured-criterion, duplicate-criterion or normalized-weight checks exist. Larger accepted inputs can exceed the schema's DECIMAL(5,2) and fail persistence. |
-| B07 / P1; static | [autoAward L158-L266](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java#L158) omits COMPLETED/approval/3-Judge guards. Only scored-list filters 3 at [L108](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java#L108); [scored query L176-L181](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionAnalyticsServiceImpl.java#L176) checks non-null total. | Organizer awards a Competition with one score or a later-rejected scored Submission; records excluded from its scored-list can still win. |
-| B08 / P2; static | [updateJudgement L206-L255](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java#L206) loads path submissionId but aggregates body submissionId; omits current assignment/lifecycle guards. | PUT `/judges/A` with own score for A but body submissionId=B changes A's details and aggregates B. Removed assignment does not prevent later updates. |
-| B09 / P1; static | [Team upload L438-L493](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L438) omits Team registration/type; [individual registration L61-L102](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/CompetitionParticipantsServiceImpl.java#L61) omits INDIVIDUAL type. | Team member uploads to an ONGOING Competition without Team registration, including INDIVIDUAL type; individual registration is accepted for TEAM Competitions. |
-| B10 / P2; static | [individual upload L141](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L141) uses `isRegistrable`; [Team upload L457](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L457) uses `isSubmittable`. | Registered individual uploads during UPCOMING with future end date; equivalent Team upload is refused. Lifecycle contracts differ. |
-| B11 / P1; static | [public Team detail L496-L522](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L496) exposes URL/Review comments without approval; [whitelist L101](../../backend/api-gateway/src/main/resources/application.yml#L101) permits anonymous access. [bucket policy L111-L140](../../backend/file-service/src/main/java/com/w16a/danish/fileService/service/impl/FileStorageServiceImpl.java#L111) grants public-read to every new bucket. | Anonymous Team detail can expose PENDING/REJECTED file/review metadata. A newly created submissions bucket grants anonymous object reads. Existing bucket policies need live inspection. |
-| B12 / P2; static | Criterion map keeps first duplicate at [L178-L184](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java#L178); no mean/max or ordering. | Two Judges give conflicting criterion scores for A/B. Best-in-criterion reflects one returned row rather than aggregate; row order can affect awards. |
-| B13 / P2; static | [RegistrationNotifier L24-L46](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/RegistrationNotifier.java#L24) and other publishers propagate exceptions; MinIO changes precede DB commit. [Judge after-commit L417-L437](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java#L417), [award after-commit L264-L290](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java#L264) lack durable recovery. | Broker failure can fail/roll back registration/Review/assignment despite CONTEXT's promise. A rejected replacement SQL write now preserves the old file, but a later remote/MQ failure can still roll back after its deletion or leave a new object orphaned. After-commit sibling outage can leave stale total/status and report failure after local commit. |
-| B14 / P2; static | [assignJudges L421-L475](../../backend/competition-service/src/main/java/com/w16a/danish/competition/service/impl/CompetitionsServiceImpl.java#L421) resolves any emails and filters duplicates only. | Organizer assigns own/Participant email; scoring permission checks the assignment row rather than Judge role. CONTEXT's fixed-role/no-overlap claims are not enforced. |
-| B15 / corrected in this cleanup; prior P1 | Both upload paths now share [persistence/reset L724-L750](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java#L724); [SubmissionRecords L63-L76](../../backend/registration-service/src/main/java/com/w16a/danish/registration/domain/po/SubmissionRecords.java#L63) explicitly sets ALWAYS update strategy on all four nullable Review/score fields. The prior SQL probe documented the former NOT_NULL omission. | [SubmissionUploadPersistenceTest](../../backend/registration-service/src/test/java/com/w16a/danish/registration/service/impl/SubmissionUploadPersistenceTest.java#L141) uses real MyBatis-Plus/H2 and separate JDBC reads to verify individual/Team replacement persists PENDING and clears totalScore/reviewer/time/comments; first uploads retain the correct owner, and rejected SQL leaves the original row/file intact. This verifies local JDBC persistence with mocked remote collaborators, not production MySQL, Spring transaction rollback or distributed commit behavior. |
-
-Additional integrity gap: replacement retains Submission ID and existing Judge/criterion rows after B15's null-clearing correction. Initial scoring rejects a second Judge/Submission record. If a previously scored Submission becomes uploadable again, obsolete judging history can survive; verify together with lifecycle transitions.
-
-## Tests and verification meaning
-
-The current 51 test files contain 555 `@Test`/`@ParameterizedTest` declarations: a source count, not a current run total (parameterized methods expand into multiple cases). Most are Mockito service tests or Spring Boot/MockMvc tests with mocked collaborators. The new Submission upload check uses real MyBatis-Plus with a small isolated H2 table and JDBC reads; it does not bootstrap the production MySQL schema or Spring transaction proxies. Gateway tests run a real gateway on a random port against WireMock; they exercise public, missing/invalid-token and forged-header paths, not successful valid-JWT access. Their test-profile whitelist also differs from production configuration. No backend Testcontainers tests were found.
-
-Useful existing checks:
-
-- [JwtAuthFilterTest](../../backend/api-gateway/src/test/java/com/w16a/danish/gateway/JwtAuthFilterTest.java): public/protected routing and forged-header stripping.
-- [RequestContext tests](../../backend/common-lib/src/test/java/com/w16a/danish/common/context/): header resolution and role guards.
-- [Registration guards](../../backend/registration-service/src/test/java/com/w16a/danish/registration/service/impl/CompetitionParticipantsServiceImplGuardsTest.java) and [Submission guards](../../backend/registration-service/src/test/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImplGuardsTest.java): missing registration, upstream failure, deadline/status branches, replacement Review reset and Review/delete permissions.
-- [SubmissionUploadPersistenceTest](../../backend/registration-service/src/test/java/com/w16a/danish/registration/service/impl/SubmissionUploadPersistenceTest.java): six individual/Team JDBC cases for first upload, persisted replacement reset, and SQL rejection preserving the previous row/file.
-- [NotificationMessageConverterTest](../../backend/common-lib/src/test/java/com/w16a/danish/common/messaging/NotificationMessageConverterTest.java) and [NotificationListenerWiringTest](../../backend/user-service/src/test/java/com/w16a/danish/user/config/NotificationListenerWiringTest.java): 31 cases for shared JSON/date/header compatibility, nullable fields, unrelated default conversion and one unique converter reaching an actual annotated listener; connection/mail interfaces are mocked.
-- [Gateway tests](../../backend/judge-service/src/test/java/com/w16a/danish/judge/gateway/CompetitionGatewayTest.java) and [fallback tests](../../backend/judge-service/src/test/java/com/w16a/danish/judge/feign/fallback/CompetitionServiceClientFallbackTest.java): require/find/batch/null and outages.
-- [Judging tests](../../backend/judge-service/src/test/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImplTest.java) and [Winner tests](../../backend/judge-service/src/test/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImplTest.java): assignment/duplicate/missing-record/permission branches and successful calls. Mocked persistence does not prove DB cascades, cross-service invariants or after-commit recovery.
-
-Configured JaCoCo line/branch floors: common-lib 75%/90%, gateway 76%/45%, users 68%/52%, competitions 71%/45%, files 78%/56%, registrations 72%/60%, interactions 87%/61%, judges 73%/46%. `mvnw.cmd test` does not enforce the `verify` floors or produce the aggregate report; `mvnw.cmd verify` is the configured gate. Green unit/controller checks do not disprove B01-B14. Integration checks should exercise denied privileged registration, ordinary Participant internal-route access, cross-Competition scoring, approval/type/registration guards, MySQL null-clearing parity, and failures between DB commit and remote side effects.
-
-## Controller route index
-
-All 114 method/path declarations below were extracted from the current controllers. They are not live-request verification. Query/body contracts are in the linked files. Anonymous access follows the gateway whitelist rather than a `/public` name; an `/internal` name or OpenAPI visibility provides no service-only boundary.
-
-### competition-service: CompetitionsController (16)
-
-[Controller source](../../backend/competition-service/src/main/java/com/w16a/danish/competition/controller/CompetitionsController.java)
-
-```text
-POST   /competitions
-GET    /competitions/{id}
-GET    /competitions/list
-DELETE /competitions/delete/{id}
-PUT    /competitions/update/{id}
-POST   /competitions/{id}/media
-DELETE /competitions/{id}/media/image
-DELETE /competitions/{id}/media/video
-GET    /competitions/achieve/my
-POST   /competitions/batch/ids
-POST   /competitions/{id}/assign-judges
-GET    /competitions/{id}/judges
-DELETE /competitions/{id}/judges/{judgeId}
-GET    /competitions/is-organizer
-GET    /competitions/public/all
-PUT    /competitions/{id}/status
-```
-
-### file-service: FileUploadController (4)
-
-[Controller source](../../backend/file-service/src/main/java/com/w16a/danish/fileService/controller/FileUploadController.java)
-
-```text
-POST   /files/upload/avatar
-POST   /files/upload/promo
-POST   /files/upload/submission
-DELETE /files/delete
-```
-
-### interaction-service: SubmissionInteractionController (10)
-
-[Controller source](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/controller/SubmissionInteractionController.java)
-
-```text
-POST   /interactions/comments
-DELETE /interactions/comments/{id}
-PUT    /interactions/comments/{id}
-GET    /interactions/comments/list
-POST   /interactions/votes
-DELETE /interactions/votes
-GET    /interactions/votes/count
-GET    /interactions/votes/status
-GET    /interactions/statistics
-GET    /interactions/public/platform/interaction-statistics
-```
-
-### judge-service: DashboardController (2)
-
-[Controller source](../../backend/judge-service/src/main/java/com/w16a/danish/judge/controller/DashboardController.java)
-
-```text
-GET    /dashboard/public/statistics
-GET    /dashboard/public/platform-overview
-```
-
-### judge-service: SubmissionJudgesController (6)
-
-[Controller source](../../backend/judge-service/src/main/java/com/w16a/danish/judge/controller/SubmissionJudgesController.java)
-
-```text
-POST   /judges/score
-GET    /judges/is-judge
-GET    /judges/{submissionId}/detail
-GET    /judges/pending-submissions
-PUT    /judges/{submissionId}
-GET    /judges/my-competitions
-```
-
-### judge-service: SubmissionWinnersController (3)
-
-[Controller source](../../backend/judge-service/src/main/java/com/w16a/danish/judge/controller/SubmissionWinnersController.java)
-
-```text
-POST   /winners/auto-award
-GET    /winners/public-list
-GET    /winners/scored-list
-```
-
-### registration-service: CompetitionParticipantsController (17)
-
-[Controller source](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/CompetitionParticipantsController.java)
-
-```text
-POST   /registrations/{competitionId}
-DELETE /registrations/{competitionId}
-GET    /registrations/{competitionId}/participants
-DELETE /registrations/{competitionId}/participants/{participantUserId}
-GET    /registrations/{competitionId}/status
-GET    /registrations/my
-POST   /registrations/teams/{competitionId}/{teamId}
-DELETE /registrations/teams/{competitionId}/{teamId}
-GET    /registrations/teams/{competitionId}/{teamId}/status
-GET    /registrations/public/{competitionId}/teams
-GET    /registrations/teams/{teamId}/competitions
-DELETE /registrations/teams/{competitionId}/team/{teamId}/by-organizer
-GET    /registrations/internal/exists-registration-by-team
-GET    /registrations/public/{competitionId}/statistics
-GET    /registrations/public/{competitionId}/participant-trend
-GET    /registrations/public/platform/participant-statistics
-GET    /registrations/public/platform/participant-trend
-```
-
-### registration-service: SubmissionRecordsController (24)
-
-[Controller source](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/SubmissionRecordsController.java)
-
-```text
-POST   /submissions/upload
-DELETE /submissions/{submissionId}
-GET    /submissions/{competitionId}
-GET    /submissions/public
-GET    /submissions/public/approved
-POST   /submissions/review
-GET    /submissions/is-organizer
-POST   /submissions/teams/upload
-GET    /submissions/public/teams/{competitionId}/{teamId}
-DELETE /submissions/teams/{submissionId}
-GET    /submissions/teams/list
-GET    /submissions/public/teams/approved
-GET    /submissions/internal/exists-by-team
-GET    /submissions/statistics
-GET    /submissions/public/{competitionId}/submission-trend
-GET    /submissions/public/platform/submission-statistics
-GET    /submissions/public/platform/submission-trend
-PUT    /submissions/internal/{id}/total-score
-GET    /submissions/internal/score-statistics
-GET    /submissions/internal/my-submission
-GET    /submissions/internal/team-submission
-GET    /submissions/internal/team-submissions
-GET    /submissions/internal/scored
-POST   /submissions/internal/by-ids
-```
-
-### user-service: TeamController (15)
-
-[Controller source](../../backend/user-service/src/main/java/com/w16a/danish/user/controller/TeamController.java)
-
-```text
-POST   /teams/create
-DELETE /teams/{teamId}/members/{memberId}
-DELETE /teams/{teamId}
-PUT    /teams/{teamId}
-POST   /teams/{teamId}/join
-POST   /teams/{teamId}/leave
-GET    /teams/public/{teamId}
-GET    /teams/public/created
-GET    /teams/my-joined
-GET    /teams/public/all
-GET    /teams/{teamId}/creator
-POST   /teams/public/brief
-GET    /teams/public/is-member
-GET    /teams/public/{teamId}/members
-GET    /teams/public/joined
-```
-
-### user-service: UsersController (17)
-
-[Controller source](../../backend/user-service/src/main/java/com/w16a/danish/user/controller/UsersController.java)
-
-```text
-POST   /users/register
-POST   /users/login
-POST   /users/logout
-DELETE /users/{userId}
-GET    /users/profile
-PUT    /users/profile
-POST   /users/profile/avatar
-GET    /users/oauth/github
-GET    /users/oauth/callback/github
-GET    /users/oauth/google
-GET    /users/oauth/callback/google
-POST   /users/forgot-password
-POST   /users/reset-password
-POST   /users/query-by-ids
-GET    /users/{userId}
-POST   /users/query-by-emails
-GET    /users/admin/list
-```
+Updated 2026-10-04. Seven executable services and common-lib remain; generated
+`target` output is excluded from inventory. Runtime uses Java 25 / Boot 4.1.
+The [runbook](../production-readiness-2026-10-04.md) records actual test/infra evidence.
+
+## Domain entry points
+
+| Domain | Read/write authority | Important rules |
+| --- | --- | --- |
+| Identity | [UsersServiceImpl](../../backend/user-service/src/main/java/com/w16a/danish/user/service/impl/UsersServiceImpl.java), [UsersController](../../backend/user-service/src/main/java/com/w16a/danish/user/controller/UsersController.java) | Public Participant/Organizer only; Admin provisioning of Judge/Admin preserves caller session |
+| First Admin | [AdminBootstrap](../../backend/user-service/src/main/java/com/w16a/danish/user/bootstrap/AdminBootstrap.java) | Explicit CLI, no existing Admin, strong password, JDBC transaction |
+| Teams | [TeamServiceImpl](../../backend/user-service/src/main/java/com/w16a/danish/user/service/impl/TeamServiceImpl.java) | Creator manages membership and registration; Team existence is independent of Competition |
+| Competition | [CompetitionsServiceImpl](../../backend/competition-service/src/main/java/com/w16a/danish/competition/service/impl/CompetitionsServiceImpl.java), [CompetitionLifecycle](../../backend/competition-service/src/main/java/com/w16a/danish/competition/domain/CompetitionLifecycle.java) | Ownership, valid criteria/dates/type, explicit lifecycle, frozen rules and finalized run |
+| Registration | [CompetitionParticipantsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/CompetitionParticipantsServiceImpl.java) | Matching entrant/type, registration/UTC deadline, creator-owned Team, current-status lock for cancel/remove |
+| Submission / Review | [SubmissionRecordsServiceImpl](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl/SubmissionRecordsServiceImpl.java) | Registered upload, Team registration, ONGOING writes, second deadline check, revision and persisted null reset |
+| Private download | [SubmissionDownloads](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/SubmissionDownloads.java), [SubmissionDownloadController](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/SubmissionDownloadController.java) | Object-level authorization, flat known key, streamed attachment, no-store/nosniff |
+| Score | [SubmissionJudgesServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionJudgesServiceImpl.java) | Actual Competition, APPROVED current revision, assigned Judge role, exact criteria and server-owned mean |
+| Award | [SubmissionWinnersServiceImpl](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl/SubmissionWinnersServiceImpl.java) | Every approved entry has 3 valid Judges, persisted serialization/idempotence, 1/1/3 ties, score snapshot |
+| Interaction | [interaction service implementations](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/service/impl) | Vote uniqueness, comment ownership and moderation |
+| Reporting | [registration analytics](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/impl), [judge dashboards](../../backend/judge-service/src/main/java/com/w16a/danish/judge/service/impl) | Read models remain separate from Submission/Registration writes |
+| Objects | [file-service](../../backend/file-service/src/main/java/com/w16a/danish/fileService) | Caller-scoped upload/delete, private submissions policy, internal streamed read |
+
+## API contracts to inspect
+
+| Contract | Controller |
+| --- | --- |
+| Public registration, login, Admin accounts | [UsersController](../../backend/user-service/src/main/java/com/w16a/danish/user/controller/UsersController.java) |
+| Public list + participationType, Organizer server filters | [CompetitionsController](../../backend/competition-service/src/main/java/com/w16a/danish/competition/controller/CompetitionsController.java) |
+| Individual/Team register, cancel and removal | [CompetitionParticipantsController](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/CompetitionParticipantsController.java) |
+| Upload, Review, public approved list, internal approved reads and versioned projection | [SubmissionRecordsController](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/SubmissionRecordsController.java) |
+| Private Team detail | [TeamSubmissionDetailController](../../backend/registration-service/src/main/java/com/w16a/danish/registration/controller/TeamSubmissionDetailController.java) |
+| Judge context, current detail, pending work, POST/PUT score | [SubmissionJudgesController](../../backend/judge-service/src/main/java/com/w16a/danish/judge/controller/SubmissionJudgesController.java) |
+| Eligibility, auto-award and public results | [SubmissionWinnersController](../../backend/judge-service/src/main/java/com/w16a/danish/judge/controller/SubmissionWinnersController.java) |
+
+## Trust and cross-service calls
+
+[JwtAuthFilter](../../backend/api-gateway/src/main/java/com/w16a/danish/gateway/filters/JwtAuthFilter.java)
+verifies browser JWTs and supplies identity. [RequestContext](../../backend/common-lib/src/main/java/com/w16a/danish/common/context/RequestContext.java)
+provides role guards. The scoped [security module](../../backend/common-lib/src/main/java/com/w16a/danish/common/security)
+verifies independent service credentials for internal routes. Explicit Feign client
+configuration avoids sending credentials to external OAuth providers.
+
+Public profile reads redact contact details. Internal user/team lookups have
+explicit caller allowlists; POST read batches retain read scope and a limit of
+100 IDs, with larger domain lists split at the service seam. Dependency failures
+return a recoverable service error rather than empty authorization/history data.
+Public, managed and Admin Competition reads are separate contracts.
+
+[CompetitionGateway in registration](../../backend/registration-service/src/main/java/com/w16a/danish/registration/gateway/CompetitionGateway.java)
+and [CompetitionGateway in judging](../../backend/judge-service/src/main/java/com/w16a/danish/judge/gateway/CompetitionGateway.java)
+hide Feign transport/missing-state interpretation. Security-sensitive current Judge
+and lifecycle lock SQL reads deliberately use the shared database to avoid an
+authorization decision racing a remote status projection.
+
+## External effects
+
+- [DurableTasks](../../backend/common-lib/src/main/java/com/w16a/danish/common/recovery/DurableTasks.java): enqueue only in a transaction; service ownership, bounded polling, lease, retry, DEAD.
+- [NotificationOutbox](../../backend/common-lib/src/main/java/com/w16a/danish/common/recovery/NotificationOutbox.java): persistent messages, event ID, mandatory route and publisher confirmation.
+- [NotificationInbox](../../backend/user-service/src/main/java/com/w16a/danish/user/config/NotificationInbox.java): deduplication and email task in one transaction.
+- [EmailDeliveryHandler](../../backend/user-service/src/main/java/com/w16a/danish/user/config/EmailDeliveryHandler.java): existing seven domain email renderers, persisted retry, SMTP ambiguity retained.
+- [SubmissionFileCleanup](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/SubmissionFileCleanup.java) and [UploadRollbackCleanup](../../backend/registration-service/src/main/java/com/w16a/danish/registration/notify/UploadRollbackCleanup.java): old-file tasks and rolled-back upload cleanup.
+- [CompetitionMediaFiles](../../backend/competition-service/src/main/java/com/w16a/danish/competition/notify/CompetitionMediaFiles.java) and [AvatarFiles](../../backend/user-service/src/main/java/com/w16a/danish/user/profile/AvatarFiles.java): dedicated replacement transactions, known object references and cleanup tasks, without controller-level storage logic.
+- [SubmissionScores](../../backend/registration-service/src/main/java/com/w16a/danish/registration/service/SubmissionScores.java): current revision/schema, complete criteria and real Judge assignment validation for score projections.
+- [PublicSubmissionAccess](../../backend/interaction-service/src/main/java/com/w16a/danish/interaction/service/PublicSubmissionAccess.java): common public-approved guard before interaction reads and writes.
+- Four domain notifiers and seven shared payloads remain. [Historical type IDs](../adr/0005-notification-wire-contracts.md) stay explicit compatibility identifiers.
+
+## Tests and limits
+
+This delivery reviewed source and contracts statically and did not execute the
+tests, application, builds or deployment described below. Test source is retained
+and synchronized with changed interfaces; its assertions are not current pass evidence.
+
+Tests cover domain guard rejection, real H2/MyBatis/transaction rollback and row
+serialization, task leases/restart/duplicate inbox, historical AMQP dispatch,
+MinIO policy/caller contracts and streaming. [CI](../../.github/workflows/ci.yml)
+retains all original coverage floors. The [integration script](../../scripts/integration-smoke.mjs)
+uses real HTTP APIs and binary downloads; it does not mock transport.
+
+Tests cannot certify public TLS, provider OAuth, SMTP delivery to a recipient,
+existing storage policy or a restored production database. See [data](data.md),
+[dependencies](dependencies.md) and the release runbook for those gates.

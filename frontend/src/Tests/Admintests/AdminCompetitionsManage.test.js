@@ -19,7 +19,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   apiClient.get.mockImplementation((url) => {
-    if (url.includes("/competitions/list")) {
+    if (url.includes("/competitions/admin/list")) {
       return Promise.resolve({
         data: {
           data: [
@@ -27,7 +27,7 @@ beforeEach(() => {
               id: "comp-1",
               name: "Awesome Competition",
               category: "Design & Creativity",
-              status: "ONGOING",
+              status: "UPCOMING",
               startDate: new Date().toISOString(),
               endDate: new Date().toISOString(),
             },
@@ -36,7 +36,7 @@ beforeEach(() => {
         },
       });
     }
-    if (url.match(/\/competitions\/[^/]+$/)) {
+    if (url.match(/\/competitions\/managed\/[^/]+$/)) {
       return Promise.resolve({
         data: {
           id: "comp-1",
@@ -77,7 +77,7 @@ describe("AdminCompetitionsManage", () => {
 
     await screen.findByText("Awesome Competition");
     expect(screen.getByText("Design & Creativity")).toBeInTheDocument();
-    expect(screen.getByText("ONGOING")).toBeInTheDocument();
+    expect(screen.getByText("UPCOMING")).toBeInTheDocument();
   });
 
   it("filters competitions by search input", async () => {

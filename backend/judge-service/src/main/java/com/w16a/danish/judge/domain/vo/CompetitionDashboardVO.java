@@ -2,6 +2,7 @@ package com.w16a.danish.judge.domain.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -63,12 +64,15 @@ public class CompetitionDashboardVO {
     // ====== New fields for participant personal submission info ======
 
     @Schema(description = "If logged in: whether the user has submitted a work")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private Boolean hasSubmitted;
 
     @Schema(description = "If logged in: user's submission total score (if available)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private BigDecimal myTotalScore;
 
     @Schema(description = "If logged in: user's submission review status (e.g., PENDING, APPROVED, REJECTED)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private String myReviewStatus;
 
     // ====== New fields for participant and submission trends ======

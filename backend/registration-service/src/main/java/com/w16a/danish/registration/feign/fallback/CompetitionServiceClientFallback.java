@@ -22,4 +22,8 @@ public class CompetitionServiceClientFallback implements CompetitionServiceClien
     public ResponseEntity<List<CompetitionResponseVO>> getCompetitionsByIds(List<String> ids) {
         throw new ServiceUnavailableException("competition-service", "getCompetitionsByIds");
     }
+    @Override
+    public ResponseEntity<Boolean> isUserJudge(String competitionId, String userId) {
+        throw new com.w16a.danish.common.exception.BusinessException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Judge assignment service unavailable");
+    }
 }

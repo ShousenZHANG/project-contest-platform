@@ -22,9 +22,12 @@ export const queryKeys = {
     all: ['competitions'],
     lists: () => [...queryKeys.competitions.all, 'list'],
     list: (p) => [...queryKeys.competitions.lists(), params(p)],
+    adminList: (p) => [...queryKeys.competitions.all, 'adminList', params(p)],
+    publicList: (p) => [...queryKeys.competitions.all, 'public', params(p)],
     mine: (p) => [...queryKeys.competitions.all, 'mine', params(p)],
     details: () => [...queryKeys.competitions.all, 'detail'],
     detail: (id) => [...queryKeys.competitions.details(), id],
+    managedDetail: (id) => [...queryKeys.competitions.details(), 'managed', id],
     judges: (id) => [...queryKeys.competitions.detail(id), 'judges'],
     overview: () => [...queryKeys.competitions.all, 'overview'],
   },
@@ -84,6 +87,14 @@ export const queryKeys = {
 
   judges: {
     all: ['judges'],
+    competitions: (p) => [...queryKeys.judges.all, 'myCompetitions', params(p)],
+    detail: (submissionId) => [...queryKeys.judges.all, 'detail', submissionId],
+    context: (competitionId, submissionId) => [
+      ...queryKeys.judges.all,
+      'context',
+      competitionId,
+      submissionId,
+    ],
     assignedSubmissions: (competitionId, p) => [
       ...queryKeys.judges.all,
       'assignedSubmissions',
@@ -96,6 +107,20 @@ export const queryKeys = {
   winners: {
     all: ['winners'],
     byCompetition: (competitionId) => [...queryKeys.winners.all, competitionId],
+    eligibility: (competitionId) => [
+      ...queryKeys.winners.byCompetition(competitionId),
+      'eligibility',
+    ],
+    publicList: (competitionId, p) => [
+      ...queryKeys.winners.byCompetition(competitionId),
+      'public',
+      params(p),
+    ],
+    managedList: (competitionId, p) => [
+      ...queryKeys.winners.byCompetition(competitionId),
+      'managed',
+      params(p),
+    ],
   },
 
   dashboard: {

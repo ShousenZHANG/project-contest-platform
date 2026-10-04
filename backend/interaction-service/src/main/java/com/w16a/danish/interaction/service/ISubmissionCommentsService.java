@@ -28,4 +28,6 @@ public interface ISubmissionCommentsService extends IService<SubmissionComments>
 
     Long countAllComments();
 
+    long countCompetitionComments(String competitionId);
+
 }

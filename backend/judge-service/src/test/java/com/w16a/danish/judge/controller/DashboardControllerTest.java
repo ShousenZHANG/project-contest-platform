@@ -3,18 +3,22 @@ package com.w16a.danish.judge.controller;
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
 import com.w16a.danish.judge.service.IDashboardService;
+import com.w16a.danish.common.context.RequestContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -45,7 +49,7 @@ class DashboardControllerTest {
     void testGetCompetitionStatisticsSuccess() throws Exception {
         // Arrange
         CompetitionDashboardVO mockVO = new CompetitionDashboardVO();
-        when(dashboardService.getCompetitionStatistics(anyString(), anyString())).thenReturn(mockVO);
+        when(dashboardService.getCompetitionStatistics(anyString(), isNull())).thenReturn(mockVO);
 
         // Act & Assert
         mockMvc.perform(get("/dashboard/public/statistics")
@@ -53,7 +57,24 @@ class DashboardControllerTest {
                         .param("userId", "test-user-id")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.hasSubmitted").doesNotExist())
+                .andExpect(jsonPath("$.myTotalScore").doesNotExist())
+                .andExpect(jsonPath("$.myReviewStatus").doesNotExist());
+        verify(dashboardService).getCompetitionStatistics("test-competition-id", null);
+    }
+
+    @Test void authenticatedStatisticsTakeTheActorFromCurrentUser() throws Exception {
+        when(dashboardService.getManagedCompetitionStatistics(any(), anyString())).thenReturn(new CompetitionDashboardVO());
+        mockMvc.perform(get("/dashboard/statistics").param("competitionId", "c").param("userId", "victim")
+                .header("User-ID", "owner").header("User-Role", "ORGANIZER"))
+                .andExpect(status().isOk());
+        verify(dashboardService).getManagedCompetitionStatistics(new RequestContext("owner", "ORGANIZER"), "c");
+    }
+
+    @Test void authenticatedStatisticsRequireIdentityHeaders() throws Exception {
+        mockMvc.perform(get("/dashboard/statistics").param("competitionId", "c"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

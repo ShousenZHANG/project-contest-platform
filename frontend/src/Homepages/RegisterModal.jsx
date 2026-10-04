@@ -19,29 +19,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import {
-  Mail,
-  Lock,
-  User,
-  Eye,
-  EyeOff,
-  Loader2,
-  ArrowRight,
-  X,
-} from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, ArrowRight, X } from 'lucide-react';
 
 import apiClient from '../api/apiClient';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { cn } from '../lib/utils';
 
 /**
@@ -82,12 +68,7 @@ function GithubIcon({ className }) {
 
 function GoogleIcon({ className }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" focusable="false">
       <path
         fill="#EA4335"
         d="M12 11v2.99h7.69c-.31 1.85-2.36 5.42-7.69 5.42-4.63 0-8.4-3.83-8.4-8.55s3.77-8.55 8.4-8.55c2.63 0 4.4 1.12 5.41 2.08l3.69-3.55C18.59.95 15.6-.5 12 -.5 5.37 -.5 0 4.87 0 11.5S5.37 23.5 12 23.5c6.93 0 11.51-4.87 11.51-11.72 0-.79-.08-1.39-.18-1.99H12z"
@@ -96,9 +77,11 @@ function GoogleIcon({ className }) {
   );
 }
 
-function RegisterModal({ onClose, role }) {
+function RegisterModal({ onClose, role: roleProp }) {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const role = (roleProp || 'PARTICIPANT').toUpperCase();
+  const canRegister = ['PARTICIPANT', 'ORGANIZER'].includes(role);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -118,6 +101,7 @@ function RegisterModal({ onClose, role }) {
   });
 
   const onSubmit = async ({ name, email, password }) => {
+    if (!canRegister || isSubmitting) return;
     setIsSubmitting(true);
     try {
       const res = await apiClient.post('/users/register', {
@@ -137,19 +121,17 @@ function RegisterModal({ onClose, role }) {
 
       toast.success('Account created successfully');
 
-      if (data.role === 'Participant') {
-        navigate(`/profile/${data.email}`);
-      } else if (data.role === 'Organizer') {
-        navigate(`/OrganizerProfile/${data.email}`);
+      if (data.role?.toUpperCase() === 'PARTICIPANT') {
+        navigate(`/profile/${encodeURIComponent(data.email)}`, { replace: true });
+      } else if (data.role?.toUpperCase() === 'ORGANIZER') {
+        navigate(`/OrganizerProfile/${encodeURIComponent(data.email)}`, { replace: true });
       } else {
         navigate('/');
       }
 
       if (typeof onClose === 'function') onClose();
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        'Server error. Please try again later.';
+      const msg = err.response?.data?.message || 'Server error. Please try again later.';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
@@ -174,9 +156,7 @@ function RegisterModal({ onClose, role }) {
         </button>
 
         <CardHeader className="space-y-2 pb-6">
-          <CardTitle className="text-3xl font-bold tracking-tight">
-            Create your account
-          </CardTitle>
+          <CardTitle className="text-3xl font-bold tracking-tight">Create your account</CardTitle>
           <CardDescription className="text-base">
             Join as a{' '}
             <span className="font-medium text-foreground">
@@ -187,11 +167,8 @@ function RegisterModal({ onClose, role }) {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-4"
-            noValidate
-          >
+          {!canRegister && <p role="alert" className="text-sm text-destructive">Judge and Admin accounts require administrator provisioning. Use password sign-in.</p>}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <div className="relative">
@@ -204,17 +181,12 @@ function RegisterModal({ onClose, role }) {
                   aria-invalid={!!errors.name}
                   className={cn(
                     'pl-9 h-11',
-                    errors.name &&
-                      'border-destructive focus-visible:ring-destructive'
+                    errors.name && 'border-destructive focus-visible:ring-destructive',
                   )}
                   {...register('name')}
                 />
               </div>
-              {errors.name && (
-                <p className="text-xs text-destructive">
-                  {errors.name.message}
-                </p>
-              )}
+              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -229,17 +201,12 @@ function RegisterModal({ onClose, role }) {
                   aria-invalid={!!errors.email}
                   className={cn(
                     'pl-9 h-11',
-                    errors.email &&
-                      'border-destructive focus-visible:ring-destructive'
+                    errors.email && 'border-destructive focus-visible:ring-destructive',
                   )}
                   {...register('email')}
                 />
               </div>
-              {errors.email && (
-                <p className="text-xs text-destructive">
-                  {errors.email.message}
-                </p>
-              )}
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -254,8 +221,7 @@ function RegisterModal({ onClose, role }) {
                   aria-invalid={!!errors.password}
                   className={cn(
                     'pl-9 pr-10 h-11',
-                    errors.password &&
-                      'border-destructive focus-visible:ring-destructive'
+                    errors.password && 'border-destructive focus-visible:ring-destructive',
                   )}
                   {...register('password')}
                 />
@@ -265,17 +231,11 @@ function RegisterModal({ onClose, role }) {
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-destructive">
-                  {errors.password.message}
-                </p>
+                <p className="text-xs text-destructive">{errors.password.message}</p>
               )}
             </div>
 
@@ -291,8 +251,7 @@ function RegisterModal({ onClose, role }) {
                   aria-invalid={!!errors.confirmPassword}
                   className={cn(
                     'pl-9 pr-10 h-11',
-                    errors.confirmPassword &&
-                      'border-destructive focus-visible:ring-destructive'
+                    errors.confirmPassword && 'border-destructive focus-visible:ring-destructive',
                   )}
                   {...register('confirmPassword')}
                 />
@@ -302,17 +261,11 @@ function RegisterModal({ onClose, role }) {
                   aria-label={showConfirm ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showConfirm ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="text-xs text-destructive">
-                  {errors.confirmPassword.message}
-                </p>
+                <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
               )}
             </div>
 
@@ -320,7 +273,7 @@ function RegisterModal({ onClose, role }) {
               type="submit"
               size="lg"
               className="w-full h-11 mt-2 group"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canRegister}
             >
               {isSubmitting ? (
                 <>
@@ -341,9 +294,7 @@ function RegisterModal({ onClose, role }) {
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
-                or continue with
-              </span>
+              <span className="bg-card px-2 text-muted-foreground">or continue with</span>
             </div>
           </div>
 
@@ -353,8 +304,9 @@ function RegisterModal({ onClose, role }) {
               variant="outline"
               size="lg"
               className="h-11"
+              disabled={isSubmitting || !canRegister}
               onClick={() => {
-                window.location.href = `/users/oauth/github?role=${role}`;
+                window.location.href = userService.oauthGithub(role);
               }}
             >
               <GithubIcon className="h-4 w-4" />
@@ -365,8 +317,9 @@ function RegisterModal({ onClose, role }) {
               variant="outline"
               size="lg"
               className="h-11"
+              disabled={isSubmitting || !canRegister}
               onClick={() => {
-                window.location.href = `/users/oauth/google?role=${role}`;
+                window.location.href = userService.oauthGoogle(role);
               }}
             >
               <GoogleIcon className="h-4 w-4" />

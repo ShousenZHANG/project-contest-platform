@@ -23,6 +23,8 @@ import { competitionService } from '../services/competitionService';
 import { queryKeys, staleTime } from '../api/queryKeys';
 import { unwrap, toMessage } from '../api/queryFn';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { parseApiDateTime } from '../lib/dateTime';
+import PageError from '../shared/components/PageError';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -50,6 +52,8 @@ const STATUS_FILTERS = [
   { value: 'UPCOMING', label: 'Upcoming' },
   { value: 'ONGOING', label: 'Ongoing' },
   { value: 'COMPLETED', label: 'Completed' },
+  { value: 'AWARDED', label: 'Awarded' },
+  { value: 'CANCELED', label: 'Canceled' },
 ];
 
 const CATEGORY_FILTERS = [
@@ -91,11 +95,11 @@ function AdminCompetitionsManage() {
     ...(statusFilter && { status: statusFilter }),
     ...(categoryFilter && { category: categoryFilter }),
   };
-  const listKey = queryKeys.competitions.list(listParams);
+  const listKey = queryKeys.competitions.adminList(listParams);
 
-  const { data: listPage, isPending: loading } = useQuery({
+  const { data: listPage, isPending: loading, error: listError, refetch: retryList, isFetching: listFetching } = useQuery({
     queryKey: listKey,
-    queryFn: () => unwrap(competitionService.list(listParams)),
+    queryFn: () => unwrap(competitionService.listAdmin(listParams)),
     staleTime: staleTime.short,
   });
 
@@ -104,9 +108,9 @@ function AdminCompetitionsManage() {
 
   // Detail is a query rather than an imperative fetch, so reopening a
   // competition the admin already looked at is instant.
-  const { data: selectedComp } = useQuery({
-    queryKey: queryKeys.competitions.detail(detailId),
-    queryFn: () => unwrap(competitionService.getById(detailId)),
+  const { data: selectedComp, error: detailError, refetch: retryDetail, isFetching: detailFetching } = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(detailId),
+    queryFn: () => unwrap(competitionService.getManagedById(detailId)),
     enabled: Boolean(detailId),
     staleTime: staleTime.medium,
   });
@@ -141,7 +145,7 @@ function AdminCompetitionsManage() {
   });
 
   const confirmDelete = () => {
-    if (!pendingDelete) return;
+    if (!pendingDelete || deleteCompetition.isPending || !['UPCOMING', 'CANCELED'].includes(pendingDelete.status)) return;
     const competitionId = pendingDelete.id;
     setPendingDelete(null);
     deleteCompetition.mutate(competitionId);
@@ -244,8 +248,10 @@ function AdminCompetitionsManage() {
       </div>
 
       {/* Table */}
+      {listError && <PageError error={listError} onRetry={() => retryList()} retrying={listFetching} />}
+      {deleteCompetition.error && <PageError error={deleteCompetition.error} />}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="All competitions">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -317,17 +323,18 @@ function AdminCompetitionsManage() {
                       </Badge>
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
-                      {new Date(comp.startDate).toLocaleDateString()}
+                      {parseApiDateTime(comp.startDate).toLocaleDateString()}
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
-                      {new Date(comp.endDate).toLocaleDateString()}
+                      {parseApiDateTime(comp.endDate).toLocaleDateString()}
                     </td>
                     <td className="px-3 py-1.5 text-right">
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        className="h-11 w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => setPendingDelete(comp)}
+                        disabled={deleting || !['UPCOMING', 'CANCELED'].includes(comp.status)}
                         aria-label={`Delete ${comp.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -374,7 +381,7 @@ function AdminCompetitionsManage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 pr-6">
-              <span className="truncate">{selectedComp?.name}</span>
+              <span className="truncate">{selectedComp?.name || 'Competition details'}</span>
               {selectedComp?.status && (
                 <Badge variant={statusBadgeVariant(selectedComp.status)}>
                   {selectedComp.status}
@@ -382,6 +389,8 @@ function AdminCompetitionsManage() {
               )}
             </DialogTitle>
           </DialogHeader>
+          {detailFetching && !selectedComp && <p role="status">Loading competition details…</p>}
+          {detailError && <PageError error={detailError} onRetry={() => retryDetail()} retrying={detailFetching} />}
 
           {selectedComp && (
             <div className="space-y-4 text-sm">
@@ -403,13 +412,13 @@ function AdminCompetitionsManage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Start</p>
                   <p className="font-medium">
-                    {new Date(selectedComp.startDate).toLocaleString()}
+                    {parseApiDateTime(selectedComp.startDate).toLocaleString()}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">End</p>
                   <p className="font-medium">
-                    {new Date(selectedComp.endDate).toLocaleString()}
+                    {parseApiDateTime(selectedComp.endDate).toLocaleString()}
                   </p>
                 </div>
                 <div>

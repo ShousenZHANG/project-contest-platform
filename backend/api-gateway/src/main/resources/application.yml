@@ -8,7 +8,7 @@ spring:
   # container DOWN permanently.
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
   application:
     name: api-gateway
   data:
@@ -25,53 +25,88 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: public
+        username: ${NACOS_USERNAME:competition-platform}
+        password: ${NACOS_PASSWORD:}
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      routes:
-        - id: user-service
-          uri: lb://user-service
-          predicates:
-            - Path=/users/**
-        - id: competition-service
-          uri: lb://competition-service
-          predicates:
-            - Path=/competitions/**
-        - id: file-service
-          uri: lb://file-service
-          predicates:
-            - Path=/files/**
-        - id: registration-service
-          uri: lb://registration-service
-          predicates:
-            - Path=/registrations/**
-        - id: submission-routes
-          uri: lb://registration-service
-          predicates:
-            - Path=/submissions/**
-        - id: interaction-service
-          uri: lb://interaction-service
-          predicates:
-            - Path=/interactions/**
-        - id: team-routes
-          uri: lb://user-service
-          predicates:
-            - Path=/teams/**
-        - id: judge-service
-          uri: lb://judge-service
-          predicates:
-            - Path=/judges/**
-        - id: winners-routes
-          uri: lb://judge-service
-          predicates:
-            - Path=/winners/**
-        - id: dashboard-service
-          uri: lb://judge-service
-          predicates:
-            - Path=/dashboard/**
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+          routes:
+            - id: user-docs
+              uri: lb://user-service
+              predicates:
+                - Path=/user-service/v3/api-docs
+              filters:
+                - StripPrefix=1
+            - id: competition-docs
+              uri: lb://competition-service
+              predicates:
+                - Path=/competition-service/v3/api-docs
+              filters:
+                - StripPrefix=1
+            - id: registration-docs
+              uri: lb://registration-service
+              predicates:
+                - Path=/registration-service/v3/api-docs
+              filters:
+                - StripPrefix=1
+            - id: interaction-docs
+              uri: lb://interaction-service
+              predicates:
+                - Path=/interaction-service/v3/api-docs
+              filters:
+                - StripPrefix=1
+            - id: judge-docs
+              uri: lb://judge-service
+              predicates:
+                - Path=/judge-service/v3/api-docs
+              filters:
+                - StripPrefix=1
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/users/**
+            - id: competition-service
+              uri: lb://competition-service
+              predicates:
+                - Path=/competitions/**
+            - id: file-service
+              uri: lb://file-service
+              predicates:
+                - Path=/files/**
+            - id: registration-service
+              uri: lb://registration-service
+              predicates:
+                - Path=/registrations/**
+            - id: submission-routes
+              uri: lb://registration-service
+              predicates:
+                - Path=/submissions/**
+            - id: interaction-service
+              uri: lb://interaction-service
+              predicates:
+                - Path=/interactions/**
+            - id: team-routes
+              uri: lb://user-service
+              predicates:
+                - Path=/teams/**
+            - id: judge-service
+              uri: lb://judge-service
+              predicates:
+                - Path=/judges/**
+            - id: winners-routes
+              uri: lb://judge-service
+              predicates:
+                - Path=/winners/**
+            - id: dashboard-service
+              uri: lb://judge-service
+              predicates:
+                - Path=/dashboard/**
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
@@ -93,6 +128,7 @@ jwt:
     - GET:/competitions/public/**
     - GET:/competitions/*
     - /submissions/public/approved
+    - GET:/submissions/public/*/download
     - /submissions/is-organizer
     - /interactions/comments/list
     - /interactions/votes/count
@@ -105,30 +141,21 @@ jwt:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
-knife4j:
-  gateway:
-    enabled: true
-    routes:
+springdoc:
+  swagger-ui:
+    path: /doc.html
+    disable-swagger-default-url: true
+    urls:
       - name: User-Service
         url: /user-service/v3/api-docs
-        service-name: user-service
-        order: 1
       - name: Competition-Service
         url: /competition-service/v3/api-docs
-        service-name: competition-service
-        order: 2
       - name: Registration-Service
         url: /registration-service/v3/api-docs
-        service-name: registration-service
-        order: 3
       - name: Interaction-Service
         url: /interaction-service/v3/api-docs
-        service-name: interaction-service
-        order: 4
       - name: Judge-Service
         url: /judge-service/v3/api-docs
-        service-name: judge-service
-        order: 5
 
 management:
   endpoints:

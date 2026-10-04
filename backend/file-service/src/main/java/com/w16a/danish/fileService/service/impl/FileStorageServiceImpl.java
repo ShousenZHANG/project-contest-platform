@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.InputStreamResource;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 
@@ -29,6 +31,35 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     private final MinioClient minioClient;
     private final MinioPropertiesConfig minioPropertiesConfig;
+
+    @PostConstruct
+    public void reconcileSubmissionPrivacy() {
+        try {
+            // Also remove a historical public policy from an already-existing bucket.
+            ensureBucketExists(BucketType.SUBMISSIONS);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Cannot secure submissions bucket", ex);
+        }
+    }
+
+    @Override
+    public InputStreamResource readSubmission(String objectName) {
+        if (objectName == null || !objectName.matches("[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9]{1,10})?")) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid submission object name");
+        }
+        try {
+            ensureBucketExists(BucketType.SUBMISSIONS);
+            return new InputStreamResource(minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(BucketType.SUBMISSIONS.getBucketName()).object(objectName).build()));
+        } catch (io.minio.errors.ErrorResponseException ex) {
+            if ("NoSuchKey".equals(ex.errorResponse().code())) {
+                throw new BusinessException(HttpStatus.NOT_FOUND, "Submission file not found");
+            }
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Submission storage unavailable");
+        } catch (Exception ex) {
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Submission storage unavailable");
+        }
+    }
 
     /**
      * Uploads user avatar image to the public avatar bucket.
@@ -60,7 +91,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     /**
      * Common logic for uploading a file to a given bucket type.
-     * Returns public URL if the bucket is public, else returns the object name.
+     * Retains the raw storage URL contract for existing Feign consumers.
      */
     private String upload(BucketType bucketType, MultipartFile file) {
         try {
@@ -106,14 +137,17 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     /**
      * Ensures the bucket exists; creates it if not found.
-     * Applies a public-read bucket policy by default.
+     * Submission objects remain private; public buckets retain their read policy.
      */
     private void ensureBucketExists(BucketType bucketType) throws Exception {
         String bucketName = bucketType.getBucketName();
         boolean found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
         if (!found) {
             minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
-
+        }
+        if (!bucketType.isPublicRead()) {
+            minioClient.deleteBucketPolicy(DeleteBucketPolicyArgs.builder().bucket(bucketName).build());
+        } else if (!found) {
             // Define public read policy for the bucket
             String policy = "{\n" +
                     "  \"Version\": \"2012-10-17\",\n" +
@@ -158,8 +192,12 @@ public class FileStorageServiceImpl implements FileStorageService {
                     .object(objectName)
                     .build());
 
+        } catch (io.minio.errors.ErrorResponseException missing) {
+            if ("NoSuchKey".equals(missing.errorResponse().code()) || "NoSuchObject".equals(missing.errorResponse().code())) return;
+            log.error("File deletion failed for bucket={} object={}: {}", bucketName, objectName, missing.errorResponse().code());
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File deletion failed");
         } catch (Exception e) {
-            log.error("File deletion failed for bucket={} object={}", bucketName, objectName, e);
+            log.error("File deletion failed for bucket={} object={}: {}", bucketName, objectName, e.getClass().getSimpleName());
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File deletion failed");
         }
     }

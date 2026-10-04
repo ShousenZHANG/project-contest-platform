@@ -15,10 +15,10 @@ import java.util.List;
  * @author Eddy
  * @since 2025/04/04
  */
-@FeignClient(name = "user-service", fallback = com.w16a.danish.registration.feign.fallback.UserServiceClientFallback.class)
+@FeignClient(name = "user-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.registration.feign.fallback.UserServiceClientFallback.class)
 public interface UserServiceClient {
 
-    @PostMapping("/users/query-by-ids")
+    @PostMapping("/users/internal/query-by-ids")
     ResponseEntity<List<UserBriefVO>> getUsersByIds(
             @RequestBody List<String> userIds,
             @RequestParam(required = false) String role
@@ -27,13 +27,13 @@ public interface UserServiceClient {
     /**
      * Query a single user by user ID.
      */
-    @GetMapping("/users/{userId}")
+    @GetMapping("/users/internal/{userId}")
     ResponseEntity<UserBriefVO> getUserBriefById(@PathVariable("userId") String userId);
 
     /**
      * Fetch the creator info of the team (used for validating registration authority).
      */
-    @GetMapping("/teams/{teamId}/creator")
+    @GetMapping("/teams/internal/{teamId}/creator")
     ResponseEntity<UserBriefVO> getTeamCreator(@PathVariable("teamId") String teamId);
 
     /**
@@ -43,7 +43,7 @@ public interface UserServiceClient {
      * @param teamIds list of team IDs to query
      * @return list of team brief info
      */
-    @PostMapping("/teams/public/brief")
+    @PostMapping("/teams/internal/brief")
     ResponseEntity<List<TeamInfoVO>> getTeamBriefByIds(@RequestBody List<String> teamIds);
 
     /**

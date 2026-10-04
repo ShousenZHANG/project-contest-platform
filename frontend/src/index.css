@@ -14,7 +14,7 @@
     --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 91% 60%;          /* blue-500 (subtle accent) */
+    --secondary: 221 83% 53%;          /* blue-600: readable under white text */
     --secondary-foreground: 0 0% 100%;
 
     /* Surfaces */
@@ -27,7 +27,8 @@
 
     /* Neutrals */
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    /* Readable on muted table headers as well as the white page surface. */
+    --muted-foreground: 215 16% 44%;
     --accent: 210 40% 96%;
     --accent-foreground: 222 47% 11%;
 

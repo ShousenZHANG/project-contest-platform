@@ -22,8 +22,7 @@ public class CompetitionServiceClientFallback implements CompetitionServiceClien
 
     @Override
     public ResponseEntity<List<CompetitionResponseVO>> getCompetitionsByIds(List<String> ids) {
-        log.warn("[Fallback] competition-service unavailable — getCompetitionsByIds returning empty list");
-        return ResponseEntity.ok(Collections.emptyList());
+        throw new ServiceUnavailableException("competition-service", "getCompetitionsByIds");
     }
 
     @Override
@@ -40,8 +39,7 @@ public class CompetitionServiceClientFallback implements CompetitionServiceClien
 
     @Override
     public ResponseEntity<List<CompetitionResponseVO>> listAllCompetitions() {
-        log.warn("[Fallback] competition-service unavailable — listAllCompetitions returning empty list");
-        return ResponseEntity.ok(Collections.emptyList());
+        throw new ServiceUnavailableException("competition-service", "listAllCompetitions");
     }
 
     @Override

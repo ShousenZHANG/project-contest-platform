@@ -2,6 +2,9 @@ server:
   port: 8081
 
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   application:
     name: user-service
   datasource:
@@ -19,19 +22,25 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: public
+        username: ${NACOS_USERNAME:competition-platform}
+        password: ${NACOS_PASSWORD:}
   mail:
-    host: smtp.gmail.com
-    port: 587
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     protocol: smtp
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${MAIL_AUTH:true}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
           starttls:
-            enable: true
+            enable: ${MAIL_STARTTLS_ENABLE:true}
   data:
     redis:
       host: redis
@@ -90,7 +99,7 @@ google:
   user-info-url: https://www.googleapis.com/oauth2/v2/userinfo
 
 frontend:
-  base-url: http://localhost:3000
+  base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
   reset-password-path: /reset-password
   email-verification-path: /verify-email
   oauth-callback-path: /oauth/callback
@@ -106,11 +115,6 @@ springdoc:
     - group: "default"
       paths-to-match: "/users/**"
       packages-to-scan: com.w16a.danish.user.controller
-knife4j:
-  enable: true
-  setting:
-    language: zh_cn
-
 feign:
   circuitbreaker:
     enabled: true

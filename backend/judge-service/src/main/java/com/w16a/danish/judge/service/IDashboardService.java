@@ -2,6 +2,7 @@ package com.w16a.danish.judge.service;
 
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
+import com.w16a.danish.common.context.RequestContext;
 
 /**
  * Service interface for retrieving dashboard statistics.
@@ -20,10 +21,12 @@ public interface IDashboardService {
      * such as the number of participants, submissions, and winners.
      *
      * @param competitionId the ID of the competition
-     * @param userId the ID of the requesting user (used for permission checks)
+     * @param userId legacy ignored parameter; public reads never resolve personal information
      * @return a {@link CompetitionDashboardVO} containing competition-related statistics
      */
     CompetitionDashboardVO getCompetitionStatistics(String competitionId, String userId);
+
+    CompetitionDashboardVO getManagedCompetitionStatistics(RequestContext ctx, String competitionId);
 
     /**
      * Retrieves platform-wide aggregated statistics,

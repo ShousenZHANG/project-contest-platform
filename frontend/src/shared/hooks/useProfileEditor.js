@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 import { userService } from '../../services/userService';
 import { queryKeys, staleTime } from '../../api/queryKeys';
@@ -26,6 +27,7 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 export function useProfileEditor(options = {}) {
   const { onDeleted } = options;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -120,7 +122,13 @@ export function useProfileEditor(options = {}) {
 
   const updateProfile = useMutation({
     mutationFn: (data) => unwrap(userService.updateProfile(data)),
-    onSuccess: () => {
+    onSuccess: (_profile, submitted) => {
+      if (submitted.password?.trim()) {
+        toast.success('Password updated. Please sign in again with your new password.');
+        AuthTokenManager.clearSession();
+        navigate('/login', { replace: true });
+        return;
+      }
       toast.success('Profile updated successfully');
       invalidateProfile();
     },
@@ -157,11 +165,12 @@ export function useProfileEditor(options = {}) {
     onError: (error) => toast.error(toMessage(error)),
   });
 
-  /** Saves the form, minus the read-only role, keeping the current avatar. */
+  /** Avatar changes use the upload endpoint; the form updates profile fields only. */
   const saveProfile = useCallback(() => {
+    if (updateProfile.isPending) return;
     const { role, ...profileData } = formData;
-    updateProfile.mutate({ ...profileData, avatarUrl });
-  }, [formData, avatarUrl, updateProfile]);
+    updateProfile.mutate(profileData);
+  }, [formData, updateProfile]);
 
   const saveAvatar = useCallback(() => {
     if (tempAvatar) uploadAvatar.mutate(tempAvatar);

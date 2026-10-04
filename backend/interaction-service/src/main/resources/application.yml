@@ -2,6 +2,9 @@ server:
   port: 8085
 
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   # Votes and comments are written straight to MySQL — no events are emitted,
   # so the inherited AMQP starter has nothing to connect to.
   # None of these use Redis — the starter arrives from the parent POM. Without
@@ -9,9 +12,9 @@ spring:
   # long enough for the container healthcheck to time out.
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
-      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+      - org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration
   application:
     name: interaction-service
   datasource:
@@ -29,7 +32,10 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        namespace: public
+        username: ${NACOS_USERNAME:competition-platform}
+        password: ${NACOS_PASSWORD:}
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
@@ -50,11 +56,6 @@ springdoc:
     - group: "default"
       paths-to-match: "/interactions/**"
       packages-to-scan: com.w16a.danish.interaction.controller
-knife4j:
-  enable: true
-  setting:
-    language: zh_cn
-
 feign:
   circuitbreaker:
     enabled: true

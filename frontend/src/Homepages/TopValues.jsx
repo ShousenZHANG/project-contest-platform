@@ -1,98 +1,75 @@
-/**
- * TopValues.jsx
- *
- * Featured contests section on the homepage. Migrated from MUI/CSS to shadcn +
- * Tailwind grid. Uses ContestCard for each item.
- *
- * Developer: Beiqi Dai (migrated)
- */
-
+import { parseApiDateTime } from '@/lib/dateTime';
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles, Trophy } from 'lucide-react';
 import ContestCard from './ContestCard';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
+import { Button } from '../components/ui/button';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import EmptyState from '../shared/components/EmptyState';
 
-const sampleValues = [
-  {
-    id: 1,
-    title: 'Car Design Contest',
-    organizer: 'TechCarLead',
-    date: '2025.04.10 ~ 05.10',
-    description: 'Build an amazing car design!',
-    category: 'Design',
-    votes: 12,
-    image:
-      'https://i.pinimg.com/236x/c1/45/d8/c145d86ee6d5542020ca41c36113687d.jpg',
-  },
-  {
-    id: 2,
-    title: 'Music Contest',
-    organizer: 'Music Master',
-    date: '2025.05.01 ~ 06.01',
-    description: 'Create an innovative music!',
-    category: 'Music',
-    votes: 34,
-    image:
-      'https://i.pinimg.com/474x/34/13/b2/3413b2fa409dc396c12527fc349eea70.jpg',
-  },
-  {
-    id: 3,
-    title: 'Cocktail Challenge',
-    organizer: 'Wine Hub',
-    date: '2025.06.15 ~ 07.15',
-    description: 'Showcase your cocktail skills!',
-    category: 'Food',
-    votes: 56,
-    image:
-      'https://i.pinimg.com/236x/6a/b7/c2/6ab7c2657078ee3dc1dd1aaaaf7316b2.jpg',
-  },
-  {
-    id: 4,
-    title: 'Story Writing Challenge',
-    organizer: 'Literature Hub',
-    date: '2025.06.15 ~ 2025.07.15',
-    description: 'Craft a compelling short story!',
-    category: 'Literature',
-    votes: 56,
-    image:
-      'https://i.pinimg.com/236x/43/0d/e5/430de57a137f68ab0c3bb2ecce4cdbcb.jpg',
-  },
-];
-
-function TopValues() {
+export default function TopValues() {
+  const params = { page: 1, size: 4 };
+  const query = useQuery({
+    queryKey: queryKeys.competitions.publicList(params),
+    queryFn: () => unwrap(competitionService.list(params)),
+    staleTime: staleTime.short,
+  });
+  const items = query.data?.data || [];
   return (
-    <section className="relative bg-background py-24">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-14">
-          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium mb-4">
-            <Sparkles className="h-3.5 w-3.5" />
-            Featured this week
+    <section className="bg-background px-4 py-16 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-3 flex items-center gap-2 text-sm font-medium text-primary">
+              <Sparkles aria-hidden="true" className="h-4 w-4" />
+              Explore competitions
+            </p>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              Find your next challenge
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Real competitions, clear requirements, and one place to get started.
+            </p>
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-3">
-            Discover Top Opportunities
-          </h2>
-          <p className="text-lg text-muted-foreground">
-            Explore a world of competitions and unlock your potential.
-          </p>
+          <Button asChild variant="outline">
+            <Link to="/contest-list">Browse all contests</Link>
+          </Button>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {sampleValues.map((item, index) => {
-            const contest = {
-              id: index,
-              title: item.title,
-              description: item.description,
-              organizer: item.organizer,
-              date: item.date,
-              votes: item.votes,
-              category: item.category,
-            };
-
-            return <ContestCard key={index} contest={contest} />;
-          })}
-        </div>
+        {query.isPending ? (
+          <PageSkeleton rows={2} />
+        ) : query.error ? (
+          <PageError
+            error={query.error}
+            onRetry={() => query.refetch()}
+            retrying={query.isFetching}
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Trophy}
+            title="New competitions are on their way"
+            description="Browse the catalogue to check for updates."
+          />
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {items.map((item) => (
+              <ContestCard
+                key={item.id}
+                contest={{
+                  ...item,
+                  title: item.name,
+                  image: item.imageUrls?.[0],
+                  date: `${parseApiDateTime(item.startDate).toLocaleDateString()} – ${parseApiDateTime(item.endDate).toLocaleDateString()}`,
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
 }
-
-export default TopValues;

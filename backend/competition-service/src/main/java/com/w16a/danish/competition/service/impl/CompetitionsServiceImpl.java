@@ -10,7 +10,9 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.competition.notify.CompetitionNotifier;
+import com.w16a.danish.competition.notify.CompetitionMediaFiles;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
+import com.w16a.danish.competition.domain.CompetitionLifecycle;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
@@ -37,12 +39,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -57,7 +59,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Competitions> implements ICompetitionsService {
 
-    private static final List<String> VIDEO_CONTENT_TYPES = List.of("video/mp4", "video/avi", "video/mov");
+    private static final List<String> VIDEO_CONTENT_TYPES = List.of("video/mp4", "video/avi", "video/mov", "video/x-msvideo", "video/quicktime");
     private static final List<String> IMAGE_CONTENT_TYPES = List.of("image/jpeg", "image/png", "image/gif");
 
     private final FileServiceClient fileServiceClient;
@@ -65,6 +67,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     private final UserServiceClient userServiceClient;
     private final ICompetitionJudgesService competitionJudgesService;
     private final CompetitionNotifier competitionNotifier;
+    private final CompetitionMediaFiles mediaFiles;
 
     @Override
     @Transactional
@@ -72,6 +75,18 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         log.info("Creating competition: name='{}', userId={}, role={}", competitionDTO.getName(), ctx.userId(), ctx.role());
         // validate user role
         ctx.requireAnyRole("ADMIN", "ORGANIZER");
+
+        if (StrUtil.isNotBlank(competitionDTO.getIntroVideoUrl()) ||
+                (competitionDTO.getImageUrls() != null && !competitionDTO.getImageUrls().isEmpty())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Upload competition media through its media endpoint");
+        }
+
+        CompetitionLifecycle.requireDates(competitionDTO.getStartDate(), competitionDTO.getEndDate());
+        CompetitionLifecycle.requireCriteria(competitionDTO.getScoringCriteria());
+        if (StrUtil.isNotBlank(competitionDTO.getStatus()) &&
+                CompetitionStatus.fromString(competitionDTO.getStatus()) != CompetitionStatus.UPCOMING) {
+            throw new BusinessException(HttpStatus.CONFLICT, "A new competition must start as UPCOMING");
+        }
 
         // check if competition name already exists
         boolean exists = lambdaQuery()
@@ -87,15 +102,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         Competitions competition = new Competitions();
         BeanUtils.copyProperties(competitionDTO, competition);
         competition.setId(StrUtil.uuid());
-        if (competitionDTO.getStatus() != null) {
-            try {
-                competition.setStatus(CompetitionStatus.fromString(competitionDTO.getStatus()));
-            } catch (IllegalArgumentException e) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid competition status: " + competitionDTO.getStatus());
-            }
-        } else {
-            competition.setStatus(CompetitionStatus.UPCOMING);
-        }
+        competition.setStatus(CompetitionStatus.UPCOMING);
         save(competition);
 
         // Insert the user-competition mapping (organizer relationship) into competition_organizers table
@@ -115,6 +122,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Transactional
     public void deleteCompetition(String competitionId, RequestContext ctx) {
         ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
 
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -132,6 +140,11 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             }
         }
 
+        if (competition.getStatus() != CompetitionStatus.UPCOMING && competition.getStatus() != CompetitionStatus.CANCELED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Cancel the competition before deleting it; completed results are retained");
+        }
+        mediaFiles.deleteAfterCommit(competition.getIntroVideoUrl());
+        Optional.ofNullable(competition.getImageUrls()).orElse(List.of()).forEach(mediaFiles::deleteAfterCommit);
         competitionOrganizersService.remove(new LambdaQueryWrapper<CompetitionOrganizers>().eq(CompetitionOrganizers::getCompetitionId, competitionId));
 
         boolean isRemoved = this.removeById(competitionId);
@@ -153,7 +166,63 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     }
 
     @Override
+    public CompetitionResponseVO getPublicCompetitionById(String competitionId) {
+        var competition = getCompetitionById(competitionId);
+        if (!Boolean.TRUE.equals(competition.getIsPublic())) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
+        return competition;
+    }
+
+    @Override
+    public CompetitionResponseVO getManagedCompetitionById(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER", "JUDGE", "PARTICIPANT");
+        var competition = getCompetitionById(competitionId);
+        if (!Boolean.TRUE.equals(competition.getIsPublic()) && !canReadPrivateCompetition(competitionId, ctx)) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
+        return competition;
+    }
+
+    @Override
+    public List<CompetitionResponseVO> getVisibleCompetitionsByIds(List<String> ids, RequestContext ctx) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER", "JUDGE", "PARTICIPANT");
+        return getCompetitionsByIds(ids).stream()
+                .filter(c -> Boolean.TRUE.equals(c.getIsPublic()) || canReadPrivateCompetition(c.getId(), ctx)).toList();
+    }
+
+    private boolean canReadPrivateCompetition(String competitionId, RequestContext ctx) {
+        if (ctx.isAdmin()) return true;
+        return switch (ctx.role().toUpperCase(java.util.Locale.ROOT)) {
+            case "ORGANIZER" -> isUserOrganizer(competitionId, ctx.userId());
+            case "JUDGE" -> isUserJudge(competitionId, ctx.userId());
+            case "PARTICIPANT" -> baseMapper.isRegisteredEntrant(competitionId, ctx.userId());
+            default -> false;
+        };
+    }
+
+    @Override
     public PageResponse<CompetitionResponseVO> listCompetitions(String keyword, String status, String category, int page, int size) {
+        return listCompetitions(keyword, status, category, null, page, size);
+    }
+
+    @Override
+    public PageResponse<CompetitionResponseVO> listCompetitions(String keyword, String status, String category, String participationType, int page, int size) {
+        return listCompetitions(keyword, status, category, participationType, page, size, true);
+    }
+
+    @Override
+    public PageResponse<CompetitionResponseVO> listCompetitionsAdmin(RequestContext ctx, String keyword, String status,
+            String category, String participationType, int page, int size) {
+        ctx.requireAnyRole("ADMIN");
+        return listCompetitions(keyword, status, category, participationType, page, size, false);
+    }
+
+    private PageResponse<CompetitionResponseVO> listCompetitions(String keyword, String status, String category,
+            String participationType, int page, int size, boolean publicOnly) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
         LambdaQueryWrapper<Competitions> wrapper = new LambdaQueryWrapper<>();
 
         if (StrUtil.isNotBlank(keyword)) {
@@ -161,14 +230,22 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         }
 
         if (StrUtil.isNotBlank(status)) {
-            wrapper.eq(Competitions::getStatus, status);
+            wrapper.eq(Competitions::getStatus, CompetitionStatus.fromString(status));
+        }
+
+        if (StrUtil.isNotBlank(participationType)) {
+            try {
+                wrapper.eq(Competitions::getParticipationType, com.w16a.danish.common.domain.enums.ParticipationType.valueOf(participationType));
+            } catch (IllegalArgumentException invalid) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid participation type");
+            }
         }
 
         if (StrUtil.isNotBlank(category)) {
             wrapper.eq(Competitions::getCategory, category);
         }
 
-        wrapper.eq(Competitions::getIsPublic, true);
+        if (publicOnly) wrapper.eq(Competitions::getIsPublic, true);
 
         wrapper.orderByDesc(Competitions::getCreatedAt);
 
@@ -195,6 +272,11 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public CompetitionResponseVO updateCompetition(String competitionId, RequestContext ctx, CompetitionUpdateDTO updateDTO) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        if (updateDTO.getIntroVideoUrl() != null || updateDTO.getImageUrls() != null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Use the media endpoints to modify competition assets");
+        }
+        requireMutableRun(competitionId);
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
@@ -211,11 +293,25 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to update this competition");
         }
 
-        BeanUtil.copyProperties(updateDTO, competition, CopyOptions.create().ignoreNullValue());
-
-        if (StrUtil.isNotBlank(updateDTO.getStatus())) {
-            competition.setStatus(CompetitionStatus.fromString(updateDTO.getStatus()));
+        if (competition.getStatus() == CompetitionStatus.AWARDED || competition.getStatus() == CompetitionStatus.CANCELED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Finished competition is immutable");
         }
+        if (competition.getStatus() != CompetitionStatus.UPCOMING && (
+                changed(updateDTO.getScoringCriteria(), competition.getScoringCriteria()) ||
+                changed(updateDTO.getParticipationType(), competition.getParticipationType()) ||
+                changed(updateDTO.getAllowedSubmissionTypes(), competition.getAllowedSubmissionTypes()) ||
+                changed(updateDTO.getStartDate(), competition.getStartDate()) ||
+                changed(updateDTO.getEndDate(), competition.getEndDate()))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Dates, participation type and criteria are frozen after opening");
+        }
+        CompetitionStatus target = StrUtil.isNotBlank(updateDTO.getStatus())
+                ? CompetitionStatus.fromString(updateDTO.getStatus()) : competition.getStatus();
+        CompetitionLifecycle.requireTransition(competition.getStatus(), target, false);
+        if (updateDTO.getScoringCriteria() != null) CompetitionLifecycle.requireCriteria(updateDTO.getScoringCriteria());
+        CompetitionLifecycle.requireDates(updateDTO.getStartDate() == null ? competition.getStartDate() : updateDTO.getStartDate(),
+                updateDTO.getEndDate() == null ? competition.getEndDate() : updateDTO.getEndDate());
+        BeanUtil.copyProperties(updateDTO, competition, CopyOptions.create().ignoreNullValue().setIgnoreProperties("status"));
+        competition.setStatus(target);
 
         competition.setUpdatedAt(null);
 
@@ -232,10 +328,13 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public CompetitionResponseVO uploadCompetitionMedia(String competitionId, RequestContext ctx, String mediaType, MultipartFile file) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
+        requireEditableMedia(competition);
 
         if ("ORGANIZER".equalsIgnoreCase(ctx.role())) {
             boolean isOrganizer = competitionOrganizersService.lambdaQuery()
@@ -258,27 +357,31 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             if (!VIDEO_CONTENT_TYPES.contains(contentType)) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid video type. Allowed: MP4, AVI, MOV");
             }
-            deleteFileByUrl(competition.getIntroVideoUrl());
         } else if ("IMAGE".equalsIgnoreCase(mediaType)) {
             if (!IMAGE_CONTENT_TYPES.contains(contentType)) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid image type. Allowed: JPG, PNG, GIF");
+            }
+            if (competition.getImageUrls() != null && competition.getImageUrls().size() >= 20) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "At most 20 competition images are allowed");
             }
         } else {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid media type. Supported: VIDEO or IMAGE");
         }
 
         String uploadedUrl = fileServiceClient.uploadCompetitionPromo(file).getBody();
+        mediaFiles.watchUpload(uploadedUrl);
 
         if ("VIDEO".equalsIgnoreCase(mediaType)) {
+            mediaFiles.deleteAfterCommit(competition.getIntroVideoUrl());
             competition.setIntroVideoUrl(uploadedUrl);
         } else {
-            List<String> imageList = Optional.ofNullable(competition.getImageUrls()).orElse(new ArrayList<>());
+            List<String> imageList = new ArrayList<>(Optional.ofNullable(competition.getImageUrls()).orElse(List.of()));
             imageList.add(uploadedUrl);
             competition.setImageUrls(imageList);
         }
 
         competition.setUpdatedAt(null);
-        this.updateById(competition);
+        if (!this.updateById(competition)) throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save competition media");
 
         CompetitionResponseVO responseVO = new CompetitionResponseVO();
         BeanUtil.copyProperties(competition, responseVO);
@@ -288,10 +391,13 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public CompetitionResponseVO deleteCompetitionImage(String competitionId, RequestContext ctx, String imageUrl) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
+        requireEditableMedia(competition);
 
         if ("ORGANIZER".equalsIgnoreCase(ctx.role())) {
             boolean isOrganizer = competitionOrganizersService.lambdaQuery()
@@ -305,16 +411,16 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to modify this competition");
         }
 
-        List<String> currentImages = Optional.ofNullable(competition.getImageUrls()).orElse(new ArrayList<>());
+        List<String> currentImages = new ArrayList<>(Optional.ofNullable(competition.getImageUrls()).orElse(List.of()));
         if (!currentImages.remove(imageUrl)) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Image URL not found in competition");
         }
 
-        deleteFileByUrl(imageUrl);
+        mediaFiles.deleteAfterCommit(imageUrl);
 
         competition.setImageUrls(currentImages);
         competition.setUpdatedAt(null);
-        this.updateById(competition);
+        if (!this.updateById(competition)) throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save competition media");
 
         CompetitionResponseVO responseVO = new CompetitionResponseVO();
         BeanUtil.copyProperties(competition, responseVO);
@@ -323,7 +429,28 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     public PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size) {
+        return listCompetitionsByOrganizer(ctx, page, size, null, null, null, null);
+    }
+
+    @Override
+    public PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size,
+            String keyword, String status, String category, String participationType) {
         ctx.requireAnyRole("ORGANIZER");
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
+        LambdaQueryWrapper<Competitions> wrapper = new LambdaQueryWrapper<>();
+        if (StrUtil.isNotBlank(keyword)) wrapper.like(Competitions::getName, keyword.trim());
+        if (StrUtil.isNotBlank(status)) wrapper.eq(Competitions::getStatus, CompetitionStatus.fromString(status));
+        if (StrUtil.isNotBlank(category)) wrapper.eq(Competitions::getCategory, category);
+        if (StrUtil.isNotBlank(participationType)) {
+            try {
+                wrapper.eq(Competitions::getParticipationType,
+                        com.w16a.danish.common.domain.enums.ParticipationType.valueOf(participationType));
+            } catch (IllegalArgumentException invalid) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid participation type");
+            }
+        }
 
         List<String> competitionIds = competitionOrganizersService.lambdaQuery()
                 .eq(CompetitionOrganizers::getUserId, ctx.userId())
@@ -342,7 +469,6 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
                     .build();
         }
 
-        LambdaQueryWrapper<Competitions> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(Competitions::getId, competitionIds)
                 .orderByDesc(Competitions::getCreatedAt);
 
@@ -365,10 +491,13 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public CompetitionResponseVO deleteIntroVideo(String competitionId, RequestContext ctx) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
         }
+        requireEditableMedia(competition);
 
         if (!isAuthorizedToModify(competitionId, ctx.userId(), ctx.role())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to modify this competition");
@@ -379,7 +508,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             throw new BusinessException(HttpStatus.NOT_FOUND, "No intro video to delete");
         }
 
-        deleteFileByUrl(introVideoUrl);
+        mediaFiles.deleteAfterCommit(introVideoUrl);
 
         UpdateWrapper<Competitions> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq("id", competitionId)
@@ -402,6 +531,7 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         if (CollUtil.isEmpty(ids)) {
             return Collections.emptyList();
         }
+        if (ids.size() > 100) throw new BusinessException(HttpStatus.BAD_REQUEST, "At most 100 competition IDs are allowed");
 
         List<Competitions> competitions = this.lambdaQuery()
                 .in(Competitions::getId, ids)
@@ -419,6 +549,8 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public void assignJudges(String competitionId, RequestContext ctx, AssignJudgesDTO dto) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
         // Step 1: Validate competition existence
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -447,6 +579,19 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
         if (users.isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "No valid users found for provided emails.");
+        }
+
+        if (competition.getStatus() == CompetitionStatus.AWARDED || competition.getStatus() == CompetitionStatus.CANCELED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Judge assignments are locked for this competition");
+        }
+        for (UserBriefVO user : users) {
+            if (!"JUDGE".equalsIgnoreCase(user.getRole()) || isUserOrganizer(competitionId, user.getId())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Only Judge accounts outside the organizing team can be assigned");
+            }
+        }
+        long requested = dto.getJudgeEmails().stream().map(e -> e.trim().toLowerCase(java.util.Locale.ROOT)).distinct().count();
+        if (users.size() != requested) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Every requested Judge account must exist");
         }
 
         // Step 5: Get already assigned judges to avoid duplication
@@ -493,6 +638,9 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
 
     @Override
     public PageResponse<UserBriefVO> listAssignedJudges(String competitionId, RequestContext ctx, int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
         // Step 1: Check if competition exists
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -523,10 +671,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             // No assigned judges, return empty result
             return PageResponse.<UserBriefVO>builder()
                     .data(Collections.emptyList())
-                    .total(0)
+                    .total(resultPage.getTotal())
                     .page(page)
                     .size(size)
-                    .pages(0)
+                    .pages(resultPage.getPages())
                     .build();
         }
 
@@ -549,6 +697,8 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     @Override
     @Transactional
     public void removeJudge(String competitionId, RequestContext ctx, String judgeId) {
+        ctx.requireAnyRole("ADMIN", "ORGANIZER");
+        requireMutableRun(competitionId);
         // Step 1: Check if competition exists
         Competitions competition = this.getById(competitionId);
         if (competition == null) {
@@ -606,6 +756,12 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     }
 
     @Override
+    public boolean isUserJudge(String competitionId, String userId) {
+        return competitionJudgesService.lambdaQuery().eq(CompetitionJudges::getCompetitionId, competitionId)
+                .eq(CompetitionJudges::getUserId, userId).exists();
+    }
+
+    @Override
     public List<CompetitionResponseVO> listAllCompetitions() {
         List<Competitions> competitions = this.lambdaQuery()
                 .eq(Competitions::getIsPublic, true)
@@ -644,6 +800,10 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid competition status: " + newStatus);
         }
 
+        if (validatedStatus != CompetitionStatus.AWARDED) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Internal status writes can only finish awarding");
+        }
+        CompetitionLifecycle.requireTransition(competition.getStatus(), validatedStatus, true);
         competition.setStatus(validatedStatus);
         competition.setUpdatedAt(LocalDateTime.now());
         boolean updated = this.updateById(competition);
@@ -658,6 +818,24 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
     }
 
 
+    private static boolean changed(Object replacement, Object current) {
+        return replacement != null && !Objects.equals(replacement, current);
+    }
+
+    private void requireMutableRun(String competitionId) {
+        baseMapper.ensureLifecycleLock(competitionId);
+        if (baseMapper.lockLifecycle(competitionId) != null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Awards have been finalized; competition changes are locked");
+        }
+    }
+
+    private static void requireEditableMedia(Competitions competition) {
+        if (competition.getStatus() == CompetitionStatus.COMPLETED || competition.getStatus() == CompetitionStatus.AWARDED
+                || competition.getStatus() == CompetitionStatus.CANCELED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Competition media is locked after the competition ends");
+        }
+    }
+
     private boolean isAuthorizedToModify(String competitionId, String userId, String userRole) {
         if ("ADMIN".equalsIgnoreCase(userRole)) {
             return true;
@@ -671,14 +849,4 @@ public class CompetitionsServiceImpl extends ServiceImpl<CompetitionsMapper, Com
         return false;
     }
 
-    private void deleteFileByUrl(String fileUrl) {
-        if (StrUtil.isBlank(fileUrl)) {
-            return;
-        }
-        URI uri = URI.create(fileUrl);
-        String[] parts = uri.getPath().substring(1).split("/", 2);
-        if (parts.length == 2) {
-            fileServiceClient.deleteFile(parts[0], parts[1]);
-        }
-    }
 }

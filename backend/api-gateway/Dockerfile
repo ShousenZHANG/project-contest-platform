@@ -1,8 +1,8 @@
 # -----------------------------
 # Stage 1: Build the application
 # -----------------------------
-# Use Maven with Eclipse Temurin JDK 23 on Alpine Linux for a lightweight build stage
-FROM maven:3.9.9-eclipse-temurin-23-alpine AS builder
+# Use Maven with Eclipse Temurin JDK 25 on Alpine Linux for a lightweight build stage
+FROM maven:3.9.11-eclipse-temurin-25-alpine AS builder
 
 # Set working directory inside the container
 WORKDIR /app
@@ -18,8 +18,8 @@ RUN mvn -f /app/pom.xml -pl backend/api-gateway -am clean package -DskipTests
 # -----------------------------
 # Stage 2: Create a minimal runtime image
 # -----------------------------
-# Use Eclipse Temurin JRE 23 on Alpine for lightweight runtime
-FROM eclipse-temurin:23-jre-alpine-3.21
+# Use Eclipse Temurin JRE 25 on Alpine for lightweight runtime
+FROM eclipse-temurin:25-jre-alpine
 
 # Set working directory for runtime container
 WORKDIR /app

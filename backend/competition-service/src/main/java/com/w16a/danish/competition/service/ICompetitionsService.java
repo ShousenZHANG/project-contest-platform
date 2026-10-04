@@ -50,6 +50,12 @@ public interface ICompetitionsService extends IService<Competitions> {
      */
     CompetitionResponseVO getCompetitionById(String competitionId);
 
+    CompetitionResponseVO getPublicCompetitionById(String competitionId);
+
+    CompetitionResponseVO getManagedCompetitionById(String competitionId, RequestContext ctx);
+
+    List<CompetitionResponseVO> getVisibleCompetitionsByIds(List<String> ids, RequestContext ctx);
+
     /**
      * List competitions with optional filters.
      *
@@ -61,6 +67,13 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @return Paginated list of competitions.
      */
     PageResponse<CompetitionResponseVO> listCompetitions(String keyword, String status, String category, int page, int size);
+
+    PageResponse<CompetitionResponseVO> listCompetitions(String keyword, String status, String category, String participationType, int page, int size);
+
+    PageResponse<CompetitionResponseVO> listCompetitionsAdmin(RequestContext ctx, String keyword, String status,
+            String category, String participationType, int page, int size);
+
+    boolean isUserJudge(String competitionId, String userId);
 
     /**
      * Update competition information.
@@ -106,6 +119,9 @@ public interface ICompetitionsService extends IService<Competitions> {
      * @return Paginated list of competitions.
      */
     PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size);
+
+    PageResponse<CompetitionResponseVO> listCompetitionsByOrganizer(RequestContext ctx, int page, int size,
+            String keyword, String status, String category, String participationType);
 
     /**
      * Delete the intro video of a competition.

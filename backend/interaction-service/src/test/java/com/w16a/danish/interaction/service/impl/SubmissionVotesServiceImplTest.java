@@ -28,6 +28,9 @@ class SubmissionVotesServiceImplTest {
     @Mock
     private SubmissionVotesMapper submissionVotesMapper;
 
+    @Mock
+    private com.w16a.danish.interaction.service.PublicSubmissionAccess submissions;
+
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
@@ -54,6 +57,19 @@ class SubmissionVotesServiceImplTest {
     }
 
     @Test
+    void privateOrUnapprovedSubmissionBlocksEveryVoteEntryPointBeforeReadingOrWritingVotes() {
+        doThrow(new BusinessException(org.springframework.http.HttpStatus.NOT_FOUND, "Submission not found"))
+                .when(submissions).requireVisible("s1");
+        assertThatThrownBy(() -> submissionVotesService.vote("s1", "u1")).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> submissionVotesService.unvote("s1", "u1")).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> submissionVotesService.countVotes("s1")).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> submissionVotesService.hasVoted("s1", "u1")).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(submissionVotesMapper);
+        verify(submissionVotesService, never()).lambdaQuery();
+        verify(submissionVotesService, never()).lambdaUpdate();
+    }
+
+    @Test
     @DisplayName("❌ Vote fails when already voted")
     void testVoteAlreadyVoted() {
         when(submissionVotesService.lambdaQuery().exists()).thenReturn(true);
@@ -61,6 +77,16 @@ class SubmissionVotesServiceImplTest {
         assertThatThrownBy(() -> submissionVotesService.vote("submissionId", "userId"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("already voted");
+    }
+
+    @Test
+    void aConcurrentDuplicateVoteIsStillAConflict() {
+        when(submissionVotesService.lambdaQuery().exists()).thenReturn(false);
+        when(submissionVotesMapper.insert(any(SubmissionVotes.class)))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("uq_submission_user"));
+        assertThatThrownBy(() -> submissionVotesService.vote("s1", "u1"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(org.springframework.http.HttpStatus.CONFLICT));
     }
 
     @Test
@@ -107,7 +133,7 @@ class SubmissionVotesServiceImplTest {
     @Test
     @DisplayName("✅ Count all votes across all submissions")
     void testCountAllVotes() {
-        when(submissionVotesService.lambdaQuery().count()).thenReturn(10L);
+        when(submissionVotesMapper.countPublicVotes()).thenReturn(10L);
 
         long totalVotes = submissionVotesService.countAllVotes();
 

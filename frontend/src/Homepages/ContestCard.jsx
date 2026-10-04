@@ -1,170 +1,68 @@
-/**
- * ContestCard.jsx
- *
- * Featured contest card. shadcn/ui Card + Tailwind. When a contest has no
- * uploaded image, a deterministic brand-family gradient cover is rendered
- * instead of relying on fragile external image URLs.
- *
- * Behavior preserved: clicking the card fires onCardClick(contest), Vote hits
- * POST /interactions/votes, Join hits POST /registrations/{id}. Auth
- * required for both — toast on success/error.
- */
-
-import React, { useState } from 'react';
-import { toast } from 'sonner';
-import { ThumbsUp, Flag, Tag, Calendar, User } from 'lucide-react';
-
-import apiClient from '../api/apiClient';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Calendar, ArrowRight } from 'lucide-react';
 import { coverGradient, initials } from '../lib/coverGradient';
-import { Button } from '../components/ui/button';
 import { Card, CardContent, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import AuthTokenManager from '@/auth/authTokenManager';
+import { Button } from '../components/ui/button';
 
-
-function ContestCard({ contest, onCardClick }) {
-  const [voteCount, setVoteCount] = useState(contest.votes ?? 0);
-
-  const handleCardClick = () => {
-    if (typeof onCardClick === 'function') onCardClick(contest);
-  };
-
-  const handleVoteClick = async (e) => {
-    e.stopPropagation();
-
-    const token = AuthTokenManager.getToken();
-    if (!token) {
-      toast.error('Please log in first');
-      return;
-    }
-
-    try {
-      // POST /interactions/votes casts the vote. /votes/count is a GET that
-      // reads the tally back — posting to it returned 405 every time.
-      await apiClient.post('/interactions/votes', null, {
-        params: { submissionId: contest.id },
-      });
-      setVoteCount((v) => v + 1);
-      toast.success('Vote submitted');
-    } catch (error) {
-      const errMsg =
-        error.response?.data?.error || error.response?.data?.message;
-      if (errMsg === 'Already voted') {
-        toast.error('You have already voted');
-      } else {
-        toast.error('Voting failed. Please try again.');
-      }
-    }
-  };
-
-  const handleJoinClick = async (e) => {
-    e.stopPropagation();
-
-    const token = AuthTokenManager.getToken();
-    if (!token) {
-      toast.error('Please log in first');
-      return;
-    }
-
-    try {
-      await apiClient.post(`/registrations/${contest.id}`);
-      toast.success('Joined successfully');
-    } catch (error) {
-      const errMsg =
-        error.response?.data?.error || error.response?.data?.message;
-      if (errMsg === 'Already JOIN!') {
-        toast.error('You have already joined');
-      } else {
-        toast.error('Joining failed. Please try again.');
-      }
-    }
-  };
-
+/** A real competition has one primary action: read its requirements. */
+export default function ContestCard({ contest }) {
   return (
-    <Card
-      onClick={handleCardClick}
-      className="group flex flex-col overflow-hidden cursor-pointer border-border/60 motion-card"
-    >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+    <Card className="group flex h-full min-w-0 flex-col overflow-hidden border-border/60 motion-card">
+      <div className="relative aspect-[16/9] overflow-hidden bg-muted">
         {contest.image ? (
-          <img
-            src={contest.image}
-            alt={contest.title}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          <img src={contest.image} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div
             aria-hidden="true"
-            className="relative h-full w-full transition-transform duration-500 group-hover:scale-105"
+            className="flex h-full items-center justify-center"
             style={{ background: coverGradient(contest.title) }}
           >
-            <div className="absolute inset-0 bg-grid opacity-20 mix-blend-overlay" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-5xl font-bold tracking-tight text-white/90 drop-shadow-sm">
-                {initials(contest.title)}
-              </span>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+            <span className="text-5xl font-bold text-white/90">{initials(contest.title)}</span>
           </div>
         )}
-        {contest.category && (
-          <Badge className="absolute top-3 left-3 bg-background/90 text-foreground hover:bg-background backdrop-blur">
-            <Tag className="mr-1 h-3 w-3" />
-            {contest.category}
-          </Badge>
-        )}
+        <Badge
+          variant="secondary"
+          className="absolute left-3 top-3 max-w-[90%] bg-background text-foreground"
+        >
+          {contest.category || 'Competition'}
+        </Badge>
       </div>
-
-      <CardContent className="flex-1 p-5 space-y-3">
-        <h3 className="text-lg font-semibold tracking-tight line-clamp-2 group-hover:text-primary transition-colors">
-          {contest.title}
-        </h3>
-
-        <div className="space-y-1.5 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <User className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{contest.organizer}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{contest.date}</span>
-          </div>
+      <CardContent className="flex-1 space-y-3 p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={contest.status === 'ONGOING' ? 'success' : 'outline'}>
+            {contest.status}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {contest.participationType === 'TEAM' ? 'Team entry' : 'Individual entry'}
+          </span>
         </div>
-
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {contest.description}
+        <h3 className="break-words text-lg font-semibold">
+          <Link
+            className="rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            to={`/publiccontest-detail/${contest.id}`}
+          >
+            {contest.title}
+          </Link>
+        </h3>
+        <p className="line-clamp-2 text-sm text-muted-foreground">{contest.description}</p>
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Calendar aria-hidden="true" className="h-4 w-4 shrink-0" />
+          {contest.date}
         </p>
       </CardContent>
-
-      <CardFooter className="p-5 pt-0 flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleVoteClick}
-          className="flex-1"
-          aria-label={`Vote for ${contest.title} — ${voteCount} votes so far`}
-        >
-          <ThumbsUp className="h-4 w-4" />
-          <span>Vote</span>
-          <span className="ml-auto text-xs font-medium text-muted-foreground">
-            {voteCount}
-          </span>
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleJoinClick}
-          className="flex-1"
-          aria-label={`Join ${contest.title}`}
-        >
-          <Flag className="h-4 w-4" />
-          Join
+      <CardFooter className="p-5 pt-0">
+        <Button asChild variant="outline" className="w-full min-h-11">
+          <Link
+            to={`/publiccontest-detail/${contest.id}`}
+            aria-label={`View details for ${contest.title}`}
+          >
+            View details
+            <ArrowRight aria-hidden="true" />
+          </Link>
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
-export default ContestCard;

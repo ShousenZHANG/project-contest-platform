@@ -4,8 +4,8 @@ import com.w16a.danish.common.messaging.MessagingConstants;
 import com.w16a.danish.common.messaging.message.SubmissionReviewedMessage;
 import com.w16a.danish.common.messaging.message.SubmissionUploadedMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.w16a.danish.common.recovery.DurableTasks;
+import com.w16a.danish.common.recovery.NotificationOutbox;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,30 +19,16 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SubmissionNotifier {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final DurableTasks tasks;
 
     public void sendSubmissionUploaded(SubmissionUploadedMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
-                MessagingConstants.SUBMISSION_UPLOADED_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME, MessagingConstants.SUBMISSION_UPLOADED_ROUTING_KEY, message));
     }
 
     public void sendSubmissionReviewed(SubmissionReviewedMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
-                MessagingConstants.SUBMISSION_REVIEWED_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME, MessagingConstants.SUBMISSION_REVIEWED_ROUTING_KEY, message));
     }
 
 }

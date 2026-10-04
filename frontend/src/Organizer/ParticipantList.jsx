@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * @file ParticipantList.jsx
  * @description
@@ -15,7 +16,8 @@ import { toast } from 'sonner';
 import { competitionService } from '../services/competitionService';
 import { registrationService } from '../services/registrationService';
 import { queryKeys, staleTime } from '../api/queryKeys';
-import { unwrap } from '../api/queryFn';
+import { unwrap, toMessage } from '../api/queryFn';
+import PageError from '../shared/components/PageError';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -48,9 +50,9 @@ function ParticipantList() {
   const queryClient = useQueryClient();
   const enabled = Boolean(competitionId);
 
-  const { data: competition } = useQuery({
-    queryKey: queryKeys.competitions.detail(competitionId),
-    queryFn: () => unwrap(competitionService.getById(competitionId)),
+  const { data: competition, error: competitionError, refetch: retryCompetition, isFetching: competitionFetching } = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(competitionId),
+    queryFn: () => unwrap(competitionService.getManagedById(competitionId)),
     enabled,
     staleTime: staleTime.medium,
   });
@@ -59,9 +61,9 @@ function ParticipantList() {
     name: competition?.name || 'Unnamed Competition',
     category: competition?.category || 'Unknown',
     startDate: competition?.startDate
-      ? new Date(competition.startDate).toLocaleDateString()
+      ? parseApiDateTime(competition.startDate).toLocaleDateString()
       : '',
-    endDate: competition?.endDate ? new Date(competition.endDate).toLocaleDateString() : '',
+    endDate: competition?.endDate ? parseApiDateTime(competition.endDate).toLocaleDateString() : '',
     status: competition?.status || '',
   };
 
@@ -69,9 +71,7 @@ function ParticipantList() {
   // organizer wins from then on.
   useEffect(() => {
     if (!competition) return;
-    setParticipationType(
-      (prev) => prev || competition.selectedParticipationType || 'INDIVIDUAL'
-    );
+    setParticipationType((prev) => prev || competition.participationType || 'INDIVIDUAL');
   }, [competition]);
 
   const isTeamMode = participationType === 'TEAM';
@@ -85,35 +85,28 @@ function ParticipantList() {
   };
   const teamsParams = { page, size: 10, keyword, sortBy: 'createdAt', order: sortOrder };
 
-  const participantsKey = queryKeys.registrations.participants(
-    competitionId,
-    participantsParams
-  );
-  const teamsKey = [
-    ...queryKeys.registrations.all,
-    'teams',
-    competitionId,
-    teamsParams,
-  ];
+  const participantsKey = queryKeys.registrations.participants(competitionId, participantsParams);
+  const teamsKey = [...queryKeys.registrations.all, 'managedTeams', competitionId, teamsParams];
 
   const participantsQuery = useQuery({
     queryKey: participantsKey,
-    queryFn: () =>
-      unwrap(registrationService.getParticipants(competitionId, participantsParams)),
+    queryFn: () => unwrap(registrationService.getParticipants(competitionId, participantsParams)),
     enabled: enabled && participationType === 'INDIVIDUAL',
     staleTime: staleTime.short,
   });
 
   const teamsQuery = useQuery({
     queryKey: teamsKey,
-    queryFn: () => unwrap(registrationService.getRegisteredTeams(competitionId, teamsParams)),
+    queryFn: () => unwrap(registrationService.getManagedRegisteredTeams(competitionId, teamsParams)),
     enabled: enabled && isTeamMode,
     staleTime: staleTime.short,
   });
 
   const activeQuery = isTeamMode ? teamsQuery : participantsQuery;
   const participants = participantsQuery.data?.data ?? [];
-  const teams = teamsQuery.data?.data ?? [];
+  const teams = (teamsQuery.data?.data ?? []).map((team) => ({
+    ...team, id: team.teamId, name: team.teamName,
+  }));
   const totalPages = activeQuery.data?.pages ?? 1;
   const totalCount = activeQuery.data?.total ?? 0;
   const loading = activeQuery.isPending;
@@ -125,11 +118,11 @@ function ParticipantList() {
         : unwrap(registrationService.removeParticipant(competitionId, id)),
     onSuccess: (_data, { kind }) => {
       toast.success(
-        kind === 'TEAM' ? 'Team removed successfully' : 'Participant removed successfully'
+        kind === 'TEAM' ? 'Team removed successfully' : 'Participant removed successfully',
       );
       queryClient.invalidateQueries({ queryKey: queryKeys.registrations.all });
     },
-    onError: () => toast.error('Error occurred during deletion'),
+    onError: (error) => toast.error(toMessage(error)),
     onSettled: () => setConfirmDelete({ open: false, id: null, kind: null }),
   });
 
@@ -149,30 +142,29 @@ function ParticipantList() {
       return `"${text.replace(/"/g, '""')}"`;
     };
 
-    const rows = participationType === 'TEAM'
-      ? [
-          ['Team Name', 'Description', 'Created At'],
-          ...teams.map((team) => [
-            team.name,
-            team.description || '',
-            team.createdAt ? new Date(team.createdAt).toLocaleString() : '',
-          ]),
-        ]
-      : [
-          ['Name', 'Email', 'Description', 'Registered At'],
-          ...participants.map((participant) => [
-            participant.name,
-            participant.email,
-            participant.description || '',
-            participant.registeredAt
-              ? new Date(participant.registeredAt).toLocaleString()
-              : '',
-          ]),
-        ];
+    const rows =
+      participationType === 'TEAM'
+        ? [
+            ['Team Name', 'Description', 'Created At'],
+            ...teams.map((team) => [
+              team.name,
+              team.description || '',
+              team.createdAt ? parseApiDateTime(team.createdAt).toLocaleString() : '',
+            ]),
+          ]
+        : [
+            ['Name', 'Email', 'Description', 'Registered At'],
+            ...participants.map((participant) => [
+              participant.name,
+              participant.email,
+              participant.description || '',
+              participant.registeredAt
+                ? parseApiDateTime(participant.registeredAt).toLocaleString()
+                : '',
+            ]),
+          ];
 
-    const csv = rows
-      .map((row) => row.map(escapeCsvValue).join(','))
-      .join('\r\n');
+    const csv = rows.map((row) => row.map(escapeCsvValue).join(',')).join('\r\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -191,6 +183,7 @@ function ParticipantList() {
   };
 
   const handleDeleteConfirm = () => {
+    if (removeRegistration.isPending) return;
     const { id, kind } = confirmDelete;
     if (id) removeRegistration.mutate({ id, kind });
   };
@@ -205,11 +198,12 @@ function ParticipantList() {
         </h1>
         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div>
-            <span className="font-medium text-foreground">Category:</span> {competitionInfo.category}
+            <span className="font-medium text-foreground">Category:</span>{' '}
+            {competitionInfo.category}
           </div>
           <div>
-            <span className="font-medium text-foreground">Period:</span>{' '}
-            {competitionInfo.startDate} ~ {competitionInfo.endDate}
+            <span className="font-medium text-foreground">Period:</span> {competitionInfo.startDate}{' '}
+            ~ {competitionInfo.endDate}
           </div>
           <div>
             <span className="font-medium text-foreground">Status:</span>{' '}
@@ -236,13 +230,21 @@ function ParticipantList() {
         <Button variant="outline" onClick={handleSortToggle}>
           Sort: {sortOrder.toUpperCase()}
         </Button>
-        <Button variant="default" onClick={exportToCsv} className="bg-success text-success-foreground hover:bg-success/90">
+        <Button
+          variant="default"
+          onClick={exportToCsv}
+          className="bg-success text-success-foreground hover:bg-success/90"
+        >
           <Download className="mr-1 h-4 w-4" />
           Export CSV
         </Button>
       </div>
 
-      {loading ? (
+      {removeRegistration.error && <PageError error={removeRegistration.error} />}
+      {competitionError || activeQuery.error ? (
+        <PageError error={competitionError || activeQuery.error} retrying={competitionFetching || activeQuery.isFetching}
+          onRetry={() => { if (competitionError) retryCompetition(); else activeQuery.refetch(); }} />
+      ) : loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -288,8 +290,8 @@ function ParticipantList() {
                       {participationType === 'TEAM' ? '-' : item.description}
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground">
-                      {new Date(
-                        participationType === 'TEAM' ? item.createdAt : item.registeredAt
+                      {parseApiDateTime(
+                        participationType === 'TEAM' ? item.createdAt : item.registeredAt,
                       ).toLocaleString()}
                     </td>
                     <td className="px-3 py-1.5">
@@ -344,38 +346,34 @@ function ParticipantList() {
       )}
 
       <div className="mt-4">
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/OrganizerContestList/${email}`)}
-        >
+        <Button variant="outline" onClick={() => navigate(`/OrganizerContestList/${email}`)}>
           Back to Contest List
         </Button>
       </div>
 
       <Dialog
         open={confirmDelete.open}
-        onOpenChange={(open) =>
-          setConfirmDelete((prev) => ({ ...prev, open, id: open ? prev.id : null }))
-        }
+        onOpenChange={(open) => {
+          if (!removeRegistration.isPending) setConfirmDelete((prev) => ({ ...prev, open, id: open ? prev.id : null }));
+        }}
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>
               Remove {confirmDelete.kind === 'TEAM' ? 'team' : 'participant'}?
             </DialogTitle>
-            <DialogDescription>
-              This action cannot be undone.
-            </DialogDescription>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={removeRegistration.isPending}
               onClick={() => setConfirmDelete({ open: false, id: null, kind: null })}
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
-              Remove
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={removeRegistration.isPending} aria-busy={removeRegistration.isPending}>
+              {removeRegistration.isPending ? 'Removing…' : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>

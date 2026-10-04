@@ -1,1 +1,3 @@
 com.w16a.danish.common.CommonLibAutoConfiguration
+com.w16a.danish.common.recovery.DurableTaskAutoConfiguration
+com.w16a.danish.common.security.ServiceSecurityAutoConfiguration

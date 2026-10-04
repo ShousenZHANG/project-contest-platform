@@ -1,0 +1,106 @@
+# Always use an explicit generated env file and the isolated runtime-tests project:
+# python infra/integration/run.py prepare
+# python infra/integration/run.py infra
+# python infra/integration/run.py backend
+# Backend JARs must first be built by the verified Maven reactor on JDK 25.
+services:
+  mysql:
+    container_name: readiness-mysql
+  database-migrations:
+    container_name: readiness-database-migrations
+  redis:
+    container_name: readiness-redis
+  rabbitmq:
+    container_name: readiness-rabbitmq
+  nacos:
+    container_name: readiness-nacos
+    # The host reserves TCP 9848 on Windows. Discovery gRPC remains available
+    # at nacos:9848 inside this network; integration clients use the gateway.
+    ports: !override
+      - "127.0.0.1:8848:8848"
+      - "127.0.0.1:8849:8080"
+  nacos-bootstrap:
+    container_name: readiness-nacos-bootstrap
+  minio:
+    container_name: readiness-minio
+  zipkin:
+    container_name: readiness-zipkin
+
+  backend-api-gateway:
+    container_name: readiness-backend-api-gateway
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT.jar
+  backend-user-service:
+    container_name: readiness-backend-user-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/user-service/target/user-service-0.0.1-SNAPSHOT.jar
+    environment:
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_AUTH: "false"
+      MAIL_STARTTLS_ENABLE: "false"
+      MAIL_USERNAME: noreply@competition.test
+      MAIL_PASSWORD: ""
+    depends_on:
+      mailpit:
+        condition: service_healthy
+  backend-competition-service:
+    container_name: readiness-backend-competition-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/competition-service/target/competition-service-0.0.1-SNAPSHOT.jar
+  backend-file-service:
+    container_name: readiness-backend-file-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/file-service/target/file-service-0.0.1-SNAPSHOT.jar
+  backend-registration-service:
+    container_name: readiness-backend-registration-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/registration-service/target/registration-service-0.0.1-SNAPSHOT.jar
+  backend-interaction-service:
+    container_name: readiness-backend-interaction-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/interaction-service/target/interaction-service-0.0.1-SNAPSHOT.jar
+  backend-judge-service:
+    container_name: readiness-backend-judge-service
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.runtime
+      args:
+        APP_JAR: backend/judge-service/target/judge-service-0.0.1-SNAPSHOT.jar
+
+  frontend-web:
+    container_name: readiness-frontend-web
+  jenkins:
+    container_name: readiness-jenkins
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    container_name: readiness-mailpit
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - my-network
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s

@@ -2,6 +2,8 @@ package com.w16a.danish.judge.controller;
 
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.judge.service.IDashboardService;
+import com.w16a.danish.common.context.CurrentUser;
+import com.w16a.danish.common.context.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -33,11 +35,9 @@ public class DashboardController {
 
     @Operation(
             summary = "Public: Get competition statistics overview",
-            description = "Retrieve basic statistics for a specific competition, including participant count, submission count, votes, comments, etc. "
-                    + "If userId is provided, also returns the user's personal submission info.",
+            description = "Retrieve aggregate statistics for a public competition. Personal submission information is never included.",
             parameters = {
-                    @Parameter(name = "competitionId", description = "Competition ID (UUID)", required = true, in = ParameterIn.QUERY),
-                    @Parameter(name = "userId", description = "Optional: User ID (if logged in)", required = false, in = ParameterIn.QUERY)
+                    @Parameter(name = "competitionId", description = "Competition ID (UUID)", required = true, in = ParameterIn.QUERY)
             },
             responses = {
                     @ApiResponse(responseCode = "200", description = "Competition statistics retrieved successfully",
@@ -47,11 +47,16 @@ public class DashboardController {
     )
     @GetMapping("/public/statistics")
     public ResponseEntity<CompetitionDashboardVO> getCompetitionStatistics(
-            @RequestParam("competitionId") String competitionId,
-            @RequestParam(value = "userId", required = false) String userId) {
+            @RequestParam("competitionId") String competitionId) {
 
-        CompetitionDashboardVO dashboard = dashboardService.getCompetitionStatistics(competitionId, userId);
+        CompetitionDashboardVO dashboard = dashboardService.getCompetitionStatistics(competitionId, null);
         return ResponseEntity.ok(dashboard);
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<CompetitionDashboardVO> getManagedCompetitionStatistics(
+            @CurrentUser RequestContext ctx, @RequestParam String competitionId) {
+        return ResponseEntity.ok(dashboardService.getManagedCompetitionStatistics(ctx, competitionId));
     }
 
     @Operation(

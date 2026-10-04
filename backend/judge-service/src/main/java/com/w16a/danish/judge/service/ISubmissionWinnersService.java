@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.spring.service.IService;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.ScoredSubmissionVO;
 import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
+import com.w16a.danish.judge.domain.vo.AwardEligibilityVO;
 
 /**
  * Service interface for managing awarded submissions.
@@ -20,6 +21,8 @@ import com.w16a.danish.judge.domain.vo.WinnerInfoVO;
  * @since 2025-04-18
  */
 public interface ISubmissionWinnersService extends IService<SubmissionWinners> {
+
+    AwardEligibilityVO getAwardEligibility(RequestContext ctx, String competitionId);
 
     /**
      * Retrieves a paginated list of scored submissions for a specific competition.
@@ -63,4 +66,6 @@ public interface ISubmissionWinnersService extends IService<SubmissionWinners> {
      * @return a paginated list of public winner details
      */
     PageResponse<WinnerInfoVO> listPublicWinners(String competitionId, int page, int size);
+
+    PageResponse<WinnerInfoVO> listManagedWinners(RequestContext ctx, String competitionId, int page, int size);
 }

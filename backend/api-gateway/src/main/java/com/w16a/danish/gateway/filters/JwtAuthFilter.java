@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.HashMap;
+import java.util.Locale;
 
 
 /**
@@ -51,6 +52,12 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         String path = request.getURI().getPath();
 
+        // Internal calls have their own credential and never enter through the public gateway.
+        if (isServiceOnlyOrAmbiguousPath(request)) {
+            response.setStatusCode(HttpStatus.FORBIDDEN);
+            return response.setComplete();
+        }
+
         // Defense-in-depth: a client must never be able to forge identity. Strip any
         // inbound User-ID/User-Role on EVERY request (including public paths) so only
         // this filter can set them, and only after the JWT is verified below.
@@ -58,6 +65,9 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
                 .headers(headers -> {
                     headers.remove("User-ID");
                     headers.remove("User-Role");
+                    headers.headerNames().stream().filter(name -> name.toLowerCase(Locale.ROOT).startsWith("x-service-")
+                            || name.equalsIgnoreCase("Service-ID") || name.equalsIgnoreCase("X-Internal-Token"))
+                            .toList().forEach(headers::remove);
                 })
                 .build();
         ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
@@ -105,6 +115,28 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() {
         return -1;
+    }
+
+    private boolean isServiceOnlyOrAmbiguousPath(ServerHttpRequest request) {
+        String path = request.getURI().getPath();
+        String rawPath = request.getURI().getRawPath();
+        if (rawPath.contains("%") || path.contains("\\") || path.contains(";")
+                || path.contains("//") || path.contains("/./") || path.contains("/../")
+                || path.endsWith("/.") || path.endsWith("/..")) {
+            return true;
+        }
+        String normalized = path.toLowerCase(Locale.ROOT).replaceAll("/+$", "");
+        String[] segments = normalized.split("/");
+        for (String segment : segments) {
+            if ("internal".equals(segment)) return true;
+        }
+        if (normalized.startsWith("/files/") || normalized.equals("/files")
+                || pathMatcher.match("/competitions/*/status", normalized)) {
+            return true;
+        }
+        // Discovery aliases stay closed even if discovery routing is accidentally re-enabled.
+        return segments.length > 1 && segments[1].endsWith("-service")
+                && !normalized.matches("/(user|competition|registration|interaction|judge)-service/v3/api-docs");
     }
 
     /**

@@ -24,6 +24,7 @@ import com.w16a.danish.user.domain.vo.*;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.user.feign.*;
 import com.w16a.danish.user.mapper.UsersMapper;
+import com.w16a.danish.user.profile.AvatarFiles;
 import com.w16a.danish.user.service.IRolesService;
 import com.w16a.danish.user.service.IUserRolesService;
 import com.w16a.danish.user.service.IUsersService;
@@ -43,7 +44,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 
-import java.net.URI;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -72,7 +72,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     private final GoogleUserClient googleUserClient;
     private final RedisTemplate<String, String> redisTemplate;
     private final FrontendProperties frontendProperties;
-    private final FileServiceClient fileServiceClient;
+    private final AvatarFiles avatarFiles;
     private final JwtUtil jwtUtil;
     private final JavaMailSender mailSender;
 
@@ -83,6 +83,30 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     @Transactional
     public UserResponseVO register(RegisterRequestDTO registerDTO) {
+        if (registerDTO.getRole() == null || !List.of("PARTICIPANT", "ORGANIZER").contains(registerDTO.getRole())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid role: " + registerDTO.getRole()
+                    + ". Public registration only permits PARTICIPANT or ORGANIZER");
+        }
+        Account account = createAccount(registerDTO);
+        Users user = account.user();
+        Roles role = account.role();
+        String token = jwtUtil.generateAndStoreToken(createClaims(user.getId(), role.getName()), jwtConfig.getSecret(), jwtConfig.getExpiration());
+        return new UserResponseVO(user.getId(), user.getName(), user.getEmail(), role.getName(), token, jwtConfig.getExpiration() / 1000);
+    }
+
+    @Override
+    @Transactional
+    public UserBriefVO provisionAccount(RequestContext administrator, RegisterRequestDTO registerDTO) {
+        administrator.requireAnyRole("ADMIN");
+        if (registerDTO.getRole() == null || !List.of("ADMIN", "JUDGE").contains(registerDTO.getRole())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Admin provisioning only permits ADMIN or JUDGE");
+        }
+        Account account = createAccount(registerDTO);
+        return UserBriefVO.builder().id(account.user().getId()).name(account.user().getName())
+                .email(account.user().getEmail()).role(account.role().getName()).build();
+    }
+
+    private Account createAccount(RegisterRequestDTO registerDTO) {
         String email = registerDTO.getEmail();
         String password = registerDTO.getPassword();
         String roleName = registerDTO.getRole();
@@ -103,6 +127,11 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Password must be at least 8 characters, include a number and an uppercase letter");
         }
 
+        Roles role = rolesService.lambdaQuery().eq(Roles::getName, roleName).one();
+        if (role == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid role: " + roleName);
+        }
+
         // create user object
         Users user = BeanUtil.copyProperties(registerDTO, Users.class);
         user.setId(StrUtil.uuid());
@@ -110,20 +139,15 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         this.save(user);
 
         // assign role
-        Roles role = rolesService.lambdaQuery().eq(Roles::getName, roleName).one();
-
-        if (role == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid role: " + roleName);
-        }
-
         UserRoles userRole = new UserRoles();
         userRole.setUserId(user.getId());
         userRole.setRoleId(role.getId());
         userRolesService.save(userRole);
 
-        String token = jwtUtil.generateAndStoreToken(createClaims(user.getId(), role.getName()), jwtConfig.getSecret(), jwtConfig.getExpiration());
-        return new UserResponseVO(user.getId(), user.getName(), user.getEmail(), role.getName(), token, jwtConfig.getExpiration() / 1000);
+        return new Account(user, role);
     }
+
+    private record Account(Users user, Roles role) {}
 
     @Override
     @Transactional
@@ -170,12 +194,6 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     @Transactional
     public String deleteUserById(String userId, RequestContext ctx) {
-        // check if user exists
-        Users user = getById(userId);
-        if (user == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "User not found");
-        }
-
         // check if user has permission to delete
         // only ADMIN can delete other users
         boolean isSelf = ctx.userId().equals(userId);
@@ -184,13 +202,24 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             throw new BusinessException(HttpStatus.FORBIDDEN, "You do not have permission to delete this user");
         }
 
-        if (StrUtil.isNotBlank(user.getAvatarUrl())) {
-            URI uri = URI.create(user.getAvatarUrl());
-            String[] parts = uri.getPath().substring(1).split("/", 2);
-            if (parts.length == 2) {
-                fileServiceClient.deleteFile(parts[0], parts[1]);
-            }
+        // Serialize administrator deletion and block new FK references while deciding.
+        baseMapper.lockAdministratorRole();
+        if (baseMapper.lockAccount(userId) == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "User not found");
         }
+        // The first consistent read must follow both locks (MySQL REPEATABLE READ).
+        Users user = getById(userId);
+        if (user == null) throw new BusinessException(HttpStatus.NOT_FOUND, "User not found");
+        if (baseMapper.isLastAdministrator(userId)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "The last administrator cannot be deleted");
+        }
+        if (baseMapper.hasRetainedHistory(userId)) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "This account has competition or team history and cannot be deleted");
+        }
+
+        // Revoke first: a failed Redis write must not leave a deleted account authorized.
+        redisTemplate.delete("jwt:token:" + userId);
 
         // delete user roles
         userRolesService.remove(new LambdaQueryWrapper<UserRoles>().eq(UserRoles::getUserId, userId));
@@ -199,7 +228,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         if (!userRemoved) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete user");
         }
-
+        avatarFiles.deleteAfterCommit(user.getAvatarUrl());
         return "User deleted successfully";
     }
 
@@ -218,7 +247,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Transactional
     public UserResponseVO oauthLoginOrRegister(OAuthLoginRequestDTO oAuthLoginRequestDTO) {
         String provider = oAuthLoginRequestDTO.getProvider().toLowerCase();
-        String email, name;
+        String email, name, subject;
 
         if ("google".equals(provider)) {
             MultiValueMap<String, String> tokenBody = new LinkedMultiValueMap<>();
@@ -236,12 +265,13 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             }
 
             GoogleUserDTO googleUser = googleUserClient.getUserInfo("Bearer " + accessToken);
-            if (googleUser == null || googleUser.getEmail() == null) {
+            if (googleUser == null || !Boolean.TRUE.equals(googleUser.getEmailVerified()) || googleUser.getEmail() == null) {
                 throw new BusinessException(HttpStatus.UNAUTHORIZED, "Failed to get Google user info");
             }
 
             email = googleUser.getEmail();
             name = googleUser.getName();
+            subject = googleUser.getSub();
 
         } else if ("github".equals(provider)) {
             Map<String, String> body = new HashMap<>();
@@ -262,8 +292,13 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                 throw new BusinessException(HttpStatus.UNAUTHORIZED, "Failed to retrieve GitHub user info");
             }
 
-            email = githubUser.getEmail() != null ? githubUser.getEmail() : githubUser.getLogin() + "@github.com";
+            List<GithubEmailDTO> providerEmails = githubUserClient.getEmails("Bearer " + accessToken);
+            email = Optional.ofNullable(providerEmails).orElse(List.of()).stream()
+                    .filter(e -> e != null && e.isPrimary() && e.isVerified() && StringUtils.hasText(e.getEmail()))
+                    .map(GithubEmailDTO::getEmail).findFirst()
+                    .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "GitHub requires a verified primary email"));
             name = githubUser.getLogin();
+            subject = githubUser.getId() == null ? null : githubUser.getId().toString();
         } else {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Unsupported provider: " + provider);
         }
@@ -273,7 +308,11 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid role: " + roleName);
         }
 
-        Users user = this.lambdaQuery().eq(Users::getEmail, email).one();
+        if (!StringUtils.hasText(subject) || subject.length() > 255) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Provider returned no stable account identity");
+        }
+        String linkedUserId = baseMapper.findOAuthUser(provider, subject);
+        Users user = linkedUserId == null ? null : this.getById(linkedUserId);
         Roles role;
 
         if (user == null) {
@@ -283,7 +322,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
             boolean emailExists = this.lambdaQuery().eq(Users::getEmail, email).exists();
             if (emailExists) {
-                throw new BusinessException(HttpStatus.CONFLICT, "Email is already registered");
+                throw new BusinessException(HttpStatus.CONFLICT, "This email has an existing account. Use password sign-in or reset your password; OAuth is not linked");
             }
 
             user = new Users();
@@ -302,6 +341,9 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
             userRole.setUserId(user.getId());
             userRole.setRoleId(role.getId());
             userRolesService.save(userRole);
+            if (baseMapper.bindOAuthAccount(provider, subject, user.getId()) != 1) {
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to link provider identity");
+            }
         } else {
             UserRoles userRole = userRolesService.getOne(
                     new LambdaQueryWrapper<UserRoles>().eq(UserRoles::getUserId, user.getId()));
@@ -309,6 +351,9 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                 throw new BusinessException(HttpStatus.FORBIDDEN, "User has no role");
             }
             role = rolesService.getById(userRole.getRoleId());
+            if (role == null || !List.of("PARTICIPANT", "ORGANIZER").contains(role.getName().toUpperCase(Locale.ROOT))) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, "Privileged accounts require password sign-in");
+            }
         }
 
         String token = jwtUtil.generateAndStoreToken(createClaims(user.getId(), role.getName()), jwtConfig.getSecret(), jwtConfig.getExpiration());
@@ -329,18 +374,16 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         if (!passwordUtil.isPasswordValid(newPassword)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Password must be at least 8 characters, contain a number and an uppercase letter");
         }
-
+        if (baseMapper.lockAccount(userId) == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Reset link is invalid or expired");
+        }
         Users user = this.getById(userId);
-
+        if (user == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Reset link is invalid or expired");
+        }
         if (passwordUtil.verifyPassword(newPassword, user.getPassword())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "New password must be different from the old one");
         }
-
-        user.setPassword(passwordUtil.encryptPassword(newPassword));
-        user.setUpdatedAt(null);
-        this.updateById(user);
-
-        redisTemplate.delete(redisKey);
 
         // get user role and create token
         UserRoles userRole = userRolesService.getOne(
@@ -351,6 +394,18 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         }
 
         Roles role = rolesService.getById(userRole.getRoleId());
+        if (role == null) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "User has no role");
+        }
+        // Two requests may have validated the same token; Redis atomically selects one winner.
+        if (!Objects.equals(userId, redisTemplate.opsForValue().getAndDelete(redisKey))) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Reset link is invalid or expired");
+        }
+        user.setPassword(passwordUtil.encryptPassword(newPassword));
+        user.setUpdatedAt(null);
+        if (!this.updateById(user)) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to reset password");
+        }
         String token = jwtUtil.generateAndStoreToken(createClaims(user.getId(), role.getName()), jwtConfig.getSecret(), jwtConfig.getExpiration());
         return new UserResponseVO(user.getId(), user.getName(), user.getEmail(), role.getName(), token, jwtConfig.getExpiration() / 1000);
     }
@@ -384,6 +439,12 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     @Override
     @Transactional
     public UserProfileVO updateUserProfile(String userId, UpdateUserDTO updateUserDTO) {
+        if (updateUserDTO.getAvatarUrl() != null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Upload avatar through the avatar endpoint");
+        }
+        if (baseMapper.lockAccount(userId) == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "User not found");
+        }
         // check if user exists
         Users user = this.getById(userId);
         if (user == null) {
@@ -422,6 +483,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                         .ignoreNullValue()
                         .setIgnoreProperties("email", "password"));
 
+        if (StrUtil.isNotBlank(newPassword)) redisTemplate.delete("jwt:token:" + userId);
+
         user.setUpdatedAt(null);
         if (!this.updateById(user)) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update user profile");
@@ -432,6 +495,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
     @Override
     public List<UserBriefVO> getUsersByIds(List<String> userIds, String role) {
+        requireBoundedLookup(userIds);
         if (CollUtil.isEmpty(userIds)) {
             return Collections.emptyList();
         }
@@ -440,16 +504,8 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                 .in(Users::getId, userIds)
                 .list();
 
+        Map<String, String> userIdToRoleMap = trustedRoles(users);
         if (StrUtil.isNotBlank(role)) {
-            Map<String, String> userIdToRoleMap = userRolesService.list(
-                            new LambdaQueryWrapper<UserRoles>().in(UserRoles::getUserId, userIds))
-                    .stream()
-                    .collect(Collectors.toMap(
-                            UserRoles::getUserId,
-                            ur -> rolesService.getById(ur.getRoleId()).getName(),
-                            (existing, replacement) -> existing
-                    ));
-
             users = users.stream()
                     .filter(u -> role.equalsIgnoreCase(userIdToRoleMap.get(u.getId())))
                     .toList();
@@ -463,6 +519,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                         .avatarUrl(user.getAvatarUrl())
                         .description(user.getDescription())
                         .createdAt(user.getCreatedAt())
+                        .role(userIdToRoleMap.getOrDefault(user.getId(), "UNKNOWN"))
                         .build())
                 .toList();
     }
@@ -481,11 +538,13 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                 .avatarUrl(user.getAvatarUrl())
                 .description(user.getDescription())
                 .createdAt(user.getCreatedAt())
+                .role(trustedRoles(List.of(user)).getOrDefault(user.getId(), "UNKNOWN"))
                 .build();
     }
 
     @Override
     public List<UserBriefVO> getUsersByEmails(List<String> emails) {
+        requireBoundedLookup(emails);
         if (emails == null || emails.isEmpty()) {
             return List.of();
         }
@@ -493,6 +552,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         List<Users> users = this.lambdaQuery()
                 .in(Users::getEmail, emails)
                 .list();
+        Map<String, String> userIdToRoleMap = trustedRoles(users);
 
         return users.stream()
                 .map(user -> {
@@ -503,15 +563,34 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
                     vo.setAvatarUrl(user.getAvatarUrl());
                     vo.setDescription(user.getDescription());
                     vo.setCreatedAt(user.getCreatedAt());
+                    vo.setRole(userIdToRoleMap.getOrDefault(user.getId(), "UNKNOWN"));
                     return vo;
                 })
                 .collect(Collectors.toList());
+    }
+
+    private Map<String, String> trustedRoles(List<Users> users) {
+        if (users.isEmpty()) return Map.of();
+        return userRolesService.list(new LambdaQueryWrapper<UserRoles>()
+                        .in(UserRoles::getUserId, users.stream().map(Users::getId).toList()))
+                .stream().collect(Collectors.toMap(UserRoles::getUserId,
+                        userRole -> Optional.ofNullable(rolesService.getById(userRole.getRoleId()))
+                                .map(Roles::getName).orElse("UNKNOWN"), (existing, replacement) -> existing));
+    }
+
+    private static void requireBoundedLookup(List<String> values) {
+        if (values != null && (values.size() > 100 || values.stream().anyMatch(v -> !StringUtils.hasText(v) || v.length() > 254))) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Lookups accept at most 100 non-empty values");
+        }
     }
 
     @Override
     public PageResponse<AdminUserVO> listUsersAdmin(RequestContext ctx, String role, String keyword, int page, int size, String sortBy, String order) {
         if (!ctx.isAdmin()) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Only ADMINs can access this resource.");
+        }
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
         }
 
         // Step 1: resolve user IDs matching the role filter (DB-level pre-filter)
@@ -548,7 +627,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         IPage<Users> usersPage = this.page(new Page<>(page, size), wrapper);
 
         if (usersPage.getRecords().isEmpty()) {
-            return new PageResponse<>(Collections.emptyList(), 0, page, size, 0);
+            return new PageResponse<>(Collections.emptyList(), usersPage.getTotal(), page, size, usersPage.getPages());
         }
 
         // Step 3: batch-load roles for only the paged user IDs

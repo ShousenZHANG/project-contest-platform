@@ -12,6 +12,7 @@ import com.w16a.danish.interaction.feign.RegistrationServiceClient;
 import com.w16a.danish.interaction.feign.UserServiceClient;
 import com.w16a.danish.interaction.mapper.SubmissionCommentsMapper;
 import com.w16a.danish.interaction.service.ISubmissionCommentsService;
+import com.w16a.danish.interaction.service.PublicSubmissionAccess;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
@@ -39,10 +40,22 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
 
     private final RegistrationServiceClient registrationServiceClient;
     private final UserServiceClient userServiceClient;
+    private final PublicSubmissionAccess submissions;
 
     @Override
     @Transactional
     public void addComment(String userId, SubmissionCommentDTO dto) {
+        validateContent(dto);
+        submissions.requireVisible(dto.getSubmissionId());
+        if (StrUtil.isNotBlank(dto.getParentId())) {
+            SubmissionComments parent = getById(dto.getParentId());
+            if (parent == null || !Objects.equals(dto.getSubmissionId(), parent.getSubmissionId())) {
+                throw new BusinessException(HttpStatus.NOT_FOUND, "Parent comment not found for this submission");
+            }
+            if (parent.getParentId() != null) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Replies must reference a top-level comment");
+            }
+        }
         SubmissionComments comment = new SubmissionComments()
                 .setId(StrUtil.uuid())
                 .setSubmissionId(dto.getSubmissionId())
@@ -63,6 +76,8 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
         if (comment == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Comment not found");
         }
+
+        submissions.requireVisible(comment.getSubmissionId());
 
         boolean isAdmin = ctx.isAdmin();
         boolean isOwner = ctx.userId().equals(comment.getUserId());
@@ -85,6 +100,10 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
 
     @Override
     public PageResponse<SubmissionCommentVO> getPaginatedComments(String submissionId, int page, int size, String sortBy, String order) {
+        submissions.requireVisible(submissionId);
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size must be between 1 and 100");
+        }
         if (!"createdAt".equalsIgnoreCase(sortBy) && !"updatedAt".equalsIgnoreCase(sortBy)) {
             sortBy = "createdAt";
         }
@@ -114,9 +133,16 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
         paged.forEach(c -> allUserIds.add(c.getUserId()));
         childComments.forEach(c -> allUserIds.add(c.getUserId()));
 
-        Map<String, UserBriefVO> userMap = Optional.ofNullable(
-                userServiceClient.getUsersByIds(new ArrayList<>(allUserIds), null).getBody()
-        ).orElse(List.of()).stream().collect(Collectors.toMap(UserBriefVO::getId, u -> u));
+        Map<String, UserBriefVO> userMap = new HashMap<>();
+        List<String> userIds = new ArrayList<>(allUserIds);
+        for (int start = 0; start < userIds.size(); start += 100) {
+            var reply = userServiceClient.getUsersByIds(userIds.subList(start, Math.min(start + 100, userIds.size())), null);
+            if (reply == null || !reply.getStatusCode().is2xxSuccessful() || reply.getBody() == null) {
+                throw new com.w16a.danish.common.exception.ServiceUnavailableException("user-service", "getUsersByIds");
+            }
+            List<UserBriefVO> users = reply.getBody();
+            users.forEach(user -> userMap.putIfAbsent(user.getId(), user));
+        }
 
         Map<String, List<SubmissionCommentVO>> groupedReplies = childComments.stream()
                 .map(c -> {
@@ -165,8 +191,14 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
             throw new BusinessException(HttpStatus.NOT_FOUND, "Comment not found");
         }
 
+        submissions.requireVisible(comment.getSubmissionId());
         if (!comment.getUserId().equals(userId)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You can only edit your own comments");
+        }
+
+        validateContent(dto);
+        if (StrUtil.isNotBlank(dto.getSubmissionId()) && !Objects.equals(dto.getSubmissionId(), comment.getSubmissionId())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "A comment cannot be moved to another submission");
         }
 
         comment.setContent(dto.getContent());
@@ -184,6 +216,7 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID must not be blank");
         }
 
+        submissions.requireVisible(submissionId);
         return this.lambdaQuery()
                 .eq(SubmissionComments::getSubmissionId, submissionId)
                 .count();
@@ -191,7 +224,19 @@ public class SubmissionCommentsServiceImpl extends ServiceImpl<SubmissionComment
 
     @Override
     public Long countAllComments() {
-        return this.lambdaQuery().count();
+        return baseMapper.countPublicComments();
+    }
+
+    @Override
+    public long countCompetitionComments(String competitionId) {
+        if (StrUtil.isBlank(competitionId)) throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition ID must not be blank");
+        return baseMapper.countCompetitionComments(competitionId);
+    }
+
+    private static void validateContent(SubmissionCommentDTO dto) {
+        if (dto == null || StrUtil.isBlank(dto.getContent())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Comment content must not be blank");
+        }
     }
 
 }

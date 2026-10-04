@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * @file TeamProjectDetail.jsx
  * @description
@@ -11,16 +12,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
-  ExternalLink,
-  Loader2,
-  Pencil,
-  Trash2,
-  Save,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, ExternalLink, Loader2, Pencil, Trash2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+import SubmissionFile from '@/shared/components/SubmissionFile';
 import { teamService } from '@/services/teamService';
 import { submissionService } from '@/services/registrationService';
 import { queryKeys, staleTime } from '@/api/queryKeys';
@@ -62,12 +56,7 @@ function TeamProjectDetail() {
 
   const queryClient = useQueryClient();
 
-  const submissionKey = [
-    ...queryKeys.submissions.all,
-    'teamSubmission',
-    competitionId,
-    teamId,
-  ];
+  const submissionKey = [...queryKeys.submissions.all, 'teamSubmission', competitionId, teamId];
 
   const {
     data: submission = null,
@@ -75,7 +64,7 @@ function TeamProjectDetail() {
     error: loadError,
   } = useQuery({
     queryKey: submissionKey,
-    queryFn: () => unwrap(submissionService.getTeamSubmission(competitionId, teamId)),
+    queryFn: () => unwrap(submissionService.getOwnTeamSubmission(competitionId, teamId)),
     enabled: Boolean(competitionId && teamId),
     staleTime: staleTime.medium,
   });
@@ -129,8 +118,7 @@ function TeamProjectDetail() {
   };
 
   const deleteSubmission = useMutation({
-    mutationFn: (submissionId) =>
-      unwrap(submissionService.deleteTeamSubmission(submissionId)),
+    mutationFn: (submissionId) => unwrap(submissionService.deleteTeamSubmission(submissionId)),
     onSuccess: () => {
       toast.success('Submission deleted.');
       queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all });
@@ -216,32 +204,17 @@ function TeamProjectDetail() {
             ) : (
               <div className="space-y-2 text-sm">
                 <p>
-                  <span className="font-semibold">Title:</span>{' '}
-                  {submission.title}
+                  <span className="font-semibold">Title:</span> {submission.title}
                 </p>
                 <p>
-                  <span className="font-semibold">Description:</span>{' '}
-                  {submission.description}
+                  <span className="font-semibold">Description:</span> {submission.description}
                 </p>
                 <p>
-                  <span className="font-semibold">File Name:</span>{' '}
-                  {submission.fileName}
+                  <span className="font-semibold">File Name:</span> {submission.fileName}
                 </p>
-                {submission.fileUrl && (
-                  <Button asChild variant="outline" size="sm">
-                    <a
-                      href={submission.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      View File
-                    </a>
-                  </Button>
-                )}
+                <SubmissionFile fileUrl={submission.fileUrl} fileName={submission.fileName} />
                 <p>
-                  <span className="font-semibold">File Type:</span>{' '}
-                  {submission.fileType}
+                  <span className="font-semibold">File Type:</span> {submission.fileType}
                 </p>
                 <p className="flex items-center gap-2">
                   <span className="font-semibold">Review Status:</span>
@@ -254,23 +227,21 @@ function TeamProjectDetail() {
                   {submission.reviewComments}
                 </p>
                 <p>
-                  <span className="font-semibold">Reviewed By:</span>{' '}
-                  {submission.reviewedBy}
+                  <span className="font-semibold">Reviewed By:</span> {submission.reviewedBy}
                 </p>
                 <p>
                   <span className="font-semibold">Reviewed At:</span>{' '}
                   {submission.reviewedAt
-                    ? new Date(submission.reviewedAt).toLocaleString()
+                    ? parseApiDateTime(submission.reviewedAt).toLocaleString()
                     : 'N/A'}
                 </p>
                 <p>
-                  <span className="font-semibold">Total Score:</span>{' '}
-                  {submission.totalScore}
+                  <span className="font-semibold">Total Score:</span> {submission.totalScore}
                 </p>
                 <p>
                   <span className="font-semibold">Submitted At:</span>{' '}
                   {submission.createdAt
-                    ? new Date(submission.createdAt).toLocaleString()
+                    ? parseApiDateTime(submission.createdAt).toLocaleString()
                     : 'Unknown'}
                 </p>
 
@@ -280,10 +251,7 @@ function TeamProjectDetail() {
                       <Pencil className="h-4 w-4" />
                       Edit
                     </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => setConfirmDelete(true)}
-                    >
+                    <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
                       <Trash2 className="h-4 w-4" />
                       Delete
                     </Button>

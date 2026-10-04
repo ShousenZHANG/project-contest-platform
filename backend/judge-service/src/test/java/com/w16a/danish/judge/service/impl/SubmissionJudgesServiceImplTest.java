@@ -1,301 +1,279 @@
 package com.w16a.danish.judge.service.impl;
 
-import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
-import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.common.domain.vo.PageResponse;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
-import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
-import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
-import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
-import com.w16a.danish.common.domain.enums.CompetitionStatus;
-import com.w16a.danish.judge.domain.po.CompetitionJudges;
-import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
-import com.w16a.danish.judge.domain.po.SubmissionJudges;
+import com.w16a.danish.common.context.RequestContext;
+import com.w16a.danish.common.recovery.DurableTasks;
+import com.w16a.danish.common.domain.enums.*;
+import com.w16a.danish.common.domain.vo.*;
+import com.w16a.danish.judge.domain.dto.*;
+import com.w16a.danish.judge.domain.po.*;
 import com.w16a.danish.judge.domain.vo.*;
-import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
-import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
-import com.w16a.danish.judge.service.ICompetitionJudgesService;
-import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.Spy;
+import com.w16a.danish.judge.gateway.CompetitionGateway;
+import com.w16a.danish.judge.mapper.*;
+import com.w16a.danish.judge.service.*;
+import org.junit.jupiter.api.*;
 import org.springframework.http.ResponseEntity;
-
+import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-
+import java.util.*;
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class SubmissionJudgesServiceImplTest {
+    private final CompetitionGateway competitions = mock(CompetitionGateway.class);
+    private final SubmissionServiceClient submissions = mock(SubmissionServiceClient.class);
+    private final ICompetitionJudgesService assignments = mock(ICompetitionJudgesService.class);
+    private final ISubmissionJudgeScoresService scores = mock(ISubmissionJudgeScoresService.class);
+    private final SubmissionJudgesMapper mapper = mock(SubmissionJudgesMapper.class);
+    private final AwardRunMapper runs = mock(AwardRunMapper.class);
+    private final DurableTasks tasks = mock(DurableTasks.class);
+    private SubmissionJudgesServiceImpl service;
+    private LambdaQueryChainWrapper<SubmissionJudges> query;
+    private CompetitionResponseVO competition;
+    private SubmissionInfoVO submission;
+    private final List<SubmissionJudges> records = new ArrayList<>();
+    private final List<SubmissionJudgeScores> details = new ArrayList<>();
+    private final RequestContext judge = new RequestContext("judge", "JUDGE");
 
-    @Spy
-    @InjectMocks
-    private SubmissionJudgesServiceImpl submissionJudgesService;
-
-    @Mock private ICompetitionJudgesService competitionJudgesService;
-    @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
-    @Mock private CompetitionGateway competitionGateway;
-    @Mock private SubmissionServiceClient submissionServiceClient;
-    @Mock private SubmissionJudgesMapper submissionJudgesMapper;
-
-    private static RequestContext ctx(String userId, String role) {
-        return new RequestContext(userId, role);
+    @BeforeEach @SuppressWarnings("unchecked") void setUp() {
+        service = spy(new SubmissionJudgesServiceImpl(assignments, scores, competitions, submissions, runs, tasks));
+        ReflectionTestUtils.setField(service, "baseMapper", mapper);
+        query = fluentQuery();
+        doReturn(query).when(service).lambdaQuery();
+        when(query.list()).thenAnswer(call -> List.copyOf(records));
+        when(query.one()).thenAnswer(call -> records.isEmpty() ? null : records.getFirst());
+        doAnswer(call -> { records.add(call.getArgument(0)); return true; }).when(service).save(any(SubmissionJudges.class));
+        doReturn(true).when(service).updateById(any(SubmissionJudges.class));
+        when(scores.saveBatch(anyCollection())).thenAnswer(call -> { details.addAll(call.getArgument(0)); return true; });
+        when(scores.listBySubmissionIds(anyList())).thenAnswer(call -> List.copyOf(details));
+        when(scores.remove(any())).thenAnswer(call -> { details.clear(); return true; });
+        competition = new CompetitionResponseVO();
+        competition.setId("c"); competition.setName("Competition"); competition.setStatus(CompetitionStatus.COMPLETED);
+        competition.setParticipationType(ParticipationType.INDIVIDUAL); competition.setScoringCriteria(List.of("A", "B"));
+        when(competitions.require("c")).thenReturn(competition);
+        when(mapper.selectValidJudgeIds("c")).thenReturn(Set.of("judge", "j2", "j3"));
+        when(runs.incrementScoreVersion("c")).thenReturn(1);
+        when(runs.scoreVersion("c")).thenReturn(1L);
+        submission = new SubmissionInfoVO();
+        submission.setId("s"); submission.setCompetitionId("c"); submission.setUserId("participant");
+        submission.setReviewStatus("APPROVED"); submission.setTitle("Submission");
+        when(submissions.getSubmissionsByIds(List.of("s"))).thenReturn(ResponseEntity.ok(List.of(submission)));
+        when(submissions.getApprovedSubmissions("c")).thenReturn(ResponseEntity.ok(List.of(submission)));
     }
 
-    @BeforeEach
-    void setUp() throws Exception {
-        MockitoAnnotations.openMocks(this);
-
-        // 👉 Inject mocked submissionJudgesMapper to baseMapper field
-        ReflectionTestUtils.setField(submissionJudgesService, "baseMapper", submissionJudgesMapper);
+    private SubmissionJudgeDTO dto() {
+        SubmissionJudgeDTO dto = new SubmissionJudgeDTO(); dto.setCompetitionId("c"); dto.setSubmissionId("s");
+        CriterionScoreDTO a = new CriterionScoreDTO(); a.setCriterion("A"); a.setScore(BigDecimal.TEN); a.setWeight(new BigDecimal("100"));
+        CriterionScoreDTO b = new CriterionScoreDTO(); b.setCriterion("B"); b.setScore(BigDecimal.ZERO);
+        dto.setScores(List.of(a, b)); return dto;
     }
 
-    @Test
-    @DisplayName("✅ Should judge a submission successfully")
-    void testJudgeSubmission_Success() throws Exception {
-        // Mock judge assignment
-        LambdaQueryChainWrapper<CompetitionJudges> judgeAssignmentQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeAssignmentQuery).when(competitionJudgesService).lambdaQuery();
-        when(judgeAssignmentQuery.eq(any(), any())).thenReturn(judgeAssignmentQuery);
-        when(judgeAssignmentQuery.exists()).thenReturn(true);
-
-        // Mock no previous judging
-        LambdaQueryChainWrapper<SubmissionJudges> judgedQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgedQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgedQuery.eq(any(), any())).thenReturn(judgedQuery);
-        when(judgedQuery.exists()).thenReturn(false);
-
-        // Mock competition info
-        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
-
-        // Mock saving judge record
-        when(submissionJudgesService.save(any())).thenReturn(true);
-
-        // Mock saving judge scores
-        when(submissionJudgeScoresService.saveBatch(any())).thenReturn(true);
-
-        // Mock updating submission total score via Feign
-        when(submissionServiceClient.updateTotalScore(any(), any())).thenReturn(null);
-
-        LambdaQueryChainWrapper<SubmissionJudges> scoreQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(scoreQuery).when(submissionJudgesService).lambdaQuery();
-        when(scoreQuery.eq(any(), any())).thenReturn(scoreQuery);
-        when(scoreQuery.select(any(SFunction.class))).thenReturn(scoreQuery);
-        when(scoreQuery.list()).thenReturn(List.of(
-                new SubmissionJudges().setTotalScore(BigDecimal.valueOf(4))
-        ));
-
-        // Act + Assert
-        SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatCode(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
-                .doesNotThrowAnyException();
+    @Test void savesServerMeanAndPropagatesAuthoritativeScore() {
+        service.judgeSubmission(judge, dto());
+        assertThat(records).hasSize(1);
+        assertThat(records.getFirst().getTotalScore()).isEqualByComparingTo("5.00");
+        assertThat(details).hasSize(2).allSatisfy(d -> assertThat(d.getWeight()).isEqualByComparingTo("0.5"));
+        verify(tasks).enqueue("SUBMISSION_SCORE", "s", 1L, Map.of("score", new BigDecimal("5.00"), "revision", 0));
+        verify(runs).incrementScoreVersion("c");
     }
 
-    @Test
-    @DisplayName("✅ Should check user assigned as judge")
-    void testIsUserAssignedAsJudge_Success() {
-        LambdaQueryChainWrapper<CompetitionJudges> query = mock(LambdaQueryChainWrapper.class);
-        doReturn(query).when(competitionJudgesService).lambdaQuery();
-        when(query.eq(any(), any())).thenReturn(query);
-        when(query.exists()).thenReturn(true);
-
-        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
-
-        assertThat(submissionJudgesService.isUserAssignedAsJudge("user-1", "comp-1")).isTrue();
+    @Test void participantCannotScoreEvenWithAnAssignment() {
+        assertThatThrownBy(() -> service.judgeSubmission(new RequestContext("judge", "PARTICIPANT"), dto()))
+                .hasMessageContaining("required role");
+        assertThat(records).isEmpty();
     }
 
-    @Test
-    @DisplayName("✅ Should get my judging detail successfully")
-    void testGetMyJudgingDetail_Success() {
-        LambdaQueryChainWrapper<SubmissionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgeQuery.eq(any(), any())).thenReturn(judgeQuery);
-        when(judgeQuery.one()).thenReturn(new SubmissionJudges().setSubmissionId("submission-1"));
-
-        LambdaQueryChainWrapper<SubmissionJudgeScores> scoreQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(scoreQuery).when(submissionJudgeScoresService).lambdaQuery();
-        when(scoreQuery.eq(any(), any())).thenReturn(scoreQuery);
-        when(scoreQuery.list()).thenReturn(List.of(new SubmissionJudgeScores()));
-
-        SubmissionJudgeVO vo = submissionJudgesService.getMyJudgingDetail("judge-1", "submission-1");
-
-        assertThat(vo).isNotNull();
-        assertThat(vo.getSubmissionId()).isEqualTo("submission-1");
+    @Test void removedOrNonJudgeAssignmentIsRejected() {
+        when(mapper.selectValidJudgeIds("c")).thenReturn(Set.of("j2"));
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("not assigned");
+        assertThat(records).isEmpty();
     }
 
-    @Test
-    @DisplayName("✅ Should list pending submissions for judging successfully")
-    void testListPendingSubmissionsForJudging_Success() {
-        when(competitionGateway.require(anyString())).thenReturn(mockCompetitionCompleted());
-
-        when(submissionServiceClient.listApprovedSubmissionsPublic(any(), anyInt(), anyInt(), any(), any(), any()))
-                .thenReturn(ResponseEntity.ok(mockPageSubmissions()));
-
-        LambdaQueryChainWrapper<SubmissionJudges> judgedQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgedQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgedQuery.eq(any(), any())).thenReturn(judgedQuery);
-        when(judgedQuery.select(any(SFunction.class))).thenReturn(judgedQuery);
-        when(judgedQuery.list()).thenReturn(Collections.emptyList());
-
-        PageResponse<SubmissionBriefVO> page = submissionJudgesService.listPendingSubmissionsForJudging(
-                ctx("judge-1", "JUDGE"), "comp-1", null, "asc", 1, 10
-        );
-
-        assertThat(page).isNotNull();
-        assertThat(page.getData()).isNotEmpty();
+    @Test void expiredOngoingCompetitionStillCannotBeScored() {
+        competition.setStatus(CompetitionStatus.ONGOING); competition.setEndDate(LocalDateTime.now().minusDays(1));
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("not completed");
     }
 
-    @Test
-    @DisplayName("✅ Should list my judging competitions successfully")
-    void testListMyJudgingCompetitions_Success() {
-        LambdaQueryChainWrapper<CompetitionJudges> query = mock(LambdaQueryChainWrapper.class);
-        doReturn(query).when(competitionJudgesService).lambdaQuery();
-        when(query.eq(any(), any())).thenReturn(query);
-        when(query.select(any(SFunction.class))).thenReturn(query);
-        when(query.list()).thenReturn(List.of(new CompetitionJudges().setCompetitionId("comp-1")));
-
-        when(competitionGateway.findAll(anyList())).thenReturn(List.of(mockCompetitionCompleted()));
-
-        PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
-                ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10
-        );
-
-        assertThat(page).isNotNull();
-        assertThat(page.getData()).isNotEmpty();
+    @Test void awardedCompetitionAndLocalCommittedRunAreImmutable() {
+        competition.setStatus(CompetitionStatus.AWARDED);
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("not completed");
+        competition.setStatus(CompetitionStatus.COMPLETED);
+        when(runs.lockRun("c")).thenReturn(LocalDateTime.now());
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("immutable");
     }
 
-    @Test
-    @DisplayName("❌ Should throw exception if user is not assigned as judge")
-    void testJudgeSubmission_NotAssignedJudge() {
-        LambdaQueryChainWrapper<CompetitionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeQuery).when(competitionJudgesService).lambdaQuery();
-        when(judgeQuery.eq(any(), any())).thenReturn(judgeQuery);
-        when(judgeQuery.exists()).thenReturn(false);
-
-        SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("You are not assigned as a judge");
+    @Test void rejectsCrossCompetitionAndUnapprovedSubmission() {
+        submission.setCompetitionId("other");
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("does not belong");
+        submission.setCompetitionId("c"); submission.setReviewStatus("REJECTED");
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("approved");
     }
 
-    @Test
-    @DisplayName("❌ Should throw exception if already judged")
-    void testJudgeSubmission_AlreadyJudged() {
-        LambdaQueryChainWrapper<CompetitionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeQuery).when(competitionJudgesService).lambdaQuery();
-        when(judgeQuery.eq(any(), any())).thenReturn(judgeQuery);
-        when(judgeQuery.exists()).thenReturn(true);
-
-        LambdaQueryChainWrapper<SubmissionJudges> judgedQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgedQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgedQuery.eq(any(), any())).thenReturn(judgedQuery);
-        when(judgedQuery.exists()).thenReturn(true);
-
-        SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.judgeSubmission(ctx("judge-1", "JUDGE"), judgeDTO))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("You have already judged");
+    @Test void rejectsWrongParticipationShapeAndUnknownCriteria() {
+        competition.setParticipationType(ParticipationType.TEAM);
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("ownership");
+        competition.setParticipationType(ParticipationType.INDIVIDUAL);
+        var body = dto(); body.getScores().getFirst().setCriterion("fake");
+        assertThatThrownBy(() -> service.judgeSubmission(judge, body)).hasMessageContaining("exactly once");
     }
 
-    @Test
-    @DisplayName("❌ Should throw exception if no existing judgement when updating")
-    void testUpdateJudgement_NoExistingJudgement() {
-        LambdaQueryChainWrapper<SubmissionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgeQuery.eq(any(), any())).thenReturn(judgeQuery);
-        when(judgeQuery.one()).thenReturn(null);
-
-        SubmissionJudgeDTO judgeDTO = buildJudgeDTO();
-        assertThatThrownBy(() -> submissionJudgesService.updateJudgement(ctx("judge-1", "JUDGE"), "submission-1", judgeDTO))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("No existing judging record found");
+    @Test void duplicateJudgementIsConflict() {
+        service.judgeSubmission(judge, dto());
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("already judged");
+        assertThat(records).hasSize(1);
     }
 
-    @Test
-    @DisplayName("✅ Should handle empty approved submissions")
-    void testListPendingSubmissionsForJudging_EmptyApprovedSubmissions() {
-        when(competitionGateway.require(any())).thenReturn(mockCompetitionCompleted());
-
-        when(submissionServiceClient.listApprovedSubmissionsPublic(any(), anyInt(), anyInt(), any(), any(), any()))
-                .thenReturn(ResponseEntity.ok(PageResponse.<SubmissionInfoVO>builder()
-                        .data(Collections.emptyList())
-                        .page(1).size(10).total(0L).pages(1).build()));
-
-        PageResponse<SubmissionBriefVO> page = submissionJudgesService.listPendingSubmissionsForJudging(
-                ctx("judge-1", "JUDGE"), "comp-1", null, "asc", 1, 10
-        );
-
-        assertThat(page).isNotNull();
-        assertThat(page.getData()).isEmpty();
+    @Test void replacementInvalidatesContextAndPostRescoresTheSameUniqueRecord() {
+        service.judgeSubmission(judge, dto());
+        String original = records.getFirst().getId();
+        submission.setRevision(1);
+        assertThat(service.getJudgingSubmission(judge, "c", "s").isHasScored()).isFalse();
+        assertThat(service.getJudgingSubmission(judge, "c", "s").isRequiresRescore()).isTrue();
+        var body = dto(); body.getScores().getLast().setScore(new BigDecimal("8"));
+        service.judgeSubmission(judge, body);
+        assertThat(records).hasSize(1);
+        assertThat(records.getFirst().getId()).isEqualTo(original);
+        assertThat(records.getFirst().getSubmissionRevision()).isEqualTo(1);
+        assertThat(records.getFirst().getScoreSchemaVersion()).isEqualTo(1);
+        assertThat(records.getFirst().getTotalScore()).isEqualByComparingTo("9.00");
+        assertThat(details).hasSize(2);
+        assertThat(service.getJudgingSubmission(judge, "c", "s").isHasScored()).isTrue();
     }
 
-    @Test
-    @DisplayName("✅ Should handle empty competition list when listing my judging competitions")
-    void testListMyJudgingCompetitions_EmptyCompetitions() {
-        LambdaQueryChainWrapper<CompetitionJudges> query = mock(LambdaQueryChainWrapper.class);
-        doReturn(query).when(competitionJudgesService).lambdaQuery();
-        when(query.eq(any(), any())).thenReturn(query);
-        when(query.select(any(SFunction.class))).thenReturn(query);
-        when(query.list()).thenReturn(Collections.emptyList());
-
-        when(competitionGateway.findAll(anyList())).thenReturn(Collections.emptyList());
-
-        PageResponse<CompetitionResponseVO> page = submissionJudgesService.listMyJudgingCompetitions(
-                ctx("judge-1", "JUDGE"), null, "createdAt", "asc", 1, 10
-        );
-
-        assertThat(page).isNotNull();
-        assertThat(page.getData()).isEmpty();
+    @Test @SuppressWarnings("unchecked") void legacyDetailsRequireRescoringAndNeverReceiveAFalseTenPointLabel() {
+        records.add(new SubmissionJudges().setId("old").setCompetitionId("c").setSubmissionId("s")
+                .setJudgeId("judge").setTotalScore(new BigDecimal("8")));
+        details.add(new SubmissionJudgeScores().setJudgeRecordId("old").setSubmissionId("s").setCriterion("A")
+                .setScore(new BigDecimal("100")).setWeight(new BigDecimal("1")));
+        var detailQuery = SubmissionJudgesServiceImplTest.<SubmissionJudgeScores>fluentQuery();
+        doReturn(detailQuery).when(scores).lambdaQuery();
+        when(detailQuery.list()).thenAnswer(call -> List.copyOf(details));
+        var detail = service.getMyJudgingDetail("judge", "s");
+        assertThat(detail.isRequiresRescore()).isTrue(); assertThat(detail.getTotalScore()).isNull();
+        assertThat(detail.getScores().getFirst().getWeight()).isNull();
+        assertThat(service.getJudgingSubmission(judge, "c", "s").isHasScored()).isFalse();
+        service.judgeSubmission(judge, dto());
+        assertThat(records).hasSize(1); assertThat(records.getFirst().getId()).isEqualTo("old");
+        assertThat(records.getFirst().getScoreSchemaVersion()).isEqualTo(1);
+        assertThat(service.getMyJudgingDetail("judge", "s").getTotalScore()).isEqualByComparingTo("5.00");
     }
 
-    // ----------- Helper methods -----------
-
-    private SubmissionJudgeDTO buildJudgeDTO() {
-        CriterionScoreDTO criterion = new CriterionScoreDTO();
-        criterion.setCriterion("Creativity");
-        criterion.setScore(BigDecimal.valueOf(4));
-        criterion.setWeight(BigDecimal.valueOf(0.5));
-
-        SubmissionJudgeDTO dto = new SubmissionJudgeDTO();
-        dto.setCompetitionId("comp-1");
-        dto.setSubmissionId("submission-1");
-        dto.setJudgeComments("Good job");
-        dto.setScores(List.of(criterion));
-        return dto;
+    @Test void missingSubmissionAndFailedReadDoNotWrite() {
+        when(submissions.getSubmissionsByIds(List.of("s"))).thenReturn(ResponseEntity.ok(List.of()));
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("not found");
+        when(submissions.getSubmissionsByIds(List.of("s"))).thenReturn(null);
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("returned no data");
+        assertThat(records).isEmpty();
     }
 
-    private CompetitionResponseVO mockCompetitionCompleted() {
-        CompetitionResponseVO vo = new CompetitionResponseVO();
-        vo.setStatus(CompetitionStatus.COMPLETED);
-        vo.setEndDate(LocalDateTime.now().minusDays(1));
-        return vo;
+    @Test void persistenceFailureDoesNotSendAProjection() {
+        doReturn(false).when(service).save(any(SubmissionJudges.class));
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("save judge record");
+        verify(tasks, never()).enqueue(anyString(), anyString(), any(), any());
     }
 
-    private PageResponse<SubmissionInfoVO> mockPageSubmissions() {
-        SubmissionInfoVO vo = new SubmissionInfoVO();
-        vo.setId("submission-1");
-        vo.setTitle("Test Submission");
-        vo.setFileName("submission.pdf");
-        vo.setCreatedAt(LocalDateTime.now().minusDays(1));
-        return PageResponse.<SubmissionInfoVO>builder()
-                .data(List.of(vo))
-                .page(1)
-                .size(10)
-                .total(1L)
-                .pages(1)
-                .build();
+    @Test void detailsFailureDoesNotSendAProjection() {
+        when(scores.saveBatch(anyCollection())).thenReturn(false);
+        assertThatThrownBy(() -> service.judgeSubmission(judge, dto())).hasMessageContaining("score details");
+        verify(tasks, never()).enqueue(anyString(), anyString(), any(), any());
+    }
+
+    @Test void updatingChecksPathAndBodyBeforeWritingAnything() {
+        assertThatThrownBy(() -> service.updateJudgement(judge, "other", dto())).hasMessageContaining("must match");
+        verify(service, never()).updateById(any(SubmissionJudges.class));
+    }
+
+    @Test void updatesOwnScoreWithSameEligibilityAndServerMean() {
+        service.judgeSubmission(judge, dto());
+        var body = dto(); body.getScores().getLast().setScore(new BigDecimal("8"));
+        service.updateJudgement(judge, "s", body);
+        assertThat(records.getFirst().getTotalScore()).isEqualByComparingTo("9.00");
+        assertThat(details).hasSize(2);
+        verify(tasks).enqueue("SUBMISSION_SCORE", "s", 1L, Map.of("score", new BigDecimal("9.00"), "revision", 0));
+    }
+
+    @Test void missingOriginalJudgementAndRemovedAssignmentCannotUpdate() {
+        assertThatThrownBy(() -> service.updateJudgement(judge, "s", dto())).hasMessageContaining("No existing");
+        when(mapper.selectValidJudgeIds("c")).thenReturn(Set.of());
+        assertThatThrownBy(() -> service.updateJudgement(judge, "s", dto())).hasMessageContaining("not assigned");
+    }
+
+    @Test void contextIncludesCriteriaAndReadOnlyAwardState() {
+        var context = service.getJudgingSubmission(judge, "c", "s");
+        assertThat(context.getScoringCriteria()).containsExactly("A", "B");
+        assertThat(context.isCanScore()).isTrue();
+        competition.setStatus(CompetitionStatus.AWARDED);
+        context = service.getJudgingSubmission(judge, "c", "s");
+        assertThat(context.getCompetitionStatus()).isEqualTo("AWARDED");
+        assertThat(context.isCanScore()).isFalse();
+    }
+
+    @Test @SuppressWarnings("unchecked") void assignedJudgeReadsOwnDetailsAndSubmissionQueue() {
+        service.judgeSubmission(judge, dto());
+        var detailQuery = SubmissionJudgesServiceImplTest.<SubmissionJudgeScores>fluentQuery();
+        doReturn(detailQuery).when(scores).lambdaQuery();
+        when(detailQuery.list()).thenReturn(details);
+        assertThat(service.getMyJudgingDetail("judge", "s").getTotalScore()).isEqualByComparingTo("5.00");
+        competition.setIsPublic(false);
+        assertThat(service.listPendingSubmissionsForJudging(judge, "c", null, "desc", 1, 10).getData())
+                .hasSize(1).allSatisfy(row -> assertThat(row.getHasScored()).isTrue());
+        verify(submissions).getApprovedSubmissions("c");
+    }
+
+    @Test void privateQueueKeepsTotalWhenPageIsPastTheEndAndRejectsForeignMetadata() {
+        competition.setIsPublic(false);
+        var page = service.listPendingSubmissionsForJudging(judge, "c", null, "desc", 2, 10);
+        assertThat(page.getData()).isEmpty(); assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getPages()).isEqualTo(1);
+        submission.setCompetitionId("private-other");
+        assertThatThrownBy(() -> service.listPendingSubmissionsForJudging(judge, "c", null, "desc", 1, 10))
+                .hasMessageContaining("does not belong");
+    }
+
+    @Test void incompleteCurrentRecordCanBeRescoredInsteadOfLeavingTheJudgeBlocked() {
+        service.judgeSubmission(judge, dto());
+        String id = records.getFirst().getId(); details.removeLast();
+        var context = service.getJudgingSubmission(judge, "c", "s");
+        assertThat(context.isHasScored()).isFalse(); assertThat(context.isRequiresRescore()).isTrue();
+        service.judgeSubmission(judge, dto());
+        assertThat(records).hasSize(1); assertThat(records.getFirst().getId()).isEqualTo(id);
+        assertThat(details).hasSize(2);
+        assertThat(service.getJudgingSubmission(judge, "c", "s").isHasScored()).isTrue();
+    }
+
+    @Test void assignmentPredicateRequiresCompletedAndCurrentValidJudge() {
+        assertThat(service.isUserAssignedAsJudge("judge", "c")).isTrue();
+        competition.setStatus(CompetitionStatus.ONGOING);
+        assertThat(service.isUserAssignedAsJudge("judge", "c")).isFalse();
+    }
+
+    @Test @SuppressWarnings("unchecked") void myCompetitionListRequiresJudgeAndValidAssignment() {
+        var assignmentQuery = SubmissionJudgesServiceImplTest.<CompetitionJudges>fluentQuery();
+        doReturn(assignmentQuery).when(assignments).lambdaQuery();
+        when(assignmentQuery.list()).thenReturn(List.of(new CompetitionJudges().setCompetitionId("c")));
+        when(competitions.findAll(List.of("c"))).thenReturn(List.of(competition));
+        assertThat(service.listMyJudgingCompetitions(judge, null, "createdAt", "desc", 1, 10).getData()).hasSize(1);
+        assertThatThrownBy(() -> service.listMyJudgingCompetitions(new RequestContext("judge", "PARTICIPANT"),
+                null, "createdAt", "desc", 1, 10)).hasMessageContaining("required role");
+    }
+
+    @Test void badPageCannotReachTheDatabase() {
+        assertThatThrownBy(() -> service.listPendingSubmissionsForJudging(judge, "c", null, "desc", 0, 10))
+                .hasMessageContaining("Page must be positive");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> LambdaQueryChainWrapper<T> fluentQuery() {
+        return mock(LambdaQueryChainWrapper.class, invocation -> {
+            var result = RETURNS_SELF.answer(invocation);
+            // MyBatis-Plus generic bridge methods return Object; Mockito's self answer excludes it.
+            if (result == null && Set.of("eq", "in", "select").contains(invocation.getMethod().getName())) {
+                return invocation.getMock();
+            }
+            return result;
+        });
     }
 }

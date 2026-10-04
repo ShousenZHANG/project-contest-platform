@@ -27,7 +27,7 @@ describe('TeamListPage', () => {
     expect(await screen.findByText('Team Nebula')).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith(
       '/registrations/public/contest-1/teams',
-      expect.objectContaining({ params: { page: 1, size: 100 } })
+      expect.objectContaining({ params: { page: 1, size: 12 } }),
     );
   });
 
@@ -55,9 +55,7 @@ describe('TeamPublicDetail', () => {
     });
 
     expect(await screen.findByText('Nebula Entry')).toBeInTheDocument();
-    expect(apiClient.get).toHaveBeenCalledWith(
-      '/submissions/public/teams/comp-1/team-1'
-    );
+    expect(apiClient.get).toHaveBeenCalledWith('/submissions/public/teams/comp-1/team-1');
   });
 
   it('falls back to the not-found copy when the endpoint errors', async () => {
@@ -69,7 +67,7 @@ describe('TeamPublicDetail', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByText(/No submission found for this team/i)).toBeInTheDocument()
+      expect(screen.getByText(/No submission found for this team/i)).toBeInTheDocument(),
     );
   });
 });

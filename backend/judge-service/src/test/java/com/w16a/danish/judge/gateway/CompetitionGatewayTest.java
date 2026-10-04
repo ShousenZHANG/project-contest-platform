@@ -94,11 +94,12 @@ class CompetitionGatewayTest {
     }
 
     @Test
-    @DisplayName("findAll returns an empty list rather than null when the batch read fails")
+    @DisplayName("findAll reports an invalid upstream body instead of inventing an empty list")
     void findAllTolerantOfNullBody() {
         when(client.getCompetitionsByIds(anyList())).thenReturn(ResponseEntity.ok(null));
 
-        assertThat(gateway.findAll(List.of("c1"))).isEmpty();
+        assertThatThrownBy(() -> gateway.findAll(List.of("c1")))
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
     }
 
     @Test
@@ -111,11 +112,12 @@ class CompetitionGatewayTest {
     }
 
     @Test
-    @DisplayName("listAll degrades to an empty list instead of null")
+    @DisplayName("listAll reports an upstream outage rather than zero public competitions")
     void listAllTolerantOfNull() {
         when(client.listAllCompetitions()).thenReturn(null);
 
-        assertThat(gateway.listAll()).isEmpty();
+        assertThatThrownBy(() -> gateway.listAll())
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
     }
 
     @Test

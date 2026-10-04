@@ -24,6 +24,9 @@ public class SubmissionInfoVO {
     @Schema(description = "Competition ID", example = "comp-456")
     private String competitionId;
 
+    @Schema(description = "File revision; increases whenever the submission is replaced")
+    private Integer revision = 0;
+
     @Schema(description = "Participant user ID", example = "user-789")
     private String userId;
 
@@ -57,7 +60,7 @@ public class SubmissionInfoVO {
     @Schema(description = "Review timestamp", example = "2025-04-05T14:30:00")
     private LocalDateTime reviewedAt;
 
-    @Schema(description = "Total score given", example = "87.50")
+    @Schema(description = "Submission score projection from 0 to 10; judging uses current criterion records", example = "8.75")
     private BigDecimal totalScore;
 
     @Schema(description = "Submission time", example = "2025-04-04T16:00:00")

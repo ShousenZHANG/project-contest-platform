@@ -8,6 +8,7 @@ import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionBriefVO;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
+import com.w16a.danish.judge.domain.vo.JudgingSubmissionVO;
 
 /**
  * Service interface for managing submission judging records.
@@ -20,6 +21,8 @@ import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
  * @since 2025-04-18
  */
 public interface ISubmissionJudgesService extends IService<SubmissionJudges> {
+
+    JudgingSubmissionVO getJudgingSubmission(RequestContext ctx, String competitionId, String submissionId);
 
     /**
      * Records a judge's evaluation for a specific submission.

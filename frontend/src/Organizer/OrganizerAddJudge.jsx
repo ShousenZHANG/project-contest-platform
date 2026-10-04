@@ -1,19 +1,8 @@
-/**
- * @file OrganizerAddJudge.jsx
- * @description
- * Manage judges for a specific competition. Add (with conflict check vs participants),
- * paginate, and delete. Migrated from MUI to shadcn/ui.
- *
- * Role: Organizer
- */
-
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { competitionService } from '../services/competitionService';
-import { registrationService } from '../services/registrationService';
 import { queryKeys, staleTime } from '../api/queryKeys';
 import { unwrap } from '../api/queryFn';
 import { Button } from '../components/ui/button';
@@ -21,251 +10,118 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import AuthTokenManager from '@/auth/authTokenManager';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import Pagination from '../shared/components/Pagination';
+import ConfirmDialog from '../shared/components/ConfirmDialog';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
-
-function OrganizerAddJudge() {
+export default function OrganizerAddJudge() {
+  useDocumentTitle('Assign competition judges');
   const { competitionId } = useParams();
   const navigate = useNavigate();
-  const email = AuthTokenManager.getEmail();
-
-  const [judgeEmail, setJudgeEmail] = useState('');
-  const [page, setPage] = useState(1);
-  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
-
+  const state = usePagedSearchParams();
   const queryClient = useQueryClient();
-  const enabled = Boolean(competitionId);
-
-  const { data: competition } = useQuery({
-    queryKey: queryKeys.competitions.detail(competitionId),
-    queryFn: () => unwrap(competitionService.getById(competitionId)),
-    enabled,
-    staleTime: staleTime.medium,
-  });
-
-  const competitionName = competition?.name || 'Unnamed Competition';
-
-  const judgesParams = { page, size: 10 };
-  const judgesKey = [...queryKeys.competitions.judges(competitionId), judgesParams];
-
-  const { data: judgesPage, isPending: judgesPending } = useQuery({
-    queryKey: judgesKey,
-    queryFn: () => unwrap(competitionService.getJudges(competitionId, judgesParams)),
-    enabled,
+  const [judgeEmail, setJudgeEmail] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const [deleteId, setDeleteId] = useState(null);
+  const competitionQuery = useQuery({
+    queryKey: queryKeys.competitions.managedDetail(competitionId),
+    queryFn: () => unwrap(competitionService.getManagedById(competitionId)),
+    enabled: Boolean(competitionId),
     staleTime: staleTime.short,
   });
-
-  const judges = judgesPage?.data ?? [];
-  const totalPages = judgesPage?.pages ?? 1;
-
-  const participantsParams = { page: 1, size: 10000 };
-  const { data: participantsEmails = new Set() } = useQuery({
-    queryKey: queryKeys.registrations.participants(competitionId, participantsParams),
-    queryFn: () =>
-      unwrap(registrationService.getParticipants(competitionId, participantsParams)),
-    // Only the email set is used here; keeping the raw page cached means the
-    // participant list page can share this entry.
-    select: (payload) => new Set((payload?.data ?? []).map((p) => p.email)),
-    enabled,
-    staleTime: staleTime.medium,
+  const competition = competitionQuery.data;
+  const params = { page: state.page, size: 10 };
+  const judgesQuery = useQuery({
+    queryKey: [...queryKeys.competitions.judges(competitionId), params],
+    queryFn: () => unwrap(competitionService.getJudges(competitionId, params)),
+    enabled: Boolean(competition),
+    staleTime: staleTime.short,
   });
-
-  const refreshJudges = () =>
+  const canEdit = ['UPCOMING', 'ONGOING', 'COMPLETED'].includes(competition?.status);
+  const refresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.competitions.judges(competitionId) });
-
-  const assignJudges = useMutation({
-    mutationFn: (judgeEmails) =>
-      unwrap(competitionService.assignJudges(competitionId, { judgeEmails })),
-    onSuccess: (data) => {
-      toast.success(typeof data === 'string' ? data : JSON.stringify(data));
-      setJudgeEmail('');
-      refreshJudges();
-    },
-    onError: (error) => {
-      const errData = error.response?.data;
-      toast.error(
-        typeof errData === 'string'
-          ? errData
-          : errData?.error || 'Error assigning judge'
-      );
-    },
+    queryClient.invalidateQueries({ queryKey: queryKeys.winners.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.judges.all });
+  };
+  const assign = useMutation({
+    mutationFn: (judgeEmails) => unwrap(competitionService.assignJudges(competitionId, { judgeEmails })),
+    onSuccess: () => { setJudgeEmail(''); refresh(); toast.success('Judges assigned'); },
   });
-
-  const removeJudge = useMutation({
+  const remove = useMutation({
     mutationFn: (judgeId) => unwrap(competitionService.removeJudge(competitionId, judgeId)),
-    onSuccess: (data) => {
-      toast.success(typeof data === 'string' ? data : 'Judge removed');
-      refreshJudges();
-    },
-    onError: () => toast.error('Error deleting judge'),
-    onSettled: () => setConfirmDelete({ open: false, id: null }),
+    onSuccess: () => { setDeleteId(null); refresh(); toast.success('Judge removed'); },
   });
-
-  const handleAddJudge = async () => {
-    const trimmedEmails = judgeEmail
-      .split(',')
-      .map((e) => e.trim())
-      .filter((e) => e);
-
-    if (trimmedEmails.length === 0) {
-      toast.warning('Judge email(s) cannot be empty');
+  const busy = assign.isPending || remove.isPending;
+  const add = (event) => {
+    event.preventDefault();
+    if (!canEdit || busy) return;
+    const emails = [...new Set(judgeEmail.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean))];
+    if (!emails.length || emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      setValidationError('Enter valid Judge email addresses separated by commas.');
       return;
     }
-
-    const conflict = trimmedEmails.find((e) => participantsEmails.has(e));
-    if (conflict) {
-      toast.error(
-        `${conflict} is already a participant in this competition and cannot be assigned as a judge.`
-      );
-      return;
-    }
-
-    assignJudges.mutate(trimmedEmails);
+    setValidationError('');
+    assign.mutate(emails);
   };
-
-  const handleConfirmDelete = () => {
-    const judgeId = confirmDelete.id;
-    if (judgeId) removeJudge.mutate(judgeId);
-  };
-
+  const judges = judgesQuery.data?.data || [];
   return (
-    <div className="mx-auto max-w-5xl px-6 py-6">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Judges for: {competitionName}
-        </h1>
-      </div>
-
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1.5">
-          <Label htmlFor="judgeEmail">Judge Email(s)</Label>
-          <Input
-            id="judgeEmail"
-            value={judgeEmail}
-            onChange={(e) => setJudgeEmail(e.target.value)}
-            placeholder="judge1@example.com, judge2@example.com"
-          />
-          <p className="text-xs text-muted-foreground">
-            You can enter multiple emails separated by commas.
-          </p>
-        </div>
-        <Button onClick={handleAddJudge}>Add Judge</Button>
-      </div>
-
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-3 py-2">#</th>
-              <th className="px-3 py-2">Email</th>
-              <th className="px-3 py-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {judgesPending ? (
-              <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
-                  Loading judges...
-                </td>
-              </tr>
-            ) : judges.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
-                  No judges assigned yet.
-                </td>
-              </tr>
-            ) : (
-              judges.map((judge, index) => (
-                <tr
-                  key={judge.id || index}
-                  className="border-b border-border last:border-0 hover:bg-muted/40"
-                >
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {(page - 1) * 10 + index + 1}
-                  </td>
-                  <td className="px-3 py-1.5 font-medium text-foreground">{judge.email}</td>
-                  <td className="px-3 py-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-destructive text-destructive hover:bg-destructive/10"
-                      onClick={() => setConfirmDelete({ open: true, id: judge.id })}
-                    >
-                      Delete
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </Card>
-
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          Page {page} of {totalPages}
-        </p>
-        <div className="flex gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-            aria-label="Next page"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/OrganizerContestList/${email}`)}
-        >
-          Back to Contest List
-        </Button>
-      </div>
-
-      <Dialog
-        open={confirmDelete.open}
-        onOpenChange={(open) => setConfirmDelete({ open, id: open ? confirmDelete.id : null })}
-      >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Remove judge?</DialogTitle>
-            <DialogDescription>
-              This will revoke the judge's assignment for this competition.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete({ open: false, id: null })}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+    <div className="mx-auto max-w-5xl space-y-5 py-6">
+      <header>
+        <h1 className="break-words text-2xl font-semibold tracking-tight">Judges for: {competition?.name || 'Competition'}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Only existing Judge accounts can be assigned. Every approved work needs at least 3 independent Judge scores before awarding.</p>
+      </header>
+      {competitionQuery.isPending ? <PageSkeleton rows={2} /> : competitionQuery.error ? (
+        <PageError error={competitionQuery.error} onRetry={() => competitionQuery.refetch()} retrying={competitionQuery.isFetching} />
+      ) : (
+        <>
+          {!canEdit && <p role="status" className="rounded-md border p-4 text-sm">Judge assignments are locked for this {competition?.status?.toLowerCase()} competition.</p>}
+          <form onSubmit={add} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-2">
+              <Label htmlFor="judgeEmail">Judge Email(s)</Label>
+              <Input id="judgeEmail" className="h-11 text-base" value={judgeEmail} autoCapitalize="none" autoComplete="off" inputMode="email"
+                disabled={!canEdit || busy} aria-invalid={Boolean(validationError)} aria-describedby="judge-email-help judge-email-error"
+                onChange={(event) => { setJudgeEmail(event.target.value); setValidationError(''); assign.reset(); }} />
+              <p id="judge-email-help" className="text-sm text-muted-foreground">Separate multiple email addresses with commas. Ask an Admin to create accounts for new judges.</p>
+              <p id="judge-email-error" role={validationError ? 'alert' : undefined} className="text-sm text-destructive">{validationError}</p>
+            </div>
+            <Button type="submit" className="min-h-11" disabled={!canEdit || busy} aria-busy={assign.isPending}>{assign.isPending ? 'Assigning…' : 'Add Judge'}</Button>
+          </form>
+          {assign.error && <PageError error={assign.error} />}
+          {remove.error && <PageError error={remove.error} />}
+          {judgesQuery.isPending ? <PageSkeleton rows={3} /> : judgesQuery.error ? (
+            <PageError error={judgesQuery.error} onRetry={() => judgesQuery.refetch()} retrying={judgesQuery.isFetching} />
+          ) : (
+            <>
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Assigned judges">
+                  <table className="w-full text-sm">
+                    <caption className="sr-only">Judges assigned to this competition</caption>
+                    <thead className="border-b bg-muted/40 text-left"><tr>{['#', 'Email', 'Action'].map((label) => <th key={label} scope="col" className="px-4 py-3">{label}</th>)}</tr></thead>
+                    <tbody>
+                      {judges.length ? judges.map((judge, index) => (
+                        <tr key={judge.id} className="border-b last:border-0">
+                          <td className="px-4 py-3">{(state.page - 1) * 10 + index + 1}</td>
+                          <th scope="row" className="break-all px-4 py-3 text-left font-medium">{judge.email}</th>
+                          <td className="px-4 py-3"><Button variant="outline" className="min-h-11 text-destructive" disabled={!canEdit || busy}
+                            aria-label={`Delete ${judge.email}`} onClick={() => { remove.reset(); setDeleteId(judge.id); }}>Delete</Button></td>
+                        </tr>
+                      )) : <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">No judges assigned on this page.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+              <Pagination page={state.page} pages={judgesQuery.data?.pages} total={judgesQuery.data?.total ?? judges.length}
+                onPageChange={state.setPage} busy={judgesQuery.isFetching || busy} />
+            </>
+          )}
+        </>
+      )}
+      <Button variant="outline" className="min-h-11" onClick={() => navigate(`/OrganizerContestList/${encodeURIComponent(AuthTokenManager.getEmail() || '')}`)}>Back to Contest List</Button>
+      <ConfirmDialog open={deleteId != null} title="Remove judge?" message="This revokes the assignment. Their existing scores will no longer count toward award eligibility."
+        confirmLabel="Remove" confirmVariant="destructive" pending={remove.isPending} error={remove.error} onConfirm={() => { if (canEdit && !busy) remove.mutate(deleteId); }} onCancel={() => setDeleteId(null)} />
     </div>
   );
 }
-
-export default OrganizerAddJudge;

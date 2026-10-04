@@ -4,6 +4,7 @@ import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
+import java.nio.charset.StandardCharsets;
 
 
 /**
@@ -44,6 +45,7 @@ public class PasswordUtil {
     public boolean isPasswordValid(String pwd) {
         return StrUtil.isNotBlank(pwd) &&
                 pwd.length() >= 8 &&
+                pwd.getBytes(StandardCharsets.UTF_8).length <= 72 &&
                 ReUtil.isMatch(".*[A-Z].*", pwd) &&
                 ReUtil.isMatch(".*\\d.*", pwd);
     }

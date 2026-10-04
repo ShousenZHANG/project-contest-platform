@@ -1,91 +1,70 @@
 package com.w16a.danish.judge.feign.fallback;
 
-import com.w16a.danish.common.domain.vo.PageResponse;
-import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import com.w16a.danish.common.exception.ServiceUnavailableException;
 
-@Slf4j
 @Component
 public class SubmissionServiceClientFallback implements SubmissionServiceClient {
 
     @Override
-    public ResponseEntity<PageResponse<SubmissionInfoVO>> listApprovedSubmissionsPublic(
-            String competitionId, int page, int size, String keyword, String sortBy, String order) {
-        log.warn("[Fallback] registration-service unavailable — listApprovedSubmissionsPublic");
-        return ResponseEntity.ok(new PageResponse<>(Collections.emptyList(), 0, page, size, 0));
+    public ResponseEntity<List<SubmissionInfoVO>> getApprovedSubmissions(String competitionId) {
+        throw new ServiceUnavailableException("registration-service", "getApprovedSubmissions");
     }
 
     @Override
     public ResponseEntity<RegistrationStatisticsVO> getRegistrationStatistics(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getRegistrationStatistics");
-        return ResponseEntity.ok(new RegistrationStatisticsVO());
+        throw new ServiceUnavailableException("registration-service", "getRegistrationStatistics");
     }
 
     @Override
     public ResponseEntity<SubmissionStatisticsVO> getSubmissionStatistics(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getSubmissionStatistics");
-        return ResponseEntity.ok(new SubmissionStatisticsVO());
+        throw new ServiceUnavailableException("registration-service", "getSubmissionStatistics");
     }
 
     @Override
     public ResponseEntity<Map<String, Map<String, Integer>>> getParticipantTrend(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getParticipantTrend");
-        return ResponseEntity.ok(Collections.emptyMap());
+        throw new ServiceUnavailableException("registration-service", "getParticipantTrend");
     }
 
     @Override
     public ResponseEntity<Map<String, Integer>> getSubmissionTrend(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getSubmissionTrend");
-        return ResponseEntity.ok(Collections.emptyMap());
+        throw new ServiceUnavailableException("registration-service", "getSubmissionTrend");
     }
 
     @Override
     public ResponseEntity<PlatformParticipantStatisticsVO> getPlatformParticipantStatistics() {
-        log.warn("[Fallback] registration-service unavailable — getPlatformParticipantStatistics");
-        return ResponseEntity.ok(new PlatformParticipantStatisticsVO());
+        throw new ServiceUnavailableException("registration-service", "getPlatformParticipantStatistics");
     }
 
     @Override
     public ResponseEntity<PlatformSubmissionStatisticsVO> getPlatformSubmissionStatistics() {
-        log.warn("[Fallback] registration-service unavailable — getPlatformSubmissionStatistics");
-        return ResponseEntity.ok(new PlatformSubmissionStatisticsVO());
+        throw new ServiceUnavailableException("registration-service", "getPlatformSubmissionStatistics");
     }
 
     @Override
     public ResponseEntity<Map<String, Map<String, Integer>>> getPlatformParticipantTrend() {
-        log.warn("[Fallback] registration-service unavailable — getPlatformParticipantTrend");
-        return ResponseEntity.ok(Collections.emptyMap());
+        throw new ServiceUnavailableException("registration-service", "getPlatformParticipantTrend");
     }
 
     @Override
     public ResponseEntity<Map<String, Integer>> getPlatformSubmissionTrend() {
-        log.warn("[Fallback] registration-service unavailable — getPlatformSubmissionTrend");
-        return ResponseEntity.ok(Collections.emptyMap());
+        throw new ServiceUnavailableException("registration-service", "getPlatformSubmissionTrend");
     }
 
     @Override
-    public ResponseEntity<Void> updateTotalScore(String submissionId, java.math.BigDecimal totalScore) {
-        // This is a WRITE. Returning ok() here would make the caller believe the score
-        // was persisted while it was silently dropped. Fail loud so the score can be retried.
-        log.error("[Fallback] registration-service unavailable — updateTotalScore submissionId={}", submissionId);
-        throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE,
-                "Submission service unavailable, total score was not persisted");
+    public ResponseEntity<Void> updateTotalScore(String submissionId, java.math.BigDecimal totalScore, long version, int revision) {
+        throw new ServiceUnavailableException("registration-service", "updateTotalScore");
     }
 
     @Override
     public ResponseEntity<SubmissionScoreStatisticsVO> getScoreStatistics(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getScoreStatistics");
-        return ResponseEntity.ok(new SubmissionScoreStatisticsVO());
+        throw new ServiceUnavailableException("registration-service", "getScoreStatistics");
     }
 
     @Override
@@ -100,19 +79,11 @@ public class SubmissionServiceClientFallback implements SubmissionServiceClient 
 
     @Override
     public ResponseEntity<List<SubmissionInfoVO>> getTeamSubmissionsBasic(String competitionId, List<String> teamIds) {
-        log.warn("[Fallback] registration-service unavailable — getTeamSubmissionsBasic");
-        return ResponseEntity.ok(List.of());
-    }
-
-    @Override
-    public ResponseEntity<List<SubmissionInfoVO>> getScoredSubmissions(String competitionId) {
-        log.warn("[Fallback] registration-service unavailable — getScoredSubmissions");
-        return ResponseEntity.ok(Collections.emptyList());
+        throw new ServiceUnavailableException("registration-service", "getTeamSubmissionsBasic");
     }
 
     @Override
     public ResponseEntity<List<SubmissionInfoVO>> getSubmissionsByIds(List<String> submissionIds) {
-        log.warn("[Fallback] registration-service unavailable — getSubmissionsByIds");
-        return ResponseEntity.ok(Collections.emptyList());
+        throw new ServiceUnavailableException("registration-service", "getSubmissionsByIds");
     }
 }

@@ -40,6 +40,9 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
 
     void deleteSubmissionsByUserAndCompetition(String userId, String competitionId);
 
+    /** Trusted domain operation; the registration service has already checked team ownership. */
+    void deleteSubmissionsByTeamAndCompetition(String teamId, String competitionId);
+
     void submitWork(RequestContext ctx, String competitionId, String title, String description, MultipartFile file);
 
     SubmissionInfoVO getMySubmission(String competitionId, RequestContext ctx);
@@ -59,6 +62,8 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
     void reviewSubmission(SubmissionReviewDTO dto, RequestContext ctx);
 
     boolean isUserOrganizerOfSubmission(String submissionId, String userId);
+
+    boolean isPublicApproved(String submissionId);
 
     void deleteSubmission(String submissionId, RequestContext ctx);
 
@@ -104,7 +109,9 @@ public interface ISubmissionRecordsService extends IService<SubmissionRecords> {
      * Update the aggregated total score on a submission record.
      * Called by judge-service after all judges submit scores.
      */
-    void updateTotalScore(String submissionId, BigDecimal totalScore);
+    void updateTotalScore(String submissionId, BigDecimal totalScore, long version, int revision);
+
+    List<SubmissionInfoVO> getApprovedSubmissions(String competitionId);
 
     /**
      * Get basic submission info for an individual participant.

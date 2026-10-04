@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * ComentsPage.jsx
  *
@@ -7,22 +8,21 @@
  * Role: Public User
  * Developer: Beiqi Dai (migrated)
  */
-import React, { useState, useEffect } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, MessageSquare } from "lucide-react";
-import { toast } from "sonner";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import { commentService } from "../services/interactionService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap, toMessage } from "../api/queryFn";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import EmptyState from "@/shared/components/EmptyState";
-import PageSkeleton from "@/shared/components/PageSkeleton";
+import React, { useState, useEffect } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
+import { toast } from 'sonner';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import { commentService } from '../services/interactionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap, toMessage } from '../api/queryFn';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import EmptyState from '@/shared/components/EmptyState';
+import PageSkeleton from '@/shared/components/PageSkeleton';
 import AuthTokenManager from '@/auth/authTokenManager';
-
 
 function CommentsPage() {
   const { submissionId } = useParams();
@@ -42,15 +42,15 @@ function CommentsPage() {
     isFetchingNextPage,
     isPending,
   } = useInfiniteQuery({
-    queryKey: [...queryKeys.comments.all, "infinite", submissionId],
+    queryKey: [...queryKeys.comments.all, 'infinite', submissionId],
     queryFn: ({ pageParam }) =>
       unwrap(
         commentService.getBySubmission(submissionId, {
           page: pageParam,
           size: 10,
-          sortBy: "createdAt",
-          order: "desc",
-        })
+          sortBy: 'createdAt',
+          order: 'desc',
+        }),
       ),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -118,30 +118,27 @@ function CommentsPage() {
                   <Card key={commentId} className="border-border/60">
                     <CardContent className="space-y-2 p-5">
                       <p className="text-sm font-semibold text-foreground">
-                        {comment.userId === currentUserId ? "My comment" : "Anonymous"}
+                        {comment.userId === currentUserId ? 'My comment' : 'Anonymous'}
                       </p>
                       <p className="text-sm leading-relaxed text-foreground/90">
                         {comment.content}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(comment.createdAt).toLocaleString()}
+                        {parseApiDateTime(comment.createdAt).toLocaleString()}
                       </p>
 
                       {comment.replies && comment.replies.length > 0 && (
                         <div className="ml-5 mt-4 space-y-2 border-l-2 border-border pl-4">
                           {repliesToShow.map((reply) => (
-                            <div
-                              key={reply.id}
-                              className="rounded-md bg-muted/40 p-3"
-                            >
+                            <div key={reply.id} className="rounded-md bg-muted/40 p-3">
                               <p className="text-sm font-semibold text-foreground">
-                                {reply.userId === currentUserId ? "My reply" : "Anonymous"}
+                                {reply.userId === currentUserId ? 'My reply' : 'Anonymous'}
                               </p>
                               <p className="mt-1 text-sm leading-relaxed text-foreground/90">
                                 {reply.content}
                               </p>
                               <p className="mt-2 text-xs text-muted-foreground">
-                                {new Date(reply.createdAt).toLocaleString()}
+                                {parseApiDateTime(reply.createdAt).toLocaleString()}
                               </p>
                             </div>
                           ))}
@@ -153,7 +150,7 @@ function CommentsPage() {
                               onClick={() => toggleExpandedReplies(commentId)}
                               className="text-amber-600 hover:text-amber-700"
                             >
-                              {isExpanded ? "Hide replies" : "View more replies"}
+                              {isExpanded ? 'Hide replies' : 'View more replies'}
                             </Button>
                           )}
                         </div>
@@ -167,10 +164,7 @@ function CommentsPage() {
 
           {page < totalPages && (
             <div className="mt-6 flex justify-center">
-              <Button
-                onClick={handleLoadMore}
-                className="bg-amber-500 hover:bg-amber-600"
-              >
+              <Button onClick={handleLoadMore} className="bg-amber-500 hover:bg-amber-600">
                 Load More Comments
               </Button>
             </div>

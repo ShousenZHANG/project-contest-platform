@@ -40,6 +40,9 @@ public class SubmissionWinners implements Serializable {
     @Schema(description = "Award name (e.g., Champion, Best Innovation)", example = "Champion")
     private String awardName;
 
+    /** Authoritative score snapshot when the award was finalized. */
+    private java.math.BigDecimal totalScore;
+
     @Schema(description = "Submission ranking (1 = Champion, 2 = Runner-up, etc.)", example = "1")
     private Integer rankSubmission;
 

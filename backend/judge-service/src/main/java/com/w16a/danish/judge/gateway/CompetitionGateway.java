@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
+import com.w16a.danish.common.exception.ServiceUnavailableException;
 
 /**
  * Reads competitions from the competition service.
@@ -61,16 +63,25 @@ public class CompetitionGateway {
         if (competitionIds == null || competitionIds.isEmpty()) {
             return List.of();
         }
-        return Optional.ofNullable(competitionServiceClient.getCompetitionsByIds(competitionIds))
-                .map(response -> response.getBody())
-                .orElse(List.of());
+        List<CompetitionResponseVO> competitions = new ArrayList<>();
+        List<String> ids = competitionIds.stream().distinct().toList();
+        for (int from = 0; from < ids.size(); from += 100) {
+            var response = competitionServiceClient.getCompetitionsByIds(ids.subList(from, Math.min(from + 100, ids.size())));
+            if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new ServiceUnavailableException("competition-service", "getCompetitionsByIds");
+            }
+            competitions.addAll(response.getBody());
+        }
+        return List.copyOf(competitions);
     }
 
-    /** Every competition on the platform. Empty rather than null when the read fails. */
+    /** All public competitions. An outage is distinct from an empty platform. */
     public List<CompetitionResponseVO> listAll() {
-        return Optional.ofNullable(competitionServiceClient.listAllCompetitions())
-                .map(response -> response.getBody())
-                .orElse(List.of());
+        var response = competitionServiceClient.listAllCompetitions();
+        if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new ServiceUnavailableException("competition-service", "listAllCompetitions");
+        }
+        return response.getBody();
     }
 
     /**

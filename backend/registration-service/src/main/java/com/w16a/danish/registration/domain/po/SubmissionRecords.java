@@ -32,6 +32,10 @@ public class SubmissionRecords implements Serializable {
     @TableId(value = "id", type = IdType.ASSIGN_UUID)
     private String id;
 
+    private Integer revision;
+
+    private Long scoreVersion;
+
     @Schema(description = "Competition ID", example = "comp-1234-uuid")
     private String competitionId;
 
@@ -71,7 +75,7 @@ public class SubmissionRecords implements Serializable {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime reviewedAt;
 
-    @Schema(description = "Total score given to the submission", example = "87.50")
+    @Schema(description = "Score projection; current verified scores use 0–10", example = "8.75")
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal totalScore;
 

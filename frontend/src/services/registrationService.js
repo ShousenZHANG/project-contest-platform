@@ -44,6 +44,10 @@ export const registrationService = {
   getRegisteredTeams: (competitionId, params) =>
     apiClient.get(`/registrations/public/${competitionId}/teams`, { params }),
 
+  /** Authorized competition roster, including private competitions. */
+  getManagedRegisteredTeams: (competitionId, params) =>
+    apiClient.get('/registrations/teams/list', { params: { competitionId, ...params } }),
+
   /** Every competition a team is registered for. */
   getTeamCompetitions: (teamId, params) =>
     apiClient.get(`/registrations/teams/${teamId}/competitions`, { params }),
@@ -76,14 +80,15 @@ export const submissionService = {
 
   getTeamSubmission: (competitionId, teamId) =>
     apiClient.get(`/submissions/public/teams/${competitionId}/${teamId}`),
+  getOwnTeamSubmission: (competitionId, teamId) =>
+    apiClient.get(`/submissions/teams/${competitionId}/${teamId}`),
 
   /** The signed-in participant's own submission for a competition. */
   getMine: (competitionId) => apiClient.get(`/submissions/${competitionId}`),
 
   delete: (submissionId) => apiClient.delete(`/submissions/${submissionId}`),
 
-  deleteTeamSubmission: (submissionId) =>
-    apiClient.delete(`/submissions/teams/${submissionId}`),
+  deleteTeamSubmission: (submissionId) => apiClient.delete(`/submissions/teams/${submissionId}`),
 
   /** Organizer approving or rejecting a submission. */
   review: (data) => apiClient.post('/submissions/review', data),

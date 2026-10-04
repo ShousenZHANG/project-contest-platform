@@ -1,19 +1,17 @@
-import React from "react";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
-import { renderWithProviders } from "../testUtils";
-import EditContest from "../../Organizer/EditContest";
+import React from 'react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithProviders } from '../testUtils';
+import EditContest from '../../Organizer/EditContest';
 import apiClient from '../../api/apiClient';
 
-jest.mock("../../api/apiClient");
+jest.mock('../../api/apiClient');
 
-jest.mock("react-router-dom", () => {
-  const actual = jest.requireActual("react-router-dom");
+jest.mock('react-router-dom', () => {
+  const actual = jest.requireActual('react-router-dom');
   return {
     ...actual,
-    useParams: () => ({ email: "test@example.com" }),
-    useSearchParams: () => [
-      new URLSearchParams({ competitionId: "test-id" }),
-    ],
+    useParams: () => ({ email: 'test@example.com' }),
+    useSearchParams: () => [new URLSearchParams({ competitionId: 'test-id' })],
     useNavigate: () => jest.fn(),
   };
 });
@@ -22,19 +20,20 @@ beforeEach(() => {
   window.alert = jest.fn();
 
   apiClient.get.mockImplementation((url) => {
-    if (url.includes("/competitions/test-id")) {
+    if (url.includes('/competitions/managed/test-id')) {
       return Promise.resolve({
         data: {
-          id: "test-id",
-          name: "Test Contest",
-          description: "This is a test description",
-          category: "Design & Creativity",
-          startDate: "2025-05-01T00:00:00",
-          endDate: "2025-05-10T00:00:00",
+          id: 'test-id',
+          name: 'Test Contest',
+          description: 'This is a test description',
+          category: 'Design & Creativity',
+          startDate: '2025-05-01T00:00:00',
+          endDate: '2025-05-10T00:00:00',
           isPublic: true,
-          scoringCriteria: ["Creativity", "Impact"],
-          allowedSubmissionTypes: ["PDF", "Image"],
-          participationType: "INDIVIDUAL",
+          scoringCriteria: ['Creativity', 'Impact'],
+          allowedSubmissionTypes: ['PDF', 'Image'],
+          participationType: 'INDIVIDUAL',
+          status: 'UPCOMING',
         },
       });
     }
@@ -48,64 +47,67 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-describe("EditContest", () => {
-  test("renders contest details from API", async () => {
+describe('EditContest', () => {
+  test('renders contest details from API', async () => {
     renderWithProviders(<EditContest />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Test Contest")).toBeInTheDocument();
-      expect(screen.getByDisplayValue("This is a test description")).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Test Contest')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('This is a test description')).toBeInTheDocument();
     });
   });
 
-  test("allows adding new scoring criteria", async () => {
+  test('allows adding new scoring criteria', async () => {
     renderWithProviders(<EditContest />);
 
-    await waitFor(() => screen.getByText("Update Contest"));
+    await waitFor(() => screen.getByText('Update Contest'));
 
-    const input = screen.getByPlaceholderText("Enter scoring criteria");
-    fireEvent.change(input, { target: { value: "Technical Skill" } });
+    const input = screen.getByPlaceholderText('Enter scoring criteria');
+    fireEvent.change(input, { target: { value: 'Technical Skill' } });
 
-    const addButton = screen.getByRole("button", { name: /add/i });
+    const addButton = screen.getByRole('button', { name: /add/i });
     fireEvent.click(addButton);
 
-    expect(screen.getByText("Technical Skill")).toBeInTheDocument();
+    expect(screen.getByText('Technical Skill')).toBeInTheDocument();
   });
 
-  test("submits updated contest data", async () => {
+  test('submits updated contest data', async () => {
     const mockNavigate = jest.fn();
-    jest.spyOn(require("react-router-dom"), "useNavigate").mockReturnValue(mockNavigate);
+    jest.spyOn(require('react-router-dom'), 'useNavigate').mockReturnValue(mockNavigate);
 
     renderWithProviders(<EditContest />);
 
-    await waitFor(() => screen.getByText("Update Contest"));
+    await waitFor(() => screen.getByText('Update Contest'));
 
     const startInput = screen.getByLabelText(/Start Date/i);
     const endInput = screen.getByLabelText(/End Date/i);
-    fireEvent.change(startInput, { target: { value: "2025-05-01" } });
-    fireEvent.change(endInput, { target: { value: "2025-05-10" } });
+    fireEvent.change(startInput, { target: { value: '2025-05-01T09:00' } });
+    fireEvent.change(endInput, { target: { value: '2025-05-10T17:30' } });
 
-    const updateButton = screen.getByRole("button", { name: /update contest/i });
+    const updateButton = screen.getByRole('button', { name: /update contest/i });
     fireEvent.click(updateButton);
 
     await waitFor(() => {
       expect(apiClient.put).toHaveBeenCalledWith(
-        expect.stringContaining("/update/"),
-        expect.anything()
+        expect.stringContaining('/update/'),
+        expect.objectContaining({
+          startDate: new Date('2025-05-01T09:00').toISOString().slice(0, 19),
+          endDate: new Date('2025-05-10T17:30').toISOString().slice(0, 19),
+        }),
       );
       expect(mockNavigate).toHaveBeenCalled();
     });
   });
 
-  test("navigates back on cancel", async () => {
+  test('navigates back on cancel', async () => {
     const mockNavigate = jest.fn();
-    jest.spyOn(require("react-router-dom"), "useNavigate").mockReturnValue(mockNavigate);
+    jest.spyOn(require('react-router-dom'), 'useNavigate').mockReturnValue(mockNavigate);
 
     renderWithProviders(<EditContest />);
 
-    await waitFor(() => screen.getByText("Cancel"));
+    await waitFor(() => screen.getByText('Cancel'));
 
-    const cancelButton = screen.getByRole("button", { name: /cancel/i });
+    const cancelButton = screen.getByRole('button', { name: /cancel/i });
     fireEvent.click(cancelButton);
 
     await waitFor(() => {

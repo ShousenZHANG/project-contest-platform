@@ -1,5 +1,7 @@
 package com.w16a.danish.competition.controller;
 
+import com.w16a.danish.common.security.ServiceOnly;
+
 import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
@@ -82,8 +84,27 @@ public class CompetitionsController {
     public ResponseEntity<CompetitionResponseVO> getCompetitionDetails(
             @Parameter(description = "Competition ID", example = "86594026-4d1d-4d6d-bf8c-8950e4d1cf3f", required = true)
             @PathVariable String id) {
-        CompetitionResponseVO competition = competitionService.getCompetitionById(id);
+        CompetitionResponseVO competition = competitionService.getPublicCompetitionById(id);
         return ResponseEntity.ok(competition);
+    }
+
+    @GetMapping("/managed/{id}")
+    public ResponseEntity<CompetitionResponseVO> getManagedCompetitionDetails(@PathVariable String id, @CurrentUser RequestContext ctx) {
+        return ResponseEntity.ok(competitionService.getManagedCompetitionById(id, ctx));
+    }
+
+    @GetMapping("/admin/list")
+    public ResponseEntity<PageResponse<CompetitionResponseVO>> listCompetitionsAdmin(@CurrentUser RequestContext ctx,
+            @RequestParam(required = false) String keyword, @RequestParam(required = false) String status,
+            @RequestParam(required = false) String category, @RequestParam(required = false) String participationType,
+            @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(competitionService.listCompetitionsAdmin(ctx, keyword, status, category, participationType, page, size));
+    }
+
+    @GetMapping("/internal/{id}")
+    @ServiceOnly(value = "internal:read", callers = {"registration-service", "judge-service", "user-service"})
+    public ResponseEntity<CompetitionResponseVO> getInternalCompetitionDetails(@PathVariable String id) {
+        return ResponseEntity.ok(competitionService.getCompetitionById(id));
     }
 
     @Operation(
@@ -108,13 +129,15 @@ public class CompetitionsController {
             @Parameter(description = "Competition category filter", example = "Web")
             @RequestParam(required = false) String category,
 
+            @RequestParam(required = false) String participationType,
+
             @Parameter(description = "Page number (starts from 1)", example = "1")
             @RequestParam(defaultValue = "1") int page,
 
             @Parameter(description = "Page size", example = "10")
             @RequestParam(defaultValue = "10") int size) {
 
-        PageResponse<CompetitionResponseVO> response = competitionService.listCompetitions(keyword, status, category, page, size);
+        PageResponse<CompetitionResponseVO> response = competitionService.listCompetitions(keyword, status, category, participationType, page, size);
         return ResponseEntity.ok(response);
     }
 
@@ -265,9 +288,15 @@ public class CompetitionsController {
     public ResponseEntity<PageResponse<CompetitionResponseVO>> listMyCompetitions(
             @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String participationType) {
 
-        PageResponse<CompetitionResponseVO> response = competitionService.listCompetitionsByOrganizer(ctx, page, size);
+        PageResponse<CompetitionResponseVO> response = keyword == null && status == null && category == null && participationType == null
+                ? competitionService.listCompetitionsByOrganizer(ctx, page, size)
+                : competitionService.listCompetitionsByOrganizer(ctx, page, size, keyword, status, category, participationType);
         return ResponseEntity.ok(response);
     }
 
@@ -285,9 +314,15 @@ public class CompetitionsController {
     )
     @PostMapping("/batch/ids")
     public ResponseEntity<List<CompetitionResponseVO>> getCompetitionsByIds(
-            @RequestBody List<String> ids) {
-        List<CompetitionResponseVO> result = competitionService.getCompetitionsByIds(ids);
+            @RequestBody List<String> ids, @CurrentUser RequestContext ctx) {
+        List<CompetitionResponseVO> result = competitionService.getVisibleCompetitionsByIds(ids, ctx);
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/internal/batch/ids")
+    @ServiceOnly(value = "internal:write", callers = {"registration-service", "judge-service", "user-service"})
+    public ResponseEntity<List<CompetitionResponseVO>> getInternalCompetitionsByIds(@RequestBody List<String> ids) {
+        return ResponseEntity.ok(competitionService.getCompetitionsByIds(ids));
     }
 
     @Operation(
@@ -378,10 +413,23 @@ public class CompetitionsController {
     @GetMapping("/is-organizer")
     public ResponseEntity<Boolean> isUserOrganizer(
             @RequestParam("competitionId") String competitionId,
-            @RequestParam("userId") String userId) {
+            @RequestParam("userId") String userId,
+            @CurrentUser RequestContext ctx) {
+
+        if (!ctx.isAdmin() && !ctx.userId().equals(userId)) {
+            throw new com.w16a.danish.common.exception.BusinessException(HttpStatus.FORBIDDEN, "Only your own organizer relationship may be queried");
+        }
+        competitionService.getManagedCompetitionById(competitionId, ctx);
 
         boolean isOrganizer = competitionService.isUserOrganizer(competitionId, userId);
         return ResponseEntity.ok(isOrganizer);
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"judge-service", "registration-service", "user-service"})
+    @GetMapping("/internal/is-organizer")
+    public ResponseEntity<Boolean> isInternalOrganizer(@RequestParam String competitionId, @RequestParam String userId) {
+        return ResponseEntity.ok(competitionService.isUserOrganizer(competitionId, userId));
     }
 
     @Operation(
@@ -403,7 +451,7 @@ public class CompetitionsController {
 
     @Operation(
             summary = "Update competition status (Internal use)",
-            description = "Directly updates the status of a competition. No user authentication required. Intended for internal system operations.",
+            description = "Projects committed award status using a scoped judge-service credential. Public requests are rejected.",
             parameters = {
                     @Parameter(name = "id", description = "ID of the competition", required = true),
                     @Parameter(name = "status", description = "New competition status (e.g., ONGOING, ENDED)", required = true, example = "ENDED")
@@ -414,6 +462,7 @@ public class CompetitionsController {
             }
     )
     @PutMapping("/{id}/status")
+    @ServiceOnly(value = "internal:write", callers = "judge-service")
     public ResponseEntity<CompetitionResponseVO> updateCompetitionStatus(
             @PathVariable("id") String competitionId,
             @RequestParam("status") String newStatus) {
@@ -422,4 +471,10 @@ public class CompetitionsController {
         return ResponseEntity.ok(updated);
     }
 
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"registration-service", "judge-service"})
+    @GetMapping("/internal/is-judge")
+    public ResponseEntity<Boolean> isUserJudge(@RequestParam String competitionId, @RequestParam String userId) {
+        return ResponseEntity.ok(competitionService.isUserJudge(competitionId, userId));
+    }
 }

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.List;
 
 /**
  * Represents a submission with total score and detailed criterion scores
@@ -32,5 +33,11 @@ public class ScoredSubmissionVO {
 
     @Schema(description = "Whether this submission has been marked as a winner", example = "false")
     private Boolean isWinner;
+
+    private String reviewStatus;
+    private int judgeCount;
+    private int minimumJudgeCount;
+    private boolean eligible;
+    private List<String> blockers;
 
 }

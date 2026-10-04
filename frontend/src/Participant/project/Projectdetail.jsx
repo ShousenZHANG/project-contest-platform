@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * Projectdetail.jsx
  *
@@ -12,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import SubmissionFile from '../../shared/components/SubmissionFile';
 import { userService } from '../../services/userService';
 import { submissionService } from '../../services/registrationService';
 import { queryKeys, staleTime } from '../../api/queryKeys';
@@ -31,7 +33,6 @@ import {
 } from '../../components/ui/dialog';
 
 function ProjectDetail() {
-
   const [editMode, setEditMode] = useState(false);
   const [updatedTitle, setUpdatedTitle] = useState('');
   const [updatedDescription, setUpdatedDescription] = useState('');
@@ -202,23 +203,12 @@ function ProjectDetail() {
                 <strong>Title:</strong> {submission.title || 'No Title'}
               </p>
               <p>
-                <strong>Description:</strong>{' '}
-                {submission.description || 'No description available'}
+                <strong>Description:</strong> {submission.description || 'No description available'}
               </p>
               <p>
                 <strong>File Name:</strong> {submission.fileName || 'No file'}
               </p>
-              {submission.fileUrl && (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="border-warning text-warning hover:bg-warning/10"
-                >
-                  <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
-                    View File
-                  </a>
-                </Button>
-              )}
+              <SubmissionFile fileUrl={submission.fileUrl} fileName={submission.fileName} />
               <p>
                 <strong>Review Status:</strong>{' '}
                 <Badge variant="outline">{submission.reviewStatus || 'Pending'}</Badge>
@@ -229,7 +219,7 @@ function ProjectDetail() {
               <p>
                 <strong>Submission Time:</strong>{' '}
                 {submission.createdAt
-                  ? new Date(submission.createdAt).toLocaleString()
+                  ? parseApiDateTime(submission.createdAt).toLocaleString()
                   : 'Unknown'}
               </p>
               <div className="flex gap-3 pt-2">

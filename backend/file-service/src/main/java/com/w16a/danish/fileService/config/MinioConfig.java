@@ -20,10 +20,12 @@ public class MinioConfig {
 
     @Bean
     public MinioClient minioClient() {
-        return MinioClient.builder()
+        var builder = MinioClient.builder()
                 .endpoint(minioPropertiesConfig.getInternalEndpoint())
-                .credentials(minioPropertiesConfig.getAccessKey(), minioPropertiesConfig.getSecretKey())
-                .build();
+                .credentials(minioPropertiesConfig.getAccessKey(), minioPropertiesConfig.getSecretKey());
+        if (minioPropertiesConfig.getRegion() != null && !minioPropertiesConfig.getRegion().isBlank()) {
+            builder.region(minioPropertiesConfig.getRegion());
+        }
+        return builder.build();
     }
 }
-

@@ -4,7 +4,7 @@
  * Upload media (images/videos) for a competition. Migrated from MUI to shadcn/ui.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trash2, Upload as UploadIcon, ImageOff } from 'lucide-react';
@@ -16,6 +16,9 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import AuthTokenManager from '@/auth/authTokenManager';
 import ConfirmDialog from '@/shared/components/ConfirmDialog';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import { Label } from '../components/ui/label';
 
 
 function UploadMedia() {
@@ -23,15 +26,20 @@ function UploadMedia() {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
+  useEffect(() => {
+    const urls = files.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
   const [confirmAction, setConfirmAction] = useState(null);
   const email = AuthTokenManager.getEmail();
 
   const queryClient = useQueryClient();
-  const detailKey = queryKeys.competitions.detail(id);
+  const detailKey = queryKeys.competitions.managedDetail(id);
 
-  const { data: competition } = useQuery({
+  const { data: competition, isPending: loading, error: detailError, refetch, isFetching } = useQuery({
     queryKey: detailKey,
-    queryFn: () => unwrap(competitionService.getById(id)),
+    queryFn: () => unwrap(competitionService.getManagedById(id)),
     enabled: Boolean(id),
     staleTime: staleTime.medium,
   });
@@ -67,11 +75,15 @@ function UploadMedia() {
   const uploadMedia = useMutation({
     mutationFn: async (selected) => {
       // The endpoint takes one file per call, so this stays sequential.
-      for (const file of selected) {
+      for (const [index, file] of selected.entries()) {
         const body = new FormData();
         body.append('file', file);
         body.append('mediaType', file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
         await unwrap(competitionService.uploadMedia(id, body));
+        // Retain only unuploaded files, so retrying a partial failure cannot
+        // create duplicates for the files the server already stored.
+        setFiles(selected.slice(index + 1));
+        refreshMedia();
       }
     },
     onSuccess: () => {
@@ -81,15 +93,17 @@ function UploadMedia() {
       refreshMedia();
       navigate(`/OrganizerContestList/${email}`);
     },
-    onError: () => toast.error('Upload failed'),
+    onError: (error) => { refreshMedia(); toast.error(toMessage(error)); },
   });
 
   const uploading = uploadMedia.isPending;
+  const busy = uploading || deleteImage.isPending || deleteVideo.isPending;
+  const canEdit = ['UPCOMING', 'ONGOING'].includes(competition?.status);
 
   const handleFileChange = (e) => {
-    const selectedFiles = Array.from(e.target.files);
+    const selectedFiles = Array.from(e.target.files || []);
     setFiles(selectedFiles);
-    setPreviews(selectedFiles.map((file) => URL.createObjectURL(file)));
+    uploadMedia.reset();
   };
 
   const requestDeleteImage = (imageUrl) => {
@@ -111,6 +125,7 @@ function UploadMedia() {
   };
 
   const handleUpload = () => {
+    if (!canEdit || busy) return;
     if (files.length === 0) {
       toast.warning('Please select file(s) first.');
       return;
@@ -132,6 +147,10 @@ function UploadMedia() {
         </p>
       </div>
 
+      {loading && <PageSkeleton rows={3} />}
+      {detailError && <PageError error={detailError} onRetry={() => refetch()} retrying={isFetching} />}
+      {competition && !canEdit && <p role="status" className="mb-4 text-sm text-muted-foreground">Media changes are locked for this competition.</p>}
+      {(uploadMedia.error || deleteImage.error || deleteVideo.error) && <PageError error={uploadMedia.error || deleteImage.error || deleteVideo.error} />}
       <Card className="mb-4">
         <CardContent className="space-y-4 pt-6">
           <h2 className="text-base font-semibold">Current Media</h2>
@@ -151,7 +170,8 @@ function UploadMedia() {
                 <Button
                   variant="destructive"
                   size="icon"
-                  className="absolute right-2 top-2"
+                  className="absolute right-2 top-2 h-11 w-11"
+                  disabled={!canEdit || busy}
                   onClick={requestDeleteVideo}
                   aria-label="Delete video"
                 >
@@ -174,7 +194,8 @@ function UploadMedia() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      className="absolute right-2 top-2"
+                      className="absolute right-2 top-2 h-11 w-11"
+                      disabled={!canEdit || busy}
                       onClick={() => requestDeleteImage(imgUrl)}
                       aria-label="Delete image"
                     >
@@ -191,11 +212,14 @@ function UploadMedia() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <h2 className="text-base font-semibold">Upload New</h2>
+          <Label htmlFor="competition-media-files">Competition images or video</Label>
           <input
+            id="competition-media-files"
             type="file"
             data-testid="file-input"
             accept="image/*,video/*"
             multiple
+            disabled={!canEdit || busy}
             onChange={handleFileChange}
             className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
           />
@@ -226,7 +250,7 @@ function UploadMedia() {
         >
           Cancel
         </Button>
-        <Button onClick={handleUpload} disabled={uploading}>
+        <Button onClick={handleUpload} disabled={!canEdit || busy || files.length === 0} aria-busy={uploading}>
           <UploadIcon className="h-4 w-4" />
           {uploading ? 'Uploading...' : 'Upload'}
         </Button>
@@ -238,8 +262,9 @@ function UploadMedia() {
         message={confirmAction?.message}
         confirmLabel={confirmAction?.confirmLabel}
         confirmVariant="destructive"
+        pending={deleteImage.isPending || deleteVideo.isPending}
         onCancel={() => setConfirmAction(null)}
-        onConfirm={() => confirmAction?.onConfirm()}
+        onConfirm={() => { if (canEdit && !busy) confirmAction?.onConfirm(); }}
       />
     </div>
   );

@@ -24,11 +24,17 @@ import java.time.format.DateTimeFormatter;
 public class RegistrationEventListener {
 
     private final EmailService emailService;
+    private final NotificationInbox inbox;
     private final FrontendProperties frontendProperties;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @RabbitListener(queues = MessagingConstants.REGISTER_SUCCESS_QUEUE)
+    public void receiveRegisterSuccess(RegisterSuccessMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("RegisterSuccessMessage", eventId, message);
+    }
+
     public void handleRegisterSuccess(RegisterSuccessMessage message) {
         String subject = "✅ Registration Submitted – " + message.getCompetitionName();
 
@@ -66,6 +72,11 @@ public class RegistrationEventListener {
     }
 
     @RabbitListener(queues = MessagingConstants.PARTICIPANT_REMOVED_QUEUE)
+    public void receiveParticipantRemoved(ParticipantRemovedMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("ParticipantRemovedMessage", eventId, message);
+    }
+
     public void handleParticipantRemoved(ParticipantRemovedMessage message) {
         String subject = "❌ Registration Cancelled – " + message.getCompetitionName();
 
@@ -98,6 +109,11 @@ public class RegistrationEventListener {
     }
 
     @RabbitListener(queues = MessagingConstants.SUBMISSION_UPLOADED_QUEUE)
+    public void receiveSubmissionUploaded(SubmissionUploadedMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("SubmissionUploadedMessage", eventId, message);
+    }
+
     public void handleSubmissionUploaded(SubmissionUploadedMessage message) {
         String subject = "📤 Submission Uploaded – " + message.getCompetitionName();
         String competitionUrl = frontendProperties.buildCompetitionPageUrl(message.getUserEmail());
@@ -133,6 +149,11 @@ public class RegistrationEventListener {
     }
 
     @RabbitListener(queues = MessagingConstants.SUBMISSION_REVIEWED_QUEUE)
+    public void receiveSubmissionReviewed(SubmissionReviewedMessage message,
+            @org.springframework.messaging.handler.annotation.Header(name = "eventId", required = false) String eventId) throws Exception {
+        inbox.accept("SubmissionReviewedMessage", eventId, message);
+    }
+
     public void handleSubmissionReviewed(SubmissionReviewedMessage message) {
         String subject = "📋 Submission Reviewed – " + message.getCompetitionName();
         String competitionUrl = frontendProperties.buildCompetitionPageUrl(message.getUserEmail());

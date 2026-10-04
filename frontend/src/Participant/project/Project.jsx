@@ -109,8 +109,8 @@ function Project() {
       // fetchQuery reuses the cached competition when the detail page or a
       // sibling view has already read it.
       const competitionDetail = await queryClient.fetchQuery({
-        queryKey: queryKeys.competitions.detail(selectedCompetitionId),
-        queryFn: () => unwrap(competitionService.getById(selectedCompetitionId)),
+        queryKey: queryKeys.competitions.managedDetail(selectedCompetitionId),
+        queryFn: () => unwrap(competitionService.getManagedById(selectedCompetitionId)),
         staleTime: staleTime.medium,
       });
       const allowedSubmissionTypes = competitionDetail.allowedSubmissionTypes || [];

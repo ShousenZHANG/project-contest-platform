@@ -2,6 +2,8 @@ package com.w16a.danish.judge.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import com.w16a.danish.common.domain.enums.ParticipationType;
+import com.w16a.danish.common.context.RequestContext;
+import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.judge.domain.vo.CompetitionDashboardVO;
 import com.w16a.danish.judge.domain.vo.PlatformDashboardVO;
 import com.w16a.danish.common.exception.BusinessException;
@@ -16,7 +18,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +44,26 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     public CompetitionDashboardVO getCompetitionStatistics(String competitionId, String userId) {
         var competition = competitionGateway.require(competitionId);
+        if (!Boolean.TRUE.equals(competition.getIsPublic())) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
+        return loadStatistics(competitionId, competition, null);
+    }
+
+    @Override
+    public CompetitionDashboardVO getManagedCompetitionStatistics(RequestContext ctx, String competitionId) {
+        var competition = competitionGateway.require(competitionId);
+        if (ctx == null || ctx.userId() == null || ctx.userId().isBlank()) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        if (!Boolean.TRUE.equals(competition.getIsPublic()) && !ctx.isAdmin()
+                && !(ctx.isOrganizer() && competitionGateway.isOrganiser(competitionId, ctx.userId()))) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Only competition organizers or admins can view a private dashboard");
+        }
+        return loadStatistics(competitionId, competition, ctx.userId());
+    }
+
+    private CompetitionDashboardVO loadStatistics(String competitionId, CompetitionResponseVO competition, String userId) {
 
         CompetitionDashboardVO dashboard = new CompetitionDashboardVO();
         dashboard.setCompetitionName(competition.getName());
@@ -50,14 +71,14 @@ public class DashboardServiceImpl implements IDashboardService {
         dashboard.setParticipationType(competition.getParticipationType().name());
 
         var registrationStatsResp = registrationServiceClient.getRegistrationStatistics(competitionId);
-        var registrationStats = registrationStatsResp.getBody();
+        var registrationStats = requiredBody(registrationStatsResp);
         if (registrationStats != null) {
             dashboard.setIndividualParticipantCount(registrationStats.getIndividualParticipantCount());
             dashboard.setTeamParticipantCount(registrationStats.getTeamParticipantCount());
         }
 
         var submissionStatsResp = registrationServiceClient.getSubmissionStatistics(competitionId);
-        var submissionStats = submissionStatsResp.getBody();
+        var submissionStats = requiredBody(submissionStatsResp);
         if (submissionStats != null) {
             dashboard.setSubmissionCount(submissionStats.getTotalSubmissions());
             dashboard.setApprovedSubmissionCount(submissionStats.getApprovedSubmissions());
@@ -65,7 +86,7 @@ public class DashboardServiceImpl implements IDashboardService {
         }
 
         var interactionStatsResp = interactionServiceClient.getInteractionStatistics(competitionId);
-        var interactionStats = interactionStatsResp.getBody();
+        var interactionStats = requiredBody(interactionStatsResp);
         if (interactionStats != null) {
             dashboard.setVoteCount(interactionStats.getVoteCount() != null ? Math.toIntExact(interactionStats.getVoteCount()) : 0);
             dashboard.setCommentCount(interactionStats.getCommentCount() != null ? Math.toIntExact(interactionStats.getCommentCount()) : 0);
@@ -75,15 +96,14 @@ public class DashboardServiceImpl implements IDashboardService {
         dashboard.setJudgeCount(judgeCount);
 
         var scoreStatsResp = registrationServiceClient.getScoreStatistics(competitionId);
-        var scoreStats = scoreStatsResp.getBody();
+        var scoreStats = requiredBody(scoreStatsResp);
         if (scoreStats != null) {
             dashboard.setAverageScore(scoreStats.getAverageScore());
             dashboard.setHighestScore(scoreStats.getHighestScore());
             dashboard.setLowestScore(scoreStats.getLowestScore());
         }
 
-        Optional.ofNullable(registrationServiceClient.getParticipantTrend(competitionId))
-                .map(ResponseEntity::getBody)
+        Optional.of(requiredBody(registrationServiceClient.getParticipantTrend(competitionId)))
                 .ifPresent(participantTrendMap -> {
                     Map<String, Integer> individualTrend = Optional.ofNullable(participantTrendMap.get("individual")).orElseGet(Map::of);
                     Map<String, Integer> teamTrend = Optional.ofNullable(participantTrendMap.get("team")).orElseGet(Map::of);
@@ -92,8 +112,7 @@ public class DashboardServiceImpl implements IDashboardService {
                     dashboard.setTeamParticipantTrend(teamTrend);
                 });
 
-        Optional.ofNullable(registrationServiceClient.getSubmissionTrend(competitionId))
-                .map(ResponseEntity::getBody)
+        Optional.of(requiredBody(registrationServiceClient.getSubmissionTrend(competitionId)))
                 .ifPresent(dashboard::setSubmissionTrend);
 
         if (userId != null) {
@@ -101,7 +120,7 @@ public class DashboardServiceImpl implements IDashboardService {
 
             ParticipationType participationType = competition.getParticipationType();
             if (participationType == ParticipationType.INDIVIDUAL) {
-                var mySubmission = registrationServiceClient.getMySubmissionBasic(competitionId, userId).getBody();
+                var mySubmission = checkedBody(registrationServiceClient.getMySubmissionBasic(competitionId, userId));
                 if (mySubmission != null) {
                     hasSubmitted = true;
                     dashboard.setMyTotalScore(mySubmission.getTotalScore());
@@ -109,15 +128,13 @@ public class DashboardServiceImpl implements IDashboardService {
                 }
             } else if (participationType == ParticipationType.TEAM) {
                 var teamIdsResp = userServiceClient.getJoinedTeamIdsByUser(userId);
-                List<String> teamIds = teamIdsResp.getBody();
+                List<String> teamIds = requiredBody(teamIdsResp);
 
                 if (CollUtil.isNotEmpty(teamIds)) {
                     // One read for every team the user belongs to. This used to be a
                     // remote call per team, issued serially, so the dashboard got slower
                     // the more teams someone joined.
-                    var teamSubmissions = Optional.ofNullable(
-                            registrationServiceClient.getTeamSubmissionsBasic(competitionId, teamIds).getBody()
-                    ).orElse(List.of());
+                    var teamSubmissions = requiredBody(registrationServiceClient.getTeamSubmissionsBasic(competitionId, teamIds));
 
                     var teamSubmission = teamSubmissions.stream().findFirst().orElse(null);
                     if (teamSubmission != null) {
@@ -128,8 +145,6 @@ public class DashboardServiceImpl implements IDashboardService {
                 }
             }
             dashboard.setHasSubmitted(hasSubmitted);
-        } else {
-            dashboard.setHasSubmitted(false);
         }
 
         return dashboard;
@@ -139,8 +154,8 @@ public class DashboardServiceImpl implements IDashboardService {
     public PlatformDashboardVO getPlatformDashboard() {
         PlatformDashboardVO dashboard = new PlatformDashboardVO();
 
-        var competitions = Optional.of(competitionGateway.listAll())
-                .orElse(Collections.emptyList());
+        var competitions = competitionGateway.listAll().stream()
+                .filter(competition -> Boolean.TRUE.equals(competition.getIsPublic())).toList();
 
         if (competitions.isEmpty()) {
             return dashboard;
@@ -162,7 +177,7 @@ public class DashboardServiceImpl implements IDashboardService {
             if (competition.getStatus() != null) {
                 switch (competition.getStatus()) {
                     case ONGOING -> activeCompetitions++;
-                    case COMPLETED -> finishedCompetitions++;
+                    case COMPLETED, AWARDED -> finishedCompetitions++;
                     default -> {
                     }
                 }
@@ -176,7 +191,7 @@ public class DashboardServiceImpl implements IDashboardService {
         dashboard.setFinishedCompetitions(finishedCompetitions);
 
         var participantStatsResp = registrationServiceClient.getPlatformParticipantStatistics();
-        var participantStats = participantStatsResp.getBody();
+        var participantStats = requiredBody(participantStatsResp);
         if (participantStats != null) {
             dashboard.setTotalParticipants(participantStats.getTotalParticipants());
             dashboard.setIndividualParticipants(participantStats.getIndividualParticipants());
@@ -184,7 +199,7 @@ public class DashboardServiceImpl implements IDashboardService {
         }
 
         var submissionStatsResp = registrationServiceClient.getPlatformSubmissionStatistics();
-        var submissionStats = submissionStatsResp.getBody();
+        var submissionStats = requiredBody(submissionStatsResp);
         if (submissionStats != null) {
             dashboard.setTotalSubmissions(submissionStats.getTotalSubmissions());
             dashboard.setApprovedSubmissions(submissionStats.getApprovedSubmissions());
@@ -193,26 +208,38 @@ public class DashboardServiceImpl implements IDashboardService {
         }
 
         var interactionStatsResp = interactionServiceClient.getPlatformInteractionStatistics();
-        var interactionStats = interactionStatsResp.getBody();
+        var interactionStats = requiredBody(interactionStatsResp);
         if (interactionStats != null) {
             dashboard.setTotalVotes(Optional.ofNullable(interactionStats.getVoteCount()).map(Math::toIntExact).orElse(0));
             dashboard.setTotalComments(Optional.ofNullable(interactionStats.getCommentCount()).map(Math::toIntExact).orElse(0));
         }
 
         var participantTrendResp = registrationServiceClient.getPlatformParticipantTrend();
-        var participantTrend = participantTrendResp.getBody();
+        var participantTrend = requiredBody(participantTrendResp);
         if (participantTrend != null) {
             dashboard.setParticipantTrend(participantTrend);
         }
 
         var submissionTrendResp = registrationServiceClient.getPlatformSubmissionTrend();
-        var submissionTrend = submissionTrendResp.getBody();
+        var submissionTrend = requiredBody(submissionTrendResp);
         if (submissionTrend != null) {
             dashboard.setSubmissionTrend(submissionTrend);
         }
 
         return dashboard;
     }
+    private static <T> T checkedBody(ResponseEntity<T> response) {
+        if (response == null || !response.getStatusCode().is2xxSuccessful()) {
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Dashboard dependency is unavailable.");
+        }
+        return response.getBody();
+    }
 
-
+    private static <T> T requiredBody(ResponseEntity<T> response) {
+        T body = checkedBody(response);
+        if (body == null) {
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Dashboard dependency returned no data.");
+        }
+        return body;
+    }
 }

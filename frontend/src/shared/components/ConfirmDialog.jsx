@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import PageError from './PageError';
 
 /**
  * Confirmation dialog. Pass `confirmVariant="destructive"` for destructive
@@ -22,9 +23,11 @@ export default function ConfirmDialog({
   confirmVariant = 'default',
   onConfirm,
   onCancel,
+  pending = false,
+  error,
 }) {
   const handleOpenChange = (next) => {
-    if (!next && onCancel) onCancel();
+    if (!next && !pending && onCancel) onCancel();
   };
 
   return (
@@ -34,12 +37,18 @@ export default function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{message}</DialogDescription>
         </DialogHeader>
+        {error && <PageError error={error} />}
         <DialogFooter>
-          <Button variant="ghost" onClick={onCancel}>
+          <Button variant="ghost" disabled={pending} onClick={onCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={confirmVariant} onClick={onConfirm}>
-            {confirmLabel}
+          <Button
+            variant={confirmVariant}
+            disabled={pending}
+            aria-busy={pending}
+            onClick={onConfirm}
+          >
+            {pending ? 'Processing…' : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

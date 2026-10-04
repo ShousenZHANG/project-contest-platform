@@ -1,6 +1,8 @@
 package com.w16a.danish.user.feign;
 
 import com.w16a.danish.user.domain.dto.GithubUserDTO;
+import com.w16a.danish.user.domain.dto.GithubEmailDTO;
+import java.util.List;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -19,4 +21,7 @@ public interface GithubUserClient {
 
     @GetMapping("/user")
     GithubUserDTO getUserInfo(@RequestHeader("Authorization") String bearerToken);
+
+    @GetMapping("/user/emails?per_page=100")
+    List<GithubEmailDTO> getEmails(@RequestHeader("Authorization") String bearerToken);
 }

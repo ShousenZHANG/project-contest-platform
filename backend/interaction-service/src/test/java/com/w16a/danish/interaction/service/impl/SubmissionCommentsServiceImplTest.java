@@ -50,6 +50,9 @@ class SubmissionCommentsServiceImplTest {
     @Mock
     private SubmissionCommentsMapper submissionCommentsMapper;
 
+    @Mock
+    private com.w16a.danish.interaction.service.PublicSubmissionAccess submissions;
+
     private static RequestContext ctx(String userId, String role) {
         return new RequestContext(userId, role);
     }
@@ -81,6 +84,33 @@ class SubmissionCommentsServiceImplTest {
         submissionCommentsService.addComment("userId", dto);
 
         verify(submissionCommentsMapper, times(1)).insert(any(SubmissionComments.class));
+    }
+
+    @Test
+    void repliesCannotUseAParentFromAnotherSubmission() {
+        SubmissionCommentDTO dto = new SubmissionCommentDTO();
+        dto.setSubmissionId("s1");
+        dto.setParentId("parent");
+        dto.setContent("Reply");
+        doReturn(new SubmissionComments().setId("parent").setSubmissionId("other")).when(submissionCommentsService).getById("parent");
+        assertThatThrownBy(() -> submissionCommentsService.addComment("user", dto))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Parent comment not found");
+        verify(submissionCommentsMapper, never()).insert(any(SubmissionComments.class));
+    }
+
+    @Test
+    void privateOrUnapprovedSubmissionCannotBeCommentedOnOrRead() {
+        doThrow(new BusinessException(org.springframework.http.HttpStatus.NOT_FOUND, "Submission not found"))
+                .when(submissions).requireVisible("s1");
+        SubmissionCommentDTO dto = new SubmissionCommentDTO();
+        dto.setSubmissionId("s1");
+        dto.setContent("Comment");
+        assertThatThrownBy(() -> submissionCommentsService.addComment("user", dto)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> submissionCommentsService.getPaginatedComments("s1", 1, 10, "createdAt", "desc"))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> submissionCommentsService.countComments("s1")).isInstanceOf(BusinessException.class);
+        verify(submissionCommentsMapper, never()).insert(any(SubmissionComments.class));
+        verifyNoInteractions(userServiceClient);
     }
 
 
@@ -200,7 +230,7 @@ class SubmissionCommentsServiceImplTest {
     @Test
     @DisplayName("✅ Count all comments")
     void testCountAllCommentsSuccess() {
-        when(submissionCommentsService.lambdaQuery().count()).thenReturn(10L);
+        when(submissionCommentsMapper.countPublicComments()).thenReturn(10L);
 
         long count = submissionCommentsService.countAllComments();
 

@@ -10,6 +10,7 @@ import com.w16a.danish.common.messaging.message.SubmissionReviewedMessage;
 import com.w16a.danish.common.messaging.message.SubmissionUploadedMessage;
 import com.w16a.danish.registration.domain.po.CompetitionOrganizers;
 import com.w16a.danish.registration.domain.po.CompetitionParticipants;
+import com.w16a.danish.registration.domain.po.CompetitionTeams;
 import com.w16a.danish.registration.domain.po.SubmissionRecords;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
@@ -24,6 +25,8 @@ import com.w16a.danish.registration.mapper.SubmissionRecordsMapper;
 import com.w16a.danish.registration.service.ICompetitionOrganizersService;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import com.w16a.danish.registration.service.ISubmissionRecordsService;
+import com.w16a.danish.registration.service.ICompetitionTeamsService;
+import com.w16a.danish.registration.service.SubmissionScores;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -58,6 +60,10 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     private final FileServiceClient fileServiceClient;
     private final SubmissionNotifier submissionNotifier;
     private final UserServiceClient userServiceClient;
+    private final SubmissionScores scores;
+
+    private final com.w16a.danish.common.recovery.DurableTasks tasks;
+    private final com.w16a.danish.registration.notify.UploadRollbackCleanup rollbackCleanup;
 
     @Lazy
     @Autowired
@@ -66,6 +72,20 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Lazy
     @Autowired
     private ICompetitionOrganizersService competitionOrganizersService;
+
+    @Lazy
+    @Autowired
+    private ICompetitionTeamsService competitionTeamsService;
+
+    @Override
+    public boolean isPublicApproved(String submissionId) {
+        if (StrUtil.isBlank(submissionId)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Submission ID must not be blank");
+        }
+        SubmissionRecords record = getById(submissionId);
+        if (record == null || !"APPROVED".equals(record.getReviewStatus())) return false;
+        return Boolean.TRUE.equals(competitionGateway.require(record.getCompetitionId()).getIsPublic());
+    }
 
     @Override
     public Map<String, Boolean> getSubmissionStatus(String userId, List<String> competitionIds) {
@@ -97,11 +117,12 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .in(SubmissionRecords::getCompetitionId, competitionIds)
                 .list();
 
+        Map<String, BigDecimal> visible = scores.visibleScores(records);
         return records.stream()
-                .filter(r -> r.getTotalScore() != null)
+                .filter(r -> visible.containsKey(r.getId()))
                 .collect(Collectors.toMap(
                         SubmissionRecords::getCompetitionId,
-                        SubmissionRecords::getTotalScore,
+                        r -> visible.get(r.getId()),
                         (existing, replacement) -> existing
                 ));
     }
@@ -115,8 +136,25 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 .one();
 
         if (submission != null) {
+            lockDeletableSubmissions(competitionId);
             deleteFileByUrl(submission.getFileUrl());
-            this.removeById(submission.getId());
+            if (!this.removeById(submission.getId())) {
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete submission");
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void deleteSubmissionsByTeamAndCompetition(String teamId, String competitionId) {
+        lockDeletableSubmissions(competitionId);
+        var submissions = lambdaQuery().eq(SubmissionRecords::getTeamId, teamId)
+                .eq(SubmissionRecords::getCompetitionId, competitionId).list();
+        for (var submission : submissions) {
+            deleteFileByUrl(submission.getFileUrl());
+            if (!removeById(submission.getId())) {
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete the team submission.");
+            }
         }
     }
 
@@ -138,11 +176,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         try {
             competition = competitionGateway.require(competitionId);
 
-            if (!CompetitionStatus.isRegistrable(competition.getStatus())) {
+            if (competition.getParticipationType() != com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "This competition requires a team submission");
+            }
+            if (!CompetitionStatus.isSubmittable(competition.getStatus())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Cannot submit work to this competition");
             }
 
-            if (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now())) {
+            if (competition.getEndDate() != null && !competition.getEndDate().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "The competition has already ended");
             }
         } catch (BusinessException e) {
@@ -154,7 +195,9 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         }
 
         String uploadedUrl = Optional.ofNullable(fileServiceClient.uploadSubmission(file).getBody())
+                .filter(StrUtil::isNotBlank)
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed"));
+        rollbackCleanup.watch(com.w16a.danish.registration.service.SubmissionDownloads.objectName(uploadedUrl));
 
         SubmissionRecords existing = lambdaQuery()
                 .eq(SubmissionRecords::getUserId, userId)
@@ -198,6 +241,8 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
         SubmissionInfoVO vo = new SubmissionInfoVO();
         BeanUtil.copyProperties(submission, vo);
+        vo.setTotalScore(scores.visibleScore(submission));
+                    vo.setFileUrl("/submissions/" + submission.getId() + "/download");
         return vo;
     }
 
@@ -231,7 +276,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            case "totalScore" -> orderByCurrentScore(query, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -240,10 +285,13 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         Page<SubmissionRecords> pageResult = new Page<>(page, size);
         query.page(pageResult);
 
+        Map<String, BigDecimal> visible = scores.visibleScores(pageResult.getRecords());
         List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
+                    vo.setTotalScore(visible.get(submission.getId()));
+                    vo.setFileUrl("/submissions/" + submission.getId() + "/download");
                     return vo;
                 })
                 .toList();
@@ -254,6 +302,8 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     @Override
     public PageResponse<SubmissionInfoVO> listPublicApprovedSubmissions(
             String competitionId, int page, int size, String keyword, String sortBy, String order) {
+        requirePublicCompetition(competitionId);
+        validatePage(page, size);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
         var query = lambdaQuery()
@@ -265,7 +315,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            case "totalScore" -> orderByCurrentScore(query, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -274,10 +324,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         Page<SubmissionRecords> pageResult = new Page<>(page, size);
         query.page(pageResult);
 
+        Map<String, BigDecimal> visible = scores.visibleScores(pageResult.getRecords());
         List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
+                    vo.setTotalScore(visible.get(submission.getId()));
+                    vo.setFileUrl("/submissions/public/" + submission.getId() + "/download");
+                    vo.setReviewComments(null); vo.setReviewedBy(null); vo.setReviewedAt(null);
                     return vo;
                 })
                 .toList();
@@ -309,6 +363,11 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid review status, must be APPROVED or REJECTED");
         }
 
+        lockOpenSubmissions(submission.getCompetitionId());
+        CompetitionResponseVO competition = competitionGateway.require(submission.getCompetitionId());
+        if (competition.getStatus() != CompetitionStatus.ONGOING) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Review decisions are frozen when scoring opens");
+        }
         submission.setReviewStatus(dto.getReviewStatus().toUpperCase());
         submission.setReviewComments(dto.getReviewComments());
         submission.setReviewedBy(reviewerId);
@@ -318,8 +377,6 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         if (!updated) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update submission review status");
         }
-
-        CompetitionResponseVO competition = competitionGateway.require(submission.getCompetitionId());
 
         UserBriefVO reviewer = Optional.ofNullable(
                 userServiceClient.getUserBriefById(reviewerId).getBody()
@@ -385,6 +442,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not allowed to delete this submission");
         }
 
+        lockDeletableSubmissions(submission.getCompetitionId());
         deleteFileByUrl(submission.getFileUrl());
 
         boolean removed = this.removeById(submissionId);
@@ -418,17 +476,17 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             return Collections.emptyMap();
         }
 
-        return this.lambdaQuery()
+        List<SubmissionRecords> records = this.lambdaQuery()
                 .in(SubmissionRecords::getTeamId, teamIds)
                 .in(SubmissionRecords::getCompetitionId, competitionIds)
                 .eq(SubmissionRecords::getReviewStatus, "APPROVED")
-                .select(SubmissionRecords::getCompetitionId, SubmissionRecords::getTeamId, SubmissionRecords::getTotalScore)
-                .list()
-                .stream()
-                .filter(s -> s.getTotalScore() != null)
+                .list();
+        Map<String, BigDecimal> visible = scores.visibleScores(records);
+        return records.stream()
+                .filter(s -> visible.containsKey(s.getId()))
                 .collect(Collectors.toMap(
                         s -> s.getCompetitionId() + ":" + s.getTeamId(),
-                        SubmissionRecords::getTotalScore,
+                        s -> visible.get(s.getId()),
                         (a, b) -> a
                 ));
     }
@@ -446,24 +504,31 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         ctx.requireAnyRole("PARTICIPANT");
         String userId = ctx.userId();
 
-        Boolean isMember = Optional.ofNullable(userServiceClient.isUserInTeam(userId, teamId).getBody())
-                .orElse(false);
+        Boolean isMember = requireTeamMembershipReply(userId, teamId);
         if (!isMember) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "You are not a member of this team.");
         }
 
         CompetitionResponseVO competition = competitionGateway.require(competitionId);
 
+        if (competition.getParticipationType() != com.w16a.danish.common.domain.enums.ParticipationType.TEAM) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "This competition requires an individual submission");
+        }
+        if (!competitionTeamsService.lambdaQuery().eq(CompetitionTeams::getCompetitionId, competitionId)
+                .eq(CompetitionTeams::getTeamId, teamId).exists()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "The team must register before submitting work");
+        }
         if (!CompetitionStatus.isSubmittable(competition.getStatus())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition is not open for submissions.");
         }
-        if (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now())) {
+        if (competition.getEndDate() != null && !competition.getEndDate().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition has already ended.");
         }
 
         String fileUrl = Optional.ofNullable(fileServiceClient.uploadSubmission(file).getBody())
                 .filter(StrUtil::isNotBlank)
                 .orElseThrow(() -> new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file."));
+        rollbackCleanup.watch(com.w16a.danish.registration.service.SubmissionDownloads.objectName(fileUrl));
 
         SubmissionRecords existing = lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
@@ -494,12 +559,13 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
 
     @Override
     public TeamSubmissionInfoVO getTeamSubmissionPublic(String competitionId, String teamId) {
+        requirePublicCompetition(competitionId);
         SubmissionRecords submission = this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .eq(SubmissionRecords::getTeamId, teamId)
                 .one();
 
-        if (submission == null) {
+        if (submission == null || !"APPROVED".equals(submission.getReviewStatus())) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found for the specified team.");
         }
 
@@ -510,14 +576,12 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         vo.setTitle(submission.getTitle());
         vo.setDescription(submission.getDescription());
         vo.setFileName(submission.getFileName());
-        vo.setFileUrl(submission.getFileUrl());
+        vo.setFileUrl("/submissions/public/" + submission.getId() + "/download");
         vo.setFileType(submission.getFileType());
         vo.setCreatedAt(submission.getCreatedAt());
         vo.setReviewStatus(submission.getReviewStatus());
-        vo.setReviewComments(submission.getReviewComments());
-        vo.setReviewedBy(submission.getReviewedBy());
-        vo.setReviewedAt(submission.getReviewedAt());
-        vo.setTotalScore(submission.getTotalScore() != null ? submission.getTotalScore().doubleValue() : null);
+        BigDecimal visible = scores.visibleScore(submission);
+        vo.setTotalScore(visible == null ? null : visible.doubleValue());
         return vo;
     }
 
@@ -536,13 +600,13 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                 throw new BusinessException(HttpStatus.FORBIDDEN, "This is not a team submission.");
             }
 
-            Boolean isMember = Optional.ofNullable(userServiceClient.isUserInTeam(userId, submission.getTeamId()).getBody())
-                    .orElse(false);
+            Boolean isMember = requireTeamMembershipReply(userId, submission.getTeamId());
             if (!isMember) {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "You are not authorized to delete this submission.");
             }
         }
 
+        lockDeletableSubmissions(submission.getCompetitionId());
         if (StrUtil.isNotBlank(submission.getFileUrl())) {
             deleteFileByUrl(submission.getFileUrl());
         }
@@ -584,7 +648,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            case "totalScore" -> orderByCurrentScore(query, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -593,10 +657,13 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         Page<SubmissionRecords> pageResult = new Page<>(page, size);
         query.page(pageResult);
 
+        Map<String, BigDecimal> visible = scores.visibleScores(pageResult.getRecords());
         List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
+                    vo.setTotalScore(visible.get(submission.getId()));
+                    vo.setFileUrl("/submissions/" + submission.getId() + "/download");
                     return vo;
                 })
                 .toList();
@@ -612,6 +679,8 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
             String keyword,
             String sortBy,
             String order) {
+        requirePublicCompetition(competitionId);
+        validatePage(page, size);
 
         boolean asc = !"desc".equalsIgnoreCase(order);
         var query = this.lambdaQuery()
@@ -624,7 +693,7 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
                         .like(SubmissionRecords::getDescription, keyword));
         switch (sortBy == null ? "" : sortBy) {
             case "title" -> query.orderBy(true, asc, SubmissionRecords::getTitle);
-            case "totalScore" -> query.orderBy(true, asc, SubmissionRecords::getTotalScore);
+            case "totalScore" -> orderByCurrentScore(query, asc);
             default -> query.orderBy(true, asc, SubmissionRecords::getCreatedAt);
         }
 
@@ -633,10 +702,14 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         Page<SubmissionRecords> pageResult = new Page<>(page, size);
         query.page(pageResult);
 
+        Map<String, BigDecimal> visible = scores.visibleScores(pageResult.getRecords());
         List<SubmissionInfoVO> vos = pageResult.getRecords().stream()
                 .map(submission -> {
                     SubmissionInfoVO vo = new SubmissionInfoVO();
                     BeanUtil.copyProperties(submission, vo);
+                    vo.setTotalScore(visible.get(submission.getId()));
+                    vo.setFileUrl("/submissions/public/" + submission.getId() + "/download");
+                    vo.setReviewComments(null); vo.setReviewedBy(null); vo.setReviewedAt(null);
                     return vo;
                 })
                 .toList();
@@ -658,14 +731,13 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
     // ── Internal API implementations (called by judge-service) ─────────────
 
     @Override
-    public void updateTotalScore(String submissionId, BigDecimal totalScore) {
-        boolean updated = this.lambdaUpdate()
-                .eq(SubmissionRecords::getId, submissionId)
-                .set(SubmissionRecords::getTotalScore, totalScore)
-                .set(SubmissionRecords::getUpdatedAt, LocalDateTime.now())
-                .update();
-        if (!updated) {
-            log.warn("updateTotalScore: no submission found with id={}", submissionId);
+    public void updateTotalScore(String submissionId, BigDecimal totalScore, long version, int revision) {
+        if (version < 1 || totalScore == null || totalScore.signum() < 0 || totalScore.compareTo(BigDecimal.TEN) > 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "A score between 0 and 10 and a positive version are required");
+        }
+        if (revision < 0) throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid submission revision");
+        if (baseMapper.updateScoreVersioned(submissionId, totalScore, version, revision) == 0 && getById(submissionId) == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Submission not found");
         }
     }
 
@@ -692,38 +764,73 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         if (competitionId == null || teamIds == null || teamIds.isEmpty()) {
             return List.of();
         }
-        return this.lambdaQuery()
+        return toSubmissionInfoVOs(this.lambdaQuery()
                 .eq(SubmissionRecords::getCompetitionId, competitionId)
                 .in(SubmissionRecords::getTeamId, teamIds)
-                .list()
-                .stream()
-                .map(this::toSubmissionInfoVO)
-                .toList();
+                .list());
+    }
+
+    @Override
+    public List<SubmissionInfoVO> getApprovedSubmissions(String competitionId) {
+        competitionGateway.require(competitionId);
+        return toSubmissionInfoVOs(lambdaQuery().eq(SubmissionRecords::getCompetitionId, competitionId)
+                .eq(SubmissionRecords::getReviewStatus, "APPROVED").orderByAsc(SubmissionRecords::getId)
+                .list());
+    }
+
+    private boolean requireTeamMembershipReply(String userId, String teamId) {
+        ResponseEntity<Boolean> reply = userServiceClient.isUserInTeam(userId, teamId);
+        if (reply == null || !reply.getStatusCode().is2xxSuccessful() || reply.getBody() == null) {
+            throw new com.w16a.danish.common.exception.ServiceUnavailableException("user-service", "isUserInTeam");
+        }
+        return reply.getBody();
+    }
+
+    private static void orderByCurrentScore(
+            com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<SubmissionRecords> query, boolean asc) {
+        query.getWrapper().getExpression().add(com.baomidou.mybatisplus.core.enums.SqlKeyword.ORDER_BY,
+                () -> SubmissionRecordsMapper.CURRENT_SCORE + (asc ? " ASC" : " DESC"));
     }
 
     private SubmissionInfoVO toSubmissionInfoVO(SubmissionRecords r) {
+        return toSubmissionInfoVO(r, scores.visibleScore(r));
+    }
+
+    private List<SubmissionInfoVO> toSubmissionInfoVOs(List<SubmissionRecords> records) {
+        Map<String, BigDecimal> visible = scores.visibleScores(records);
+        return records.stream().map(record -> toSubmissionInfoVO(record, visible.get(record.getId()))).toList();
+    }
+
+    private SubmissionInfoVO toSubmissionInfoVO(SubmissionRecords r, BigDecimal visibleScore) {
         SubmissionInfoVO vo = new SubmissionInfoVO();
         vo.setId(r.getId());
+        vo.setRevision(r.getRevision());
         vo.setCompetitionId(r.getCompetitionId());
         vo.setUserId(r.getUserId());
         vo.setTeamId(r.getTeamId());
         vo.setTitle(r.getTitle());
         vo.setDescription(r.getDescription());
         vo.setFileName(r.getFileName());
-        vo.setFileUrl(r.getFileUrl());
+        vo.setFileUrl("/submissions/" + r.getId() + "/download");
         vo.setFileType(r.getFileType());
         vo.setReviewStatus(r.getReviewStatus());
         vo.setReviewComments(r.getReviewComments());
         vo.setReviewedBy(r.getReviewedBy());
         vo.setReviewedAt(r.getReviewedAt());
-        vo.setTotalScore(r.getTotalScore());
+        vo.setTotalScore(visibleScore);
         vo.setCreatedAt(r.getCreatedAt());
         return vo;
     }
 
     private void persistUploadedSubmission(SubmissionRecords submission, String title, String description,
                                            MultipartFile file, String uploadedUrl, String failureMessage) {
+        lockOpenSubmissions(submission.getCompetitionId());
+        var competition = competitionGateway.require(submission.getCompetitionId());
+        if (competition.getEndDate() != null && !competition.getEndDate().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Submission deadline passed while the file was uploading");
+        }
         boolean replacing = submission.getId() != null;
+        submission.setRevision((submission.getRevision() == null ? 0 : submission.getRevision()) + 1);
         String previousFileUrl = submission.getFileUrl();
         submission.setTitle(title)
                 .setDescription(description)
@@ -753,10 +860,31 @@ public class SubmissionRecordsServiceImpl extends ServiceImpl<SubmissionRecordsM
         if (StrUtil.isBlank(fileUrl)) {
             return;
         }
-        URI uri = URI.create(fileUrl);
-        String[] parts = uri.getPath().substring(1).split("/", 2);
-        if (parts.length == 2) {
-            fileServiceClient.deleteFile(parts[0], parts[1]);
+        String objectName = com.w16a.danish.registration.service.SubmissionDownloads.objectName(fileUrl);
+        tasks.enqueue("SUBMISSION_FILE_DELETE", null, null, Map.of("objectName", objectName));
+    }
+
+    private void lockOpenSubmissions(String competitionId) {
+        baseMapper.ensureLifecycleLock(competitionId);
+        if (baseMapper.lockLifecycle(competitionId) != null || !"ONGOING".equals(baseMapper.competitionStatus(competitionId))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Submission changes are locked when scoring or awarding starts");
         }
     }
+    private void lockDeletableSubmissions(String competitionId) {
+        baseMapper.ensureLifecycleLock(competitionId);
+        var awardedAt = baseMapper.lockLifecycle(competitionId);
+        String status = baseMapper.competitionStatus(competitionId);
+        if (awardedAt != null || "COMPLETED".equals(status) || "AWARDED".equals(status)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Completed submissions and results are retained");
+        }
+    }
+    private void requirePublicCompetition(String competitionId) {
+        if (!Boolean.TRUE.equals(competitionGateway.require(competitionId).getIsPublic())) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
+    }
+    private void validatePage(int page, int size) {
+        if (page < 1 || size < 1 || size > 100) throw new BusinessException(HttpStatus.BAD_REQUEST, "Invalid page or size");
+    }
+
 }

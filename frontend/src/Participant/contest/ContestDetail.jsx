@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * ContestDetail.jsx
  *
@@ -39,8 +40,8 @@ function ContestDetail() {
     isPending: loading,
     error: queryError,
   } = useQuery({
-    queryKey: queryKeys.competitions.detail(id),
-    queryFn: () => unwrap(competitionService.getById(id)),
+    queryKey: queryKeys.competitions.managedDetail(id),
+    queryFn: () => unwrap(competitionService.getManagedById(id)),
     enabled: Boolean(id),
     staleTime: staleTime.medium,
   });
@@ -124,11 +125,11 @@ function ContestDetail() {
                 <DetailRow label="Participation Type" value={contestDetail.participationType} />
                 <DetailRow
                   label="Start Date:"
-                  value={new Date(contestDetail.startDate).toLocaleString()}
+                  value={parseApiDateTime(contestDetail.startDate).toLocaleString()}
                 />
                 <DetailRow
                   label="End Date:"
-                  value={new Date(contestDetail.endDate).toLocaleString()}
+                  value={parseApiDateTime(contestDetail.endDate).toLocaleString()}
                 />
                 <DetailRow
                   label="Allowed Submission Types:"

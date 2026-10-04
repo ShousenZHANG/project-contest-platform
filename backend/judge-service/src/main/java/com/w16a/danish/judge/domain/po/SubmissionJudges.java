@@ -41,7 +41,13 @@ public class SubmissionJudges implements Serializable {
     @Schema(description = "Judge user ID (UUID)", example = "user-123e4567-e89b-12d3-a456-426614174000")
     private String judgeId;
 
-    @Schema(description = "Total score given by the judge", example = "85.5")
+    @Schema(description = "Submission file revision evaluated by this Judge")
+    private Integer submissionRevision = 0;
+
+    @Schema(description = "Scoring rules version: 0 is legacy and requires rescoring; 1 uses the server 0–10 mean")
+    private Integer scoreSchemaVersion = 0;
+
+    @Schema(description = "Total score given by the judge on a 0–10 scale", example = "8.5")
     private BigDecimal totalScore;
 
     @Schema(description = "General comments from the judge", example = "Great innovation and teamwork!")

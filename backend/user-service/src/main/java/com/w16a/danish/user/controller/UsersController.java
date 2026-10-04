@@ -5,6 +5,8 @@ import com.w16a.danish.common.web.ApiResponses;
 import cn.hutool.core.util.StrUtil;
 import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
+import com.w16a.danish.common.security.ServiceOnly;
+import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.user.config.FrontendProperties;
@@ -12,7 +14,7 @@ import com.w16a.danish.user.config.GithubOAuthProperties;
 import com.w16a.danish.user.config.GoogleOAuthProperties;
 import com.w16a.danish.user.domain.dto.*;
 import com.w16a.danish.user.domain.vo.*;
-import com.w16a.danish.user.feign.FileServiceClient;
+import com.w16a.danish.user.profile.AvatarFiles;
 import com.w16a.danish.user.service.IUsersService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -55,7 +57,7 @@ public class UsersController {
     private final GithubOAuthProperties githubOAuthProperties;
     private final GoogleOAuthProperties googleOAuthProperties;
     private final FrontendProperties frontendProperties;
-    private final FileServiceClient fileServiceClient;
+    private final AvatarFiles avatarFiles;
 
     @Operation(
             summary = "Register a new user",
@@ -80,6 +82,13 @@ public class UsersController {
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequestDTO registerDTO) {
         UserResponseVO response = userService.register(registerDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/admin/accounts")
+    public ResponseEntity<UserBriefVO> provisionAccount(@CurrentUser RequestContext administrator,
+                                                       @Valid @RequestBody RegisterRequestDTO registerDTO) {
+        administrator.requireAnyRole("ADMIN");
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.provisionAccount(administrator, registerDTO));
     }
 
     @Operation(
@@ -202,6 +211,9 @@ public class UsersController {
             @CurrentUser RequestContext ctx,
             @RequestBody UpdateUserDTO updateUserDTO) {
 
+        if (updateUserDTO.getAvatarUrl() != null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Use the avatar upload endpoint to change your avatar");
+        }
         UserProfileVO updated = userService.updateUserProfile(ctx.userId(), updateUserDTO);
         return ResponseEntity.ok(updated);
     }
@@ -232,20 +244,7 @@ public class UsersController {
     public ResponseEntity<UserProfileVO> uploadAndSetAvatar(
             @CurrentUser RequestContext ctx,
             @RequestParam("file") MultipartFile file) {
-        String avatarUrl = fileServiceClient.uploadAvatar(file).getBody();
-        UserProfileVO currentProfile = userService.getUserProfile(ctx.userId());
-        String oldAvatarUrl = currentProfile.getAvatarUrl();
-        if (StrUtil.isNotBlank(oldAvatarUrl)) {
-            URI uri = URI.create(oldAvatarUrl);
-            String[] parts = uri.getPath().substring(1).split("/", 2);
-            if (parts.length == 2) {
-                fileServiceClient.deleteFile(parts[0], parts[1]);
-            }
-        }
-        UpdateUserDTO dto = new UpdateUserDTO();
-        dto.setAvatarUrl(avatarUrl);
-        UserProfileVO updated = userService.updateUserProfile(ctx.userId(), dto);
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(avatarFiles.replace(ctx.userId(), file));
     }
 
     @Operation(
@@ -268,15 +267,14 @@ public class UsersController {
     public void redirectToGithubOauth(@RequestParam("role") String role, HttpServletResponse response, HttpSession session) throws IOException {
         // CSRF protection: bind a one-time state nonce to the session and echo it
         // through the provider; the callback rejects any mismatch.
-        String state = StrUtil.uuid();
-        session.setAttribute("oauth_state", state);
+        String state = beginOauth("github", role, session);
 
         String redirectUrl = UriComponentsBuilder
                 .fromUri(URI.create(githubOAuthProperties.getAuthorizeUrl()))
                 .queryParam("client_id", githubOAuthProperties.getClientId())
                 .queryParam("redirect_uri", githubOAuthProperties.getRedirectUri())
                 .queryParam("scope", "user:email")
-                .queryParam("state", state + ":" + role)
+                .queryParam("state", state)
                 .build()
                 .toUriString();
 
@@ -285,35 +283,32 @@ public class UsersController {
 
     @GetMapping("/oauth/callback/github")
     public void handleGithubCallback(
-            @RequestParam("code") String code,
+            @RequestParam(value = "code", required = false) String code,
             @RequestParam("state") String state,
             HttpSession session,
             HttpServletResponse response
     ) throws IOException {
-        String savedState = (String) session.getAttribute("oauth_state");
+        String savedState = (String) session.getAttribute("oauth_state_github");
+        session.removeAttribute("oauth_state_github");
         String[] stateParts = state.split(":");
-        String receivedState = stateParts[0];
         String role = stateParts.length > 1 ? stateParts[1] : "PARTICIPANT";
 
-        if (savedState == null || !Objects.equals(receivedState, savedState)) {
+        if (savedState == null || !Objects.equals(state, savedState)) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid OAuth state");
             return;
         }
-        session.removeAttribute("oauth_state");
+
+        if (StrUtil.isBlank(code)) {
+            redirectOauthCancellation(response);
+            return;
+        }
 
         OAuthLoginRequestDTO dto = new OAuthLoginRequestDTO();
         dto.setProvider("github");
         dto.setCode(code);
         dto.setRole(role);
 
-        UserResponseVO userInfo = userService.oauthLoginOrRegister(dto);
-        String redirectUrl = frontendProperties.buildOauthRedirectUrl(
-                userInfo.getAccessToken(),
-                userInfo.getEmail(),
-                userInfo.getRole(),
-                userInfo.getUserId()
-        );
-        response.sendRedirect(redirectUrl);
+        finishOauth(dto, response);
     }
 
     @Operation(
@@ -334,8 +329,7 @@ public class UsersController {
     )
     @GetMapping("/oauth/google")
     public void redirectToGoogleOauth(@RequestParam("role") String role, HttpServletResponse response, HttpSession session) throws IOException {
-        String state = StrUtil.uuid();
-        session.setAttribute("oauth_state", state);
+        String state = beginOauth("google", role, session);
 
         String redirectUrl = UriComponentsBuilder
                 .fromUriString(googleOAuthProperties.getAuthorizeUrl())
@@ -345,7 +339,7 @@ public class UsersController {
                 .queryParam("scope", "openid email profile")
                 .queryParam("access_type", "offline")
                 .queryParam("include_granted_scopes", "true")
-                .queryParam("state", state + ":" + role)
+                .queryParam("state", state)
                 .build()
                 .toUriString();
 
@@ -353,31 +347,28 @@ public class UsersController {
     }
 
     @GetMapping("/oauth/callback/google")
-    public void handleGoogleCallback(@RequestParam("code") String code, @RequestParam("state") String state, HttpSession session, HttpServletResponse response) throws IOException {
-        String savedState = (String) session.getAttribute("oauth_state");
+    public void handleGoogleCallback(@RequestParam(value = "code", required = false) String code, @RequestParam("state") String state, HttpSession session, HttpServletResponse response) throws IOException {
+        String savedState = (String) session.getAttribute("oauth_state_google");
+        session.removeAttribute("oauth_state_google");
         String[] stateParts = state.split(":");
-        String receivedState = stateParts[0];
         String role = stateParts.length > 1 ? stateParts[1] : "PARTICIPANT";
 
-        if (savedState == null || !Objects.equals(receivedState, savedState)) {
+        if (savedState == null || !Objects.equals(state, savedState)) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid OAuth state");
             return;
         }
-        session.removeAttribute("oauth_state");
+
+        if (StrUtil.isBlank(code)) {
+            redirectOauthCancellation(response);
+            return;
+        }
 
         OAuthLoginRequestDTO dto = new OAuthLoginRequestDTO();
         dto.setProvider("google");
         dto.setCode(code);
         dto.setRole(role);
 
-        UserResponseVO userInfo = userService.oauthLoginOrRegister(dto);
-        String redirectUrl = frontendProperties.buildOauthRedirectUrl(
-                userInfo.getAccessToken(),
-                userInfo.getEmail(),
-                userInfo.getRole(),
-                userInfo.getUserId()
-        );
-        response.sendRedirect(redirectUrl);
+        finishOauth(dto, response);
     }
 
     @Operation(
@@ -455,9 +446,11 @@ public class UsersController {
     @PostMapping("/query-by-ids")
     public ResponseEntity<List<UserBriefVO>> getUsersByIds(
             @RequestBody List<String> userIds,
-            @RequestParam(required = false) String role
+            @RequestParam(required = false) String role,
+            @CurrentUser RequestContext ctx
     ) {
         List<UserBriefVO> users = userService.getUsersByIds(userIds, role);
+        users.forEach(user -> redactContact(user, ctx));
         return ResponseEntity.ok(users);
     }
 
@@ -486,8 +479,9 @@ public class UsersController {
             }
     )
     @GetMapping("/{userId}")
-    public ResponseEntity<UserBriefVO> getUserBriefById(@PathVariable String userId) {
+    public ResponseEntity<UserBriefVO> getUserBriefById(@PathVariable String userId, @CurrentUser RequestContext ctx) {
         UserBriefVO user = userService.getUserBriefById(userId);
+        redactContact(user, ctx);
         return ResponseEntity.ok(user);
     }
 
@@ -504,9 +498,67 @@ public class UsersController {
             }
     )
     @PostMapping("/query-by-emails")
-    public ResponseEntity<List<UserBriefVO>> getUsersByEmails(@RequestBody List<String> emails) {
+    public ResponseEntity<List<UserBriefVO>> getUsersByEmails(@RequestBody List<String> emails, @CurrentUser RequestContext ctx) {
+        ctx.requireAnyRole("ADMIN");
         List<UserBriefVO> users = userService.getUsersByEmails(emails);
         return ResponseEntity.ok(users);
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"competition-service", "registration-service", "interaction-service", "judge-service"})
+    @PostMapping("/internal/query-by-ids")
+    public ResponseEntity<List<UserBriefVO>> getInternalUsersByIds(@RequestBody List<String> ids,
+            @RequestParam(required = false) String role) {
+        return ResponseEntity.ok(userService.getUsersByIds(ids, role));
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = "competition-service")
+    @PostMapping("/internal/query-by-emails")
+    public ResponseEntity<List<UserBriefVO>> getInternalUsersByEmails(@RequestBody List<String> emails) {
+        return ResponseEntity.ok(userService.getUsersByEmails(emails));
+    }
+
+    @Operation(hidden = true)
+    @ServiceOnly(value = "internal:read", callers = {"competition-service", "registration-service", "interaction-service", "judge-service"})
+    @GetMapping("/internal/{userId}")
+    public ResponseEntity<UserBriefVO> getInternalUserBrief(@PathVariable String userId) {
+        return ResponseEntity.ok(userService.getUserBriefById(userId));
+    }
+
+    private static void redactContact(UserBriefVO user, RequestContext ctx) {
+        if (!ctx.isAdmin() && !Objects.equals(user.getId(), ctx.userId())) {
+            user.setEmail(null);
+        }
+    }
+
+    private static String beginOauth(String provider, String role, HttpSession session) {
+        String normalized = role == null ? "" : role.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!List.of("PARTICIPANT", "ORGANIZER").contains(normalized)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "OAuth signup only permits PARTICIPANT or ORGANIZER");
+        }
+        String state = StrUtil.uuid() + ":" + normalized;
+        session.setAttribute("oauth_state_" + provider, state);
+        return state;
+    }
+
+    private void finishOauth(OAuthLoginRequestDTO dto, HttpServletResponse response) throws IOException {
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
+        try {
+            UserResponseVO user = userService.oauthLoginOrRegister(dto);
+            response.sendRedirect(frontendProperties.buildOauthRedirectUrl(user.getAccessToken(), user.getEmail(), user.getRole(), user.getUserId()));
+        } catch (BusinessException rejected) {
+            response.sendRedirect(frontendProperties.buildOauthErrorUrl(rejected.getMessage()));
+        } catch (feign.FeignException unavailable) {
+            response.sendRedirect(frontendProperties.buildOauthErrorUrl("The identity provider is unavailable. Retry or use password sign-in."));
+        }
+    }
+
+    private void redirectOauthCancellation(HttpServletResponse response) throws IOException {
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
+        response.sendRedirect(frontendProperties.buildOauthErrorUrl("OAuth authorization was canceled. Use password sign-in or try again."));
     }
 
     @Operation(

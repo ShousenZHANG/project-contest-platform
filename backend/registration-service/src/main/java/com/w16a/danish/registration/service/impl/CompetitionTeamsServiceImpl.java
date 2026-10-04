@@ -21,6 +21,8 @@ public class CompetitionTeamsServiceImpl extends ServiceImpl<CompetitionTeamsMap
 
     @Override
     public int countTeamParticipants() {
-        return Math.toIntExact(this.lambdaQuery().count());
+        return Math.toIntExact(this.lambdaQuery()
+                .inSql(CompetitionTeams::getCompetitionId, "SELECT id FROM competitions WHERE is_public=TRUE")
+                .count());
     }
 }

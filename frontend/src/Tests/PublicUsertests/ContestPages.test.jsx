@@ -34,7 +34,7 @@ describe('UserContestList', () => {
     expect(await screen.findByText('AI Innovation Challenge')).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith(
       '/competitions/list',
-      expect.objectContaining({ params: {} })
+      expect.objectContaining({ params: { page: 1, size: 12 } }),
     );
   });
 });
@@ -49,11 +49,11 @@ describe('contest detail', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByText(/Failed to load contest details/i)).toBeInTheDocument()
+      expect(screen.getByText(/Failed to load contest details/i)).toBeInTheDocument(),
     );
   });
 
-  it('serves the public and participant views from one cache entry', async () => {
+  it('keeps public and authenticated competition details in separate cache entries', async () => {
     apiClient.get.mockResolvedValue({ data: CONTEST });
     const queryClient = createTestQueryClient();
 
@@ -65,8 +65,8 @@ describe('contest detail', () => {
     await screen.findAllByText(/AI Innovation Challenge/i);
     publicView.unmount();
 
-    // Same competition, participant route — the detail key is shared, so the
-    // second view must not issue another request.
+    // Managed metadata must use its authenticated endpoint, even after viewing
+    // the same competition through the public page.
     apiClient.get.mockClear();
     renderWithProviders(<ContestDetail />, {
       route: '/contest-detail/comp-1',
@@ -75,6 +75,6 @@ describe('contest detail', () => {
     });
 
     await screen.findAllByText(/AI Innovation Challenge/i);
-    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(apiClient.get).toHaveBeenCalledWith('/competitions/managed/comp-1');
   });
 });

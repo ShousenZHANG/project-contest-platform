@@ -1,6 +1,7 @@
 package com.w16a.danish.fileService.service;
 
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.InputStreamResource;
 
 /**
  * Service interface for handling file storage operations with MinIO.
@@ -32,9 +33,11 @@ public interface FileStorageService {
      * Uploads a participant's submission (e.g., PDF, video) to a private bucket.
      *
      * @param file the submission file
-     * @return the internal object name in the bucket (not a URL)
+     * @return the stable storage URL; private objects are downloaded through resource-authorized application routes
      */
     String uploadSubmission(MultipartFile file);
+
+    InputStreamResource readSubmission(String objectName);
 
     /**
      * Deletes a file from the specified bucket.

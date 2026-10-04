@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -54,6 +55,45 @@ class CompetitionParticipantsServiceImplTest {
         return new RequestContext(userId, role);
     }
 
+    @Test
+    void registeredTeamProfilesAreLoadedInBatchesOfAtMostOneHundred() {
+        @SuppressWarnings("unchecked")
+        LambdaQueryChainWrapper<CompetitionTeams> teams = mock(LambdaQueryChainWrapper.class);
+        when(competitionTeamsService.lambdaQuery()).thenReturn(teams);
+        when(teams.eq(any(), any())).thenReturn(teams);
+        when(teams.list()).thenReturn(java.util.stream.IntStream.range(0, 205)
+                .mapToObj(index -> new CompetitionTeams().setTeamId("t" + index)).toList());
+        when(userServiceClient.getTeamBriefByIds(anyList())).thenAnswer(call -> {
+            List<String> ids = call.getArgument(0);
+            return ResponseEntity.ok(ids.stream().map(id -> {
+                TeamInfoVO view = new TeamInfoVO();
+                view.setTeamId(id);
+                view.setTeamName(id);
+                view.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
+                return view;
+            }).toList());
+        });
+        var page = service.getTeamsByCompetitionWithSearch("c1", 1, 10, null, "teamName", "asc");
+        assertThat(page.getTotal()).isEqualTo(205);
+        verify(userServiceClient, times(3)).getTeamBriefByIds(argThat(ids -> ids.size() <= 100));
+    }
+
+    @Test
+    void aMissingOrFailedTeamBatchIsAServiceFailureInsteadOfAnEmptyCompetition() {
+        @SuppressWarnings("unchecked")
+        LambdaQueryChainWrapper<CompetitionTeams> teams = mock(LambdaQueryChainWrapper.class);
+        when(competitionTeamsService.lambdaQuery()).thenReturn(teams);
+        when(teams.eq(any(), any())).thenReturn(teams);
+        when(teams.list()).thenReturn(List.of(new CompetitionTeams().setTeamId("t1")));
+        for (ResponseEntity<List<TeamInfoVO>> reply : java.util.Arrays.<ResponseEntity<List<TeamInfoVO>>>asList(
+                null, ResponseEntity.ok(null), ResponseEntity.status(503).body(List.of()))) {
+            when(userServiceClient.getTeamBriefByIds(List.of("t1"))).thenReturn(reply);
+            assertThatThrownBy(() -> service.getTeamsByCompetitionWithSearch("c1", 1, 10, null, "teamName", "asc"))
+                    .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getStatus())
+                            .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE));
+        }
+    }
+
     // we'll reuse this stub for all calls to service.lambdaQuery()
     @SuppressWarnings("unchecked")
     private LambdaQueryChainWrapper<CompetitionParticipants> partQuery;
@@ -67,6 +107,8 @@ class CompetitionParticipantsServiceImplTest {
         submissionService            = mock(ISubmissionRecordsService.class);
         registrationNotifier         = mock(RegistrationNotifier.class);
         competitionTeamsService      = mock(ICompetitionTeamsService.class);
+        participantsMapper = mock(CompetitionParticipantsMapper.class);
+        when(participantsMapper.competitionStatus(anyString())).thenReturn("ONGOING");
 
         // 2) create a stubbed LambdaQueryChainWrapper for participants
         partQuery = mock(LambdaQueryChainWrapper.class);
@@ -87,6 +129,7 @@ class CompetitionParticipantsServiceImplTest {
         };
 
         // 4) spy it so we can stub save(), removeById(), etc.
+        ReflectionTestUtils.setField(real, "baseMapper", participantsMapper);
         service = spy(real);
     }
 
@@ -95,6 +138,7 @@ class CompetitionParticipantsServiceImplTest {
     void testRegister_Success() {
         // stub competition-service
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(ParticipationType.INDIVIDUAL);
         competition.setStatus(CompetitionStatus.UPCOMING);
         when(competitionGateway.require("comp-1")).thenReturn(competition);
 
@@ -307,7 +351,7 @@ class CompetitionParticipantsServiceImplTest {
 
         // Act & Assert
         assertThatCode(() -> service.getCompetitionsRegisteredByTeam(
-                "team-1", 1, 10, null, "competitionName", "asc"))
+                "team-1", ctx("admin", "ADMIN"), 1, 10, null, "competitionName", "asc"))
                 .doesNotThrowAnyException();
     }
 
@@ -396,7 +440,10 @@ class CompetitionParticipantsServiceImplTest {
 
         // exists() for isTeamRegistered
         when(tq.exists()).thenReturn(true);
-        assertThatCode(() -> service.isTeamRegistered("comp-1","team-1"))
+        var publicCompetition = new CompetitionResponseVO();
+        publicCompetition.setIsPublic(true);
+        when(competitionGateway.require("comp-1")).thenReturn(publicCompetition);
+        assertThatCode(() -> service.isTeamRegistered("comp-1","team-1", ctx("user-1", "PARTICIPANT")))
                 .doesNotThrowAnyException();
 
         // same call for existsRegistrationByTeamId

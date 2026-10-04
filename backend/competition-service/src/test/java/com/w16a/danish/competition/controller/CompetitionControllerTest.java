@@ -2,6 +2,7 @@ package com.w16a.danish.competition.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.w16a.danish.common.context.RequestContext;
+import com.w16a.danish.common.security.ServiceTokenService;
 import com.w16a.danish.competition.domain.dto.AssignJudgesDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionCreateDTO;
 import com.w16a.danish.competition.domain.dto.CompetitionUpdateDTO;
@@ -13,7 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -29,13 +30,16 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "service.auth.secret=test-service-secret-at-least-32-characters")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CompetitionControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ServiceTokenService tokens;
 
     @MockitoBean
     private ICompetitionsService competitionService;
@@ -69,7 +73,7 @@ class CompetitionControllerTest {
     @Test
     @DisplayName("✅ Should get competition details successfully")
     void testGetCompetitionDetails() throws Exception {
-        when(competitionService.getCompetitionById(anyString()))
+        when(competitionService.getPublicCompetitionById(anyString()))
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(get("/competitions/{id}", "test-id"))
@@ -220,6 +224,8 @@ class CompetitionControllerTest {
         when(competitionService.isUserOrganizer(anyString(), anyString())).thenReturn(true);
 
         mockMvc.perform(get("/competitions/is-organizer")
+                        .header("User-ID", "user-id")
+                        .header("User-Role", "ORGANIZER")
                         .param("competitionId", "comp-id")
                         .param("userId", "user-id"))
                 .andExpect(status().isOk())
@@ -242,7 +248,24 @@ class CompetitionControllerTest {
                 .thenReturn(new CompetitionResponseVO());
 
         mockMvc.perform(put("/competitions/{id}/status", "comp-id")
+                        .header(ServiceTokenService.HEADER, tokens.issue("judge-service", "competition-service-test", "internal:write"))
                         .param("status", "ENDED"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void browserIdentityCannotSetCompetitionStatus() throws Exception {
+        mockMvc.perform(put("/competitions/c1/status").param("status", "AWARDED")
+                        .header("User-ID", "admin").header("User-Role", "ADMIN"))
+                .andExpect(status().isForbidden());
+        verify(competitionService, never()).updateCompetitionStatus(anyString(), anyString());
+    }
+
+    @Test
+    void otherServiceCannotSetCompetitionStatus() throws Exception {
+        mockMvc.perform(put("/competitions/c1/status").param("status", "AWARDED")
+                        .header(ServiceTokenService.HEADER, tokens.issue("user-service", "competition-service-test", "internal:write")))
+                .andExpect(status().isForbidden());
+        verify(competitionService, never()).updateCompetitionStatus(anyString(), anyString());
     }
 }

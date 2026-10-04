@@ -2,6 +2,7 @@ package com.w16a.danish.judge.service.impl;
 
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.mapper.CompetitionJudgesMapper;
+import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,12 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CompetitionJudgesServiceImpl extends ServiceImpl<CompetitionJudgesMapper, CompetitionJudges> implements ICompetitionJudgesService {
 
+    private final SubmissionJudgesMapper submissionJudgesMapper;
+
     @Override
     public int countJudgesByCompetitionId(String competitionId) {
-        Long count = this.lambdaQuery()
-                .eq(CompetitionJudges::getCompetitionId, competitionId)
-                .count();
-        return Math.toIntExact(count);
+        var judges = submissionJudgesMapper.selectValidJudgeIds(competitionId);
+        return judges == null ? 0 : judges.size();
     }
 
 }

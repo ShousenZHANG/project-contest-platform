@@ -9,6 +9,7 @@ import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.judge.domain.vo.SubmissionBriefVO;
 import com.w16a.danish.judge.domain.vo.SubmissionJudgeVO;
+import com.w16a.danish.judge.domain.vo.JudgingSubmissionVO;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,6 +38,14 @@ public class SubmissionJudgesController {
 
     private final ISubmissionJudgesService submissionJudgesService;
 
+    @GetMapping("/submissions/{submissionId}")
+    public ResponseEntity<JudgingSubmissionVO> getJudgingSubmission(
+            @CurrentUser RequestContext ctx, @PathVariable String submissionId,
+            @RequestParam String competitionId) {
+        ctx.requireAnyRole("JUDGE");
+        return ResponseEntity.ok(submissionJudgesService.getJudgingSubmission(ctx, competitionId, submissionId));
+    }
+
     @Operation(
             summary = "Judge a submission",
             description = "Allows an assigned judge to score and comment a submission. Only assigned judges can perform this action.",
@@ -56,8 +65,8 @@ public class SubmissionJudgesController {
                             description = "Forbidden - User is not assigned as a judge for this competition."
                     ),
                     @ApiResponse(
-                            responseCode = "400",
-                            description = "Bad Request - The judge has already scored this submission."
+                            responseCode = "409",
+                            description = "Conflict - The judge has already scored this submission or awards are finalized."
                     )
             }
     )
@@ -66,6 +75,7 @@ public class SubmissionJudgesController {
             @CurrentUser RequestContext ctx,
             @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
+        ctx.requireAnyRole("JUDGE");
         submissionJudgesService.judgeSubmission(ctx, judgeDTO);
         return ApiResponses.message("Submission judged successfully.");
     }
@@ -85,8 +95,7 @@ public class SubmissionJudgesController {
             @CurrentUser RequestContext ctx,
             @RequestParam("competitionId") String competitionId) {
 
-        boolean isJudge = submissionJudgesService.isUserAssignedAsJudge(ctx.userId(), competitionId);
-        return ResponseEntity.ok(isJudge);
+        return ResponseEntity.ok(ctx.isJudge() && submissionJudgesService.isUserAssignedAsJudge(ctx.userId(), competitionId));
     }
 
     @Operation(
@@ -104,13 +113,14 @@ public class SubmissionJudgesController {
             @CurrentUser RequestContext ctx,
             @PathVariable("submissionId") String submissionId) {
 
+        ctx.requireAnyRole("JUDGE");
         SubmissionJudgeVO vo = submissionJudgesService.getMyJudgingDetail(ctx.userId(), submissionId);
         return ResponseEntity.ok(vo);
     }
 
     @Operation(
             summary = "List approved submissions pending judgment",
-            description = "Returns a paginated list of approved submissions in the specified competition that the current judge has not yet scored. Supports keyword search and sorting.",
+            description = "Returns approved submissions available to the assigned judge, with current-score status. Supports keyword search and sorting.",
             parameters = {
                     @io.swagger.v3.oas.annotations.Parameter(name = "competitionId", description = "Competition ID", required = true),
                     @io.swagger.v3.oas.annotations.Parameter(name = "keyword", description = "Keyword to search submission title", required = false),
@@ -131,6 +141,7 @@ public class SubmissionJudgesController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
+        ctx.requireAnyRole("JUDGE");
         PageResponse<SubmissionBriefVO> response = submissionJudgesService.listPendingSubmissionsForJudging(
                 ctx, competitionId, keyword, sortOrder, page, size);
         return ResponseEntity.ok(response);
@@ -156,6 +167,7 @@ public class SubmissionJudgesController {
             @PathVariable("submissionId") String submissionId,
             @Valid @RequestBody SubmissionJudgeDTO judgeDTO) {
 
+        ctx.requireAnyRole("JUDGE");
         submissionJudgesService.updateJudgement(ctx, submissionId, judgeDTO);
         return ApiResponses.message("Judging updated successfully.");
     }
@@ -183,6 +195,7 @@ public class SubmissionJudgesController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
+        ctx.requireAnyRole("JUDGE");
         PageResponse<CompetitionResponseVO> response = submissionJudgesService.listMyJudgingCompetitions(
                 ctx, keyword, sortBy, order, page, size);
         return ResponseEntity.ok(response);

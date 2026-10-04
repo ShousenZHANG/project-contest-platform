@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * @file ContestList.jsx
  * @description
@@ -7,18 +8,24 @@
  * Role: Organizer
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Filter, X, Plus } from 'lucide-react';
+import { Filter, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { competitionService } from '../services/competitionService';
 import { queryKeys, staleTime } from '../api/queryKeys';
 import { unwrap, toMessage } from '../api/queryFn';
 import PageSkeleton from '../shared/components/PageSkeleton';
+import PageError from '../shared/components/PageError';
+import ConfirmDialog from '../shared/components/ConfirmDialog';
+import Pagination from '../shared/components/Pagination';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
+import { CATEGORIES } from '../shared/competitionCategories';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import AuthTokenManager from '@/auth/authTokenManager';
@@ -31,15 +38,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '../components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 
 const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-11 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
 function statusVariant(status) {
   if (status === 'ONGOING') return 'success';
@@ -49,49 +51,42 @@ function statusVariant(status) {
 }
 
 function OrganizerContestList() {
+  const [transition, setTransition] = useState(null);
   useDocumentTitle('My Contests');
-  const [searchInput, setSearchInput] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState([]);
+  const state = usePagedSearchParams();
+  const selectedStatus = state.searchParams.get('status') || '';
+  const category = state.searchParams.get('category') || '';
+  const selectedParticipationType = state.searchParams.get('participationType') || '';
   const [isFilterVisible, setIsFilterVisible] = useState(false);
-  const [selectedParticipationType, setSelectedParticipationType] = useState('');
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const email = AuthTokenManager.getEmail();
 
-  const listKey = queryKeys.competitions.mine();
+  const params = {
+    page: state.page,
+    size: 10,
+    ...(state.keyword && { keyword: state.keyword }),
+    ...(selectedStatus && { status: selectedStatus }),
+    ...(category && { category }),
+    ...(selectedParticipationType && { participationType: selectedParticipationType }),
+  };
+  const listKey = queryKeys.competitions.mine(params);
 
   const {
-    data: competitions = [],
+    data: listPage,
     isPending,
+    isFetching,
     error,
+    refetch,
   } = useQuery({
     queryKey: listKey,
-    queryFn: () => unwrap(competitionService.getMyOrganized()),
-    // The endpoint answers with a PageResponse rather than the ApiResponse
-    // envelope, so the rows sit one level down.
-    select: (page) => (Array.isArray(page?.data) ? page.data : []),
+    queryFn: () => unwrap(competitionService.getMyOrganized(params)),
     staleTime: staleTime.short,
   });
 
-  // Filtering is derived from state already on hand — deriving it during render
-  // avoids the extra commit an effect-plus-state pair would cost.
-  const filteredCompetitions = useMemo(
-    () =>
-      competitions.filter((comp) => {
-        const matchesSearch = comp.name.toLowerCase().includes(searchInput.toLowerCase());
-        const matchesStatus = selectedStatus ? comp.status === selectedStatus : true;
-        const matchesCategory =
-          selectedCategories.length > 0 ? selectedCategories.includes(comp.category) : true;
-        const matchesParticipation = selectedParticipationType
-          ? comp.participationType === selectedParticipationType
-          : true;
-        return matchesSearch && matchesStatus && matchesCategory && matchesParticipation;
-      }),
-    [competitions, searchInput, selectedStatus, selectedCategories, selectedParticipationType]
-  );
+  const competitions = listPage?.data || [];
 
   const deleteCompetition = useMutation({
     mutationFn: (competitionId) => unwrap(competitionService.delete(competitionId)),
@@ -104,7 +99,7 @@ function OrganizerContestList() {
       queryClient.setQueryData(listKey, (page) =>
         page
           ? { ...page, data: (page.data ?? []).filter((comp) => comp.id !== competitionId) }
-          : page
+          : page,
       );
 
       return { previous };
@@ -118,7 +113,7 @@ function OrganizerContestList() {
     },
 
     onSuccess: () => toast.success('Competition deleted'),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: listKey }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all }),
   });
 
   const handleCreate = () => navigate(`/OrganizerContest/${email}`);
@@ -133,11 +128,14 @@ function OrganizerContestList() {
     if (competitionId) deleteCompetition.mutate(competitionId);
   };
 
-  const handleCategoryChange = (category) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
-    );
-  };
+  const changeStatus = useMutation({
+    mutationFn: ({ id, status }) => unwrap(competitionService.update(id, { status })),
+    onSuccess: () => {
+      setTransition(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all });
+    },
+    onError: () => setTransition(null),
+  });
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6">
@@ -145,7 +143,7 @@ function OrganizerContestList() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My Contests</h1>
           <p className="text-sm text-muted-foreground">
-            {filteredCompetitions.length} of {competitions.length} contest(s) shown.
+            Manage registration, submissions, judging and published awards.
           </p>
         </div>
         <div className="flex gap-2">
@@ -156,19 +154,31 @@ function OrganizerContestList() {
         </div>
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <Input
-          type="text"
-          placeholder="Search by name..."
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          className="max-w-md"
-        />
-        <Button variant="outline" onClick={() => setIsFilterVisible(true)}>
+      <form className="mb-4 flex flex-wrap items-end gap-2" onSubmit={state.submitSearch}>
+        <div className="min-w-0 flex-1 space-y-2">
+          <Label htmlFor="organizer-contest-search">Search my contests</Label>
+          <Input
+            id="organizer-contest-search"
+            type="search"
+            placeholder="Search by name..."
+            value={state.searchInput}
+            onChange={(e) => state.setSearchInput(e.target.value)}
+            className="h-11 text-base"
+          />
+        </div>
+        <Button type="submit" className="min-h-11">
+          Search
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11"
+          onClick={() => setIsFilterVisible(true)}
+        >
           <Filter className="mr-1 h-4 w-4" />
           Filter
         </Button>
-      </div>
+      </form>
 
       <Sheet open={isFilterVisible} onOpenChange={setIsFilterVisible}>
         <SheetContent side="right" className="w-full sm:max-w-md">
@@ -177,28 +187,28 @@ function OrganizerContestList() {
           </SheetHeader>
           <div className="mt-4 space-y-5">
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Status
-              </h4>
+              <Label htmlFor="organizer-contest-status">Status</Label>
               <select
+                id="organizer-contest-status"
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => state.setFilters({ status: e.target.value })}
                 className={SELECT_CLASS}
               >
                 <option value="">All</option>
                 <option value="UPCOMING">UPCOMING</option>
                 <option value="ONGOING">ONGOING</option>
                 <option value="COMPLETED">COMPLETED</option>
+                <option value="AWARDED">AWARDED</option>
+                <option value="CANCELED">CANCELED</option>
               </select>
             </div>
 
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Participation Type
-              </h4>
+              <Label htmlFor="organizer-contest-participation">Participation Type</Label>
               <select
+                id="organizer-contest-participation"
                 value={selectedParticipationType}
-                onChange={(e) => setSelectedParticipationType(e.target.value)}
+                onChange={(e) => state.setFilters({ participationType: e.target.value })}
                 className={SELECT_CLASS}
               >
                 <option value="">All</option>
@@ -208,25 +218,31 @@ function OrganizerContestList() {
             </div>
 
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Category
-              </h4>
-              <div className="flex flex-col gap-1.5">
-                {competitions.length > 0 &&
-                  Array.from(new Set(competitions.map((item) => item.category)))
-                    .sort((a, b) => a.localeCompare(b))
-                    .map((category) => (
-                      <label key={category} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCategories.includes(category)}
-                          onChange={() => handleCategoryChange(category)}
-                          className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                        />
-                        {category}
-                      </label>
-                    ))}
-              </div>
+              <Label htmlFor="organizer-contest-category">Category</Label>
+              <select
+                id="organizer-contest-category"
+                value={category}
+                className={SELECT_CLASS}
+                onChange={(e) => state.setFilters({ category: e.target.value })}
+              >
+                <option value="">All</option>
+                {CATEGORIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  state.setFilters({ status: '', category: '', participationType: '', keyword: '' })
+                }
+              >
+                Clear filters
+              </Button>
+              <Button onClick={() => setIsFilterVisible(false)}>Done</Button>
             </div>
           </div>
         </SheetContent>
@@ -235,13 +251,8 @@ function OrganizerContestList() {
       {isPending ? (
         <PageSkeleton rows={6} />
       ) : error ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
-          {toMessage(error)}
-        </div>
-      ) : filteredCompetitions.length === 0 ? (
+        <PageError error={error} onRetry={() => refetch()} retrying={isFetching} />
+      ) : competitions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No competitions found.</p>
       ) : (
         <Card className="overflow-x-auto">
@@ -252,6 +263,7 @@ function OrganizerContestList() {
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Category</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Lifecycle</th>
                 <th className="px-3 py-2">Start</th>
                 <th className="px-3 py-2">End</th>
                 <th className="px-3 py-2">Edit</th>
@@ -263,22 +275,62 @@ function OrganizerContestList() {
               </tr>
             </thead>
             <tbody>
-              {filteredCompetitions.map((comp, index) => (
-                <tr key={comp.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                  <td className="px-3 py-1.5 text-muted-foreground">{index + 1}</td>
+              {competitions.map((comp, index) => (
+                <tr
+                  key={comp.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/40"
+                >
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {(state.page - 1) * 10 + index + 1}
+                  </td>
                   <td className="px-3 py-1.5 font-medium text-foreground">{comp.name}</td>
                   <td className="px-3 py-1.5 text-muted-foreground">{comp.category}</td>
                   <td className="px-3 py-1.5">
                     <Badge variant={statusVariant(comp.status)}>{comp.status}</Badge>
                   </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {new Date(comp.startDate).toLocaleDateString()}
+                  <td className="px-3 py-1.5">
+                    {comp.status === 'UPCOMING' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setTransition({ id: comp.id, name: comp.name, status: 'ONGOING' })
+                        }
+                      >
+                        Start competition
+                      </Button>
+                    ) : comp.status === 'ONGOING' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setTransition({ id: comp.id, name: comp.name, status: 'COMPLETED' })
+                        }
+                      >
+                        End submissions
+                      </Button>
+                    ) : comp.status === 'COMPLETED' || comp.status === 'AWARDED' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => navigate(`/submissions/${comp.id}/ratings`)}
+                      >
+                        Awards and readiness
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">Closed</span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">
-                    {new Date(comp.endDate).toLocaleDateString()}
+                    {parseApiDateTime(comp.startDate).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {parseApiDateTime(comp.endDate).toLocaleDateString()}
                   </td>
                   <td className="px-3 py-1.5">
-                    <Button size="sm" variant="outline" onClick={() => handleEdit(comp.id)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={['AWARDED', 'CANCELED'].includes(comp.status)}
+                      onClick={() => handleEdit(comp.id)}
+                    >
                       Edit
                     </Button>
                   </td>
@@ -286,6 +338,7 @@ function OrganizerContestList() {
                     <Button
                       size="sm"
                       variant="secondary"
+                      disabled={!['UPCOMING', 'ONGOING'].includes(comp.status)}
                       onClick={() => navigate(`/OrganizerUploadMedia/${comp.id}`)}
                     >
                       Upload
@@ -297,6 +350,7 @@ function OrganizerContestList() {
                       variant="outline"
                       className="border-destructive text-destructive hover:bg-destructive/10"
                       onClick={() => setConfirmDelete({ open: true, id: comp.id })}
+                      disabled={comp.status === 'AWARDED'}
                     >
                       Delete
                     </Button>
@@ -324,10 +378,7 @@ function OrganizerContestList() {
                     </Button>
                   </td>
                   <td className="px-3 py-1.5">
-                    <Button
-                      size="sm"
-                      onClick={() => navigate(`/OrganizerAddJudge/${comp.id}`)}
-                    >
+                    <Button size="sm" onClick={() => navigate(`/OrganizerAddJudge/${comp.id}`)}>
                       Add
                     </Button>
                   </td>
@@ -338,6 +389,30 @@ function OrganizerContestList() {
         </Card>
       )}
 
+      {!isPending && !error && (
+        <Pagination
+          page={state.page}
+          pages={listPage?.pages}
+          total={listPage?.total ?? competitions.length}
+          onPageChange={state.setPage}
+          busy={isFetching}
+        />
+      )}
+
+      {changeStatus.error && <PageError error={changeStatus.error} />}
+      <ConfirmDialog
+        open={Boolean(transition)}
+        title={transition?.status === 'ONGOING' ? 'Start competition?' : 'End submissions?'}
+        message={
+          transition?.status === 'ONGOING'
+            ? `Opening ${transition?.name} locks its criteria, entry type and schedule.`
+            : `Completing ${transition?.name} closes submissions and opens judging. This cannot be undone.`
+        }
+        confirmLabel={transition?.status === 'ONGOING' ? 'Start competition' : 'End submissions'}
+        pending={changeStatus.isPending}
+        onConfirm={() => changeStatus.mutate(transition)}
+        onCancel={() => setTransition(null)}
+      />
       <Dialog
         open={confirmDelete.open}
         onOpenChange={(open) => setConfirmDelete({ open, id: open ? confirmDelete.id : null })}
@@ -346,7 +421,8 @@ function OrganizerContestList() {
           <DialogHeader>
             <DialogTitle>Delete competition?</DialogTitle>
             <DialogDescription>
-              This will permanently remove the competition and its data. This action cannot be undone.
+              This will permanently remove the competition and its data. This action cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

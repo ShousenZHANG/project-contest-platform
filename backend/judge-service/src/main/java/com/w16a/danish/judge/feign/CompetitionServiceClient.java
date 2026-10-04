@@ -14,7 +14,7 @@ import java.util.List;
  * @author Eddy
  * @date 2025/04/18
  */
-@FeignClient(name = "competition-service", fallback = com.w16a.danish.judge.feign.fallback.CompetitionServiceClientFallback.class)
+@FeignClient(name = "competition-service", configuration = com.w16a.danish.common.security.InternalFeignConfiguration.class, fallback = com.w16a.danish.judge.feign.fallback.CompetitionServiceClientFallback.class)
 public interface CompetitionServiceClient {
 
     /**
@@ -23,7 +23,7 @@ public interface CompetitionServiceClient {
      * @param competitionId Competition ID
      * @return Full competition information
      */
-    @GetMapping("/competitions/{id}")
+    @GetMapping("/competitions/internal/{id}")
     ResponseEntity<CompetitionResponseVO> getCompetitionById(@PathVariable("id") String competitionId);
 
     /**
@@ -33,7 +33,7 @@ public interface CompetitionServiceClient {
      * @param ids list of competition IDs
      * @return {@link ResponseEntity }<{@link List }<{@link CompetitionResponseVO }>>
      */
-    @PostMapping("/competitions/batch/ids")
+    @PostMapping("/competitions/internal/batch/ids")
     ResponseEntity<List<CompetitionResponseVO>> getCompetitionsByIds(@RequestBody List<String> ids);
 
     /**
@@ -42,7 +42,7 @@ public interface CompetitionServiceClient {
      * @param competitionId Competition ID
      * @return Full competition information
      */
-    @GetMapping("/competitions/is-organizer")
+    @GetMapping("/competitions/internal/is-organizer")
     ResponseEntity<Boolean> isUserOrganizer(
             @RequestParam("competitionId") String competitionId,
             @RequestParam("userId") String userId);
@@ -74,10 +74,10 @@ public interface CompetitionServiceClient {
     ResponseEntity<List<CompetitionResponseVO>> listAllCompetitions();
 
     /**
-     * Update the status of a competition (Internal use, no auth required).
+     * Request the idempotent COMPLETED-to-AWARDED transition using service authentication.
      *
      * @param competitionId Competition ID
-     * @param newStatus New status to update (e.g., ONGOING, ENDED)
+     * @param newStatus AWARDED
      * @return Updated competition information
      */
     @PutMapping("/competitions/{id}/status")

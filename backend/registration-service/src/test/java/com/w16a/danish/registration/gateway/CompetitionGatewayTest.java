@@ -93,11 +93,12 @@ class CompetitionGatewayTest {
     }
 
     @Test
-    @DisplayName("findAll returns an empty list rather than null when the batch read fails")
-    void findAllTolerantOfNullBody() {
+    @DisplayName("findAll fails closed when the dependency supplies no response body")
+    void findAllRejectsNullBody() {
         when(client.getCompetitionsByIds(anyList())).thenReturn(ResponseEntity.ok(null));
 
-        assertThat(gateway.findAll(List.of("c1"))).isEmpty();
+        assertThatThrownBy(() -> gateway.findAll(List.of("c1")))
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
     }
 
     @Test
@@ -107,6 +108,43 @@ class CompetitionGatewayTest {
         when(client.getCompetitionsByIds(List.of("c1"))).thenReturn(ResponseEntity.ok(batch));
 
         assertThat(gateway.findAll(List.of("c1"))).isEqualTo(batch);
+    }
+
+    @Test
+    void findAllBatchesEveryIdWithinTheInternalLimit() {
+        List<String> ids = java.util.stream.IntStream.range(0, 205).mapToObj(i -> "c" + i).toList();
+        when(client.getCompetitionsByIds(anyList())).thenAnswer(invocation -> {
+            List<String> batch = invocation.getArgument(0);
+            assertThat(batch).hasSizeLessThanOrEqualTo(100);
+            return ResponseEntity.ok(batch.stream().map(id -> {
+                var competition = new CompetitionResponseVO();
+                competition.setId(id);
+                return competition;
+            }).toList());
+        });
+        assertThat(gateway.findAll(ids)).extracting(CompetitionResponseVO::getId).containsExactlyElementsOf(ids);
+        org.mockito.Mockito.verify(client, org.mockito.Mockito.times(3)).getCompetitionsByIds(anyList());
+    }
+
+    @Test
+    void failedBatchDoesNotBecomeASuccessfulEmptyPage() {
+        when(client.getCompetitionsByIds(anyList())).thenReturn(null);
+        assertThatThrownBy(() -> gateway.findAll(List.of("c1")))
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
+        when(client.getCompetitionsByIds(anyList())).thenReturn(ResponseEntity.status(503).body(List.of()));
+        assertThatThrownBy(() -> gateway.findAll(List.of("c1")))
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
+    }
+
+    @Test
+    void judgePredicateRequiresAnExplicitSuccessfulBoolean() {
+        when(client.isUserJudge("c1", "judge")).thenReturn(ResponseEntity.ok(true));
+        assertThat(gateway.isAssignedJudge("c1", "judge")).isTrue();
+        when(client.isUserJudge("c1", "judge")).thenReturn(ResponseEntity.ok(false));
+        assertThat(gateway.isAssignedJudge("c1", "judge")).isFalse();
+        when(client.isUserJudge("c1", "judge")).thenReturn(ResponseEntity.ok(null));
+        assertThatThrownBy(() -> gateway.isAssignedJudge("c1", "judge"))
+                .isInstanceOf(com.w16a.danish.common.exception.ServiceUnavailableException.class);
     }
 
 

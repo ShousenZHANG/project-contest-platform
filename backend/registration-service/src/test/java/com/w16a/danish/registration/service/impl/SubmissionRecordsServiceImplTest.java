@@ -54,8 +54,12 @@ class SubmissionRecordsServiceImplTest {
     @Mock private FileServiceClient fileServiceClient;
     @Mock private SubmissionNotifier submissionNotifier;
     @Mock private UserServiceClient userServiceClient;
+    @Mock private com.w16a.danish.registration.service.SubmissionScores scores;
     @Mock private ICompetitionParticipantsService competitionParticipantsService;
     @Mock private ICompetitionOrganizersService competitionOrganizersService;
+    @Mock private com.w16a.danish.common.recovery.DurableTasks tasks;
+    @Mock private com.w16a.danish.registration.notify.UploadRollbackCleanup rollbackCleanup;
+    @Mock private com.w16a.danish.registration.service.ICompetitionTeamsService competitionTeamsService;
 
     private static RequestContext ctx(String userId, String role) {
         return new RequestContext(userId, role);
@@ -66,6 +70,18 @@ class SubmissionRecordsServiceImplTest {
         MockitoAnnotations.openMocks(this);
 
         ReflectionTestUtils.setField(submissionService, "baseMapper", submissionRecordsMapper);
+        ReflectionTestUtils.setField(submissionService, "competitionTeamsService", competitionTeamsService);
+        when(submissionRecordsMapper.competitionStatus(anyString())).thenReturn("ONGOING");
+        CompetitionResponseVO publicCompetition = new CompetitionResponseVO();
+        publicCompetition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        publicCompetition.setIsPublic(true);
+        publicCompetition.setStatus(CompetitionStatus.ONGOING);
+        when(competitionGateway.require(anyString())).thenReturn(publicCompetition);
+        LambdaQueryChainWrapper<com.w16a.danish.registration.domain.po.CompetitionTeams> teamRegistrations = mock(LambdaQueryChainWrapper.class);
+        when(competitionTeamsService.lambdaQuery()).thenReturn(teamRegistrations);
+        when(teamRegistrations.eq(any(), any())).thenReturn(teamRegistrations);
+        when(teamRegistrations.exists()).thenReturn(true);
+
 
         Field participantsField = SubmissionRecordsServiceImpl.class.getDeclaredField("competitionParticipantsService");
         participantsField.setAccessible(true);
@@ -113,11 +129,13 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
 
-        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
 
         UserBriefVO user = new UserBriefVO();
         user.setName("Test User");
@@ -154,6 +172,8 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().minusDays(1)); // 已经结束
         when(competitionGateway.require(competitionId)).thenReturn(competition);
@@ -174,6 +194,8 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
@@ -214,11 +236,13 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
 
-        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
         when(userServiceClient.getUserBriefById(userId)).thenReturn(ResponseEntity.ok(null));
 
         when(submissionRecordsMapper.insert(any(SubmissionRecords.class))).thenReturn(0);
@@ -239,11 +263,13 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
 
-        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
 
         UserBriefVO user = new UserBriefVO();
         user.setName("Test User");
@@ -268,12 +294,14 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
-        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
 
-        SubmissionRecords existingRecord = new SubmissionRecords();
+        SubmissionRecords existingRecord = new SubmissionRecords().setId("existing-s1").setCompetitionId(competitionId);
         LambdaQueryChainWrapper<SubmissionRecords> submissionQuery = mock(LambdaQueryChainWrapper.class);
         doReturn(submissionQuery).when(submissionService).lambdaQuery();
         when(submissionQuery.eq(any(), any())).thenReturn(submissionQuery);
@@ -302,6 +330,8 @@ class SubmissionRecordsServiceImplTest {
 
         // Mock competition information: ongoing and not ended
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
@@ -310,11 +340,11 @@ class SubmissionRecordsServiceImplTest {
         when(fileServiceClient.uploadSubmission(file))
                 .thenReturn(ResponseEntity.ok(" "));
 
-        // Act & Assert: Expect BusinessException with general save submission error
+        // An empty file-service response is rejected before persistence.
         assertThatThrownBy(() -> submissionService.submitWork(
                 ctx(userId, "PARTICIPANT"), competitionId, "Title", "Desc", file))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Failed to save submission"); // Correct expected message
+                .hasMessageContaining("File upload failed");
     }
 
     @Test
@@ -326,11 +356,13 @@ class SubmissionRecordsServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "filename.pdf", "application/pdf", "dummy content".getBytes());
 
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
 
-        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+        when(fileServiceClient.uploadSubmission(file)).thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
         when(userServiceClient.getUserBriefById(userId)).thenThrow(new RuntimeException("Feign Client error"));
 
         // Act & Assert
@@ -355,6 +387,8 @@ class SubmissionRecordsServiceImplTest {
 
         // Mock competition info: competition is ongoing
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
@@ -386,13 +420,15 @@ class SubmissionRecordsServiceImplTest {
 
         // Mock competition info: ongoing and not ended
         CompetitionResponseVO competition = new CompetitionResponseVO();
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.TEAM);
+        competition.setIsPublic(true);
         competition.setStatus(CompetitionStatus.ONGOING);
         competition.setEndDate(LocalDateTime.now().plusDays(5));
         when(competitionGateway.require(competitionId)).thenReturn(competition);
 
         // Mock file upload returns a valid URL
         when(fileServiceClient.uploadSubmission(file))
-                .thenReturn(ResponseEntity.ok("http://mockurl.com/file"));
+                .thenReturn(ResponseEntity.ok("http://mockurl.com/submissions/file"));
 
         // Mock user is in the team
         when(userServiceClient.isUserInTeam(userId, teamId))
@@ -486,6 +522,7 @@ class SubmissionRecordsServiceImplTest {
     void testGetPlatformSubmissionTrend_Success() {
         LambdaQueryChainWrapper<SubmissionRecords> queryMock = mock(LambdaQueryChainWrapper.class);
         doReturn(queryMock).when(analyticsService).lambdaQuery();
+        when(queryMock.inSql(any(), anyString())).thenReturn(queryMock);
 
         // Mock for select() and list()
         when(queryMock.select((SFunction<SubmissionRecords, ?>[]) any())).thenReturn(queryMock);
@@ -651,6 +688,9 @@ class SubmissionRecordsServiceImplTest {
 
         // 3) stub fetching competition info
         CompetitionResponseVO comp = new CompetitionResponseVO();
+        comp.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        comp.setIsPublic(true);
+        comp.setStatus(CompetitionStatus.ONGOING);
         comp.setName("Comp");
         when(competitionGateway.require("c1")).thenReturn(comp);
 
@@ -821,6 +861,7 @@ class SubmissionRecordsServiceImplTest {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
         doReturn(q).when(analyticsService).lambdaQuery();
+        when(q.inSql(any(), anyString())).thenReturn(q);
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(Collections.emptyList());
 
@@ -842,6 +883,7 @@ class SubmissionRecordsServiceImplTest {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
         doReturn(q).when(analyticsService).lambdaQuery();
+        when(q.inSql(any(), anyString())).thenReturn(q);
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(List.of(a, b, c));
 
@@ -858,6 +900,7 @@ class SubmissionRecordsServiceImplTest {
         @SuppressWarnings("unchecked")
         LambdaQueryChainWrapper<SubmissionRecords> q = mock(LambdaQueryChainWrapper.class);
         doReturn(q).when(analyticsService).lambdaQuery();
+        when(q.inSql(any(), anyString())).thenReturn(q);
         when(q.select((SFunction<SubmissionRecords, ?>[]) any(SFunction[].class))).thenReturn(q);
         when(q.list()).thenReturn(Collections.emptyList());
 

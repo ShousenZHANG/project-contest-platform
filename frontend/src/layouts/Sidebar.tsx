@@ -63,16 +63,37 @@ function buildNavItems(role?: string, userEmail?: string): NavItem[] {
       { to: `/contest/${email}`, label: 'Competitions', icon: Trophy, roles: ['PARTICIPANT'] },
       { to: `/teams/${email}`, label: 'Teams', icon: Users, roles: ['PARTICIPANT'] },
       { to: `/project/${email}`, label: 'Submissions', icon: FileText, roles: ['PARTICIPANT'] },
-      { to: `/rating/${email}`, label: 'Scoring Queue', icon: ClipboardCheck, roles: ['PARTICIPANT'] }
+    );
+  }
+
+  if (normalizedRole === 'JUDGE') {
+    items.push(
+      { to: '/judge', label: 'Scoring Queue', icon: ClipboardCheck, roles: ['JUDGE'] },
+      { to: `/judge/profile/${email}`, label: 'Profile', icon: User, roles: ['JUDGE'] },
     );
   }
 
   if (normalizedRole === 'ORGANIZER') {
     items.push(
       { to: `/OrganizerProfile/${email}`, label: 'Profile', icon: User, roles: ['ORGANIZER'] },
-      { to: `/OrganizerDashboard/${email}`, label: 'Dashboard', icon: BarChart3, roles: ['ORGANIZER'] },
-      { to: `/OrganizerContestList/${email}`, label: 'Competitions', icon: Briefcase, roles: ['ORGANIZER'] },
-      { to: `/OrganizerContest/${email}`, label: 'Create Contest', icon: PlusCircle, roles: ['ORGANIZER'] }
+      {
+        to: `/OrganizerDashboard/${email}`,
+        label: 'Dashboard',
+        icon: BarChart3,
+        roles: ['ORGANIZER'],
+      },
+      {
+        to: `/OrganizerContestList/${email}`,
+        label: 'Competitions',
+        icon: Briefcase,
+        roles: ['ORGANIZER'],
+      },
+      {
+        to: `/OrganizerContest/${email}`,
+        label: 'Create Contest',
+        icon: PlusCircle,
+        roles: ['ORGANIZER'],
+      },
     );
   }
 
@@ -81,7 +102,7 @@ function buildNavItems(role?: string, userEmail?: string): NavItem[] {
       { to: '/AdminDashboard', label: 'Dashboard', icon: ShieldCheck, roles: ['ADMIN'] },
       { to: '/AdminAccountManage', label: 'Accounts', icon: Users, roles: ['ADMIN'] },
       { to: '/AllCompetitions', label: 'Competitions', icon: Trophy, roles: ['ADMIN'] },
-      { to: '/AdminProfile', label: 'Profile', icon: User, roles: ['ADMIN'] }
+      { to: '/AdminProfile', label: 'Profile', icon: User, roles: ['ADMIN'] },
     );
   }
 
@@ -103,18 +124,16 @@ function NavList({ items, collapsed = false, onNavigate }: NavListProps) {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/'}
+            aria-label={item.label}
+            end={item.to === '/' || item.to === '/judge'}
             onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                'hover:bg-accent hover:text-accent-foreground',
-                isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
-                collapsed && 'justify-center px-2'
-              )
-            }
+            className={cn(
+              'flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors',
+              'hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground',
+              collapsed && 'justify-center px-2',
+            )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
             {!collapsed && <span className="truncate">{item.label}</span>}
           </NavLink>
         );
@@ -138,7 +157,9 @@ function Brand({ collapsed = false }: { collapsed?: boolean }) {
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
         <Trophy className="h-4 w-4" />
       </div>
-      {!collapsed && <span className="truncate text-sm font-semibold tracking-tight">Questora</span>}
+      {!collapsed && (
+        <span className="truncate text-sm font-semibold tracking-tight">Questora</span>
+      )}
     </div>
   );
 }
@@ -178,7 +199,7 @@ export function Sidebar({ role, userEmail }: SidebarProps) {
       <aside
         className={cn(
           'sticky top-0 hidden h-screen flex-col border-r bg-card transition-all duration-200 md:flex',
-          collapsed ? 'w-16' : 'w-60'
+          collapsed ? 'w-16' : 'w-60',
         )}
         aria-label="Primary navigation"
       >

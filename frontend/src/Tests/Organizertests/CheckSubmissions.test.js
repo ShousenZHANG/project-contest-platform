@@ -20,7 +20,7 @@ beforeEach(() => {
   apiClient.get.mockImplementation((url) => {
     if (url.includes("/competitions/")) {
       return Promise.resolve({
-        data: { name: "Test Competition" },
+        data: { name: "Test Competition", status: "ONGOING" },
       });
     }
     if (url.includes("/submissions/public")) {

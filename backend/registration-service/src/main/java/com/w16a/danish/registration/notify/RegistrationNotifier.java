@@ -4,8 +4,8 @@ import com.w16a.danish.common.messaging.MessagingConstants;
 import com.w16a.danish.common.messaging.message.RegisterSuccessMessage;
 import com.w16a.danish.common.messaging.message.ParticipantRemovedMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.w16a.danish.common.recovery.DurableTasks;
+import com.w16a.danish.common.recovery.NotificationOutbox;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,29 +19,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RegistrationNotifier {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final DurableTasks tasks;
 
     public void sendRegisterSuccess(RegisterSuccessMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
-                MessagingConstants.REGISTER_SUCCESS_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME, MessagingConstants.REGISTER_SUCCESS_ROUTING_KEY, message));
     }
 
     public void sendParticipantRemoved(ParticipantRemovedMessage message) {
-        rabbitTemplate.convertAndSend(
-                MessagingConstants.REGISTRATION_EXCHANGE_NAME,
-                MessagingConstants.PARTICIPANT_REMOVED_ROUTING_KEY,
-                message,
-                msg -> {
-                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                    return msg;
-                }
-        );
+        tasks.enqueue("NOTIFICATION", null, null, NotificationOutbox.payload(
+                MessagingConstants.REGISTRATION_EXCHANGE_NAME, MessagingConstants.PARTICIPANT_REMOVED_ROUTING_KEY, message));
     }
 }

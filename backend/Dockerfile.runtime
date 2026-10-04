@@ -1,0 +1,8 @@
+# CI and integration reuse the jars already produced by the verified Maven reactor.
+FROM eclipse-temurin:25-jre-alpine
+WORKDIR /app
+ARG APP_JAR
+COPY ${APP_JAR} /app/application.jar
+RUN addgroup -S app && adduser -S app -G app
+USER app
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/application.jar"]

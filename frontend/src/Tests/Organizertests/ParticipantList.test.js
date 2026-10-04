@@ -3,6 +3,7 @@ import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import ParticipantList from "../../Organizer/ParticipantList";
 import { renderWithProviders } from "../testUtils";
 import apiClient from '../../api/apiClient';
+import { useLocation } from 'react-router-dom';
 
 jest.mock("../../api/apiClient");
 
@@ -14,7 +15,7 @@ jest.mock("react-router-dom", () => {
     ...actual,
     useNavigate: () => mockNavigate,
     useParams: () => ({ competitionId: "test-competition" }),
-    useLocation: () => ({ pathname: "/OrganizerDashboard/test@example.com", state: { participationType: "INDIVIDUAL" } }),
+    useLocation: jest.fn(() => ({ pathname: "/OrganizerDashboard/test@example.com", state: { participationType: "INDIVIDUAL" } })),
     MemoryRouter: actual.MemoryRouter,
     Routes: actual.Routes,
     Route: actual.Route,
@@ -22,6 +23,7 @@ jest.mock("react-router-dom", () => {
 });
 
 beforeEach(() => {
+  useLocation.mockReturnValue({ pathname: '/OrganizerParticipantList/test-competition', state: { participationType: 'INDIVIDUAL' } });
   jest.spyOn(Storage.prototype, "getItem").mockImplementation((key) => {
     if (key === "email") return "test@example.com";
     if (key === "token") return "mock-token";
@@ -31,7 +33,7 @@ beforeEach(() => {
   });
 
   apiClient.get.mockImplementation((url) => {
-    if (url.includes("/competitions/test-competition")) {
+    if (url.includes("/competitions/managed/test-competition")) {
       return Promise.resolve({
         data: {
           name: "Test Competition",
@@ -39,7 +41,7 @@ beforeEach(() => {
           startDate: "2025-05-01",
           endDate: "2025-05-10",
           status: "Ongoing",
-          selectedParticipationType: "INDIVIDUAL",
+          participationType: "INDIVIDUAL",
         },
       });
     }
@@ -118,5 +120,28 @@ describe("ParticipantList", () => {
     const backButton = await screen.findByRole("button", { name: /Back to Contest List/i });
     fireEvent.click(backButton);
     expect(mockNavigate).toHaveBeenCalledWith("/OrganizerContestList/test@example.com");
+  });
+
+  it('uses the managed roster and real TeamInfoVO identifiers for a private team competition', async () => {
+    useLocation.mockReturnValue({ pathname: '/OrganizerParticipantList/test-competition', state: null });
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/competitions/managed/test-competition') {
+        return Promise.resolve({ data: { name: 'Private team contest', participationType: 'TEAM', isPublic: false, status: 'ONGOING' } });
+      }
+      if (url === '/registrations/teams/list') {
+        return Promise.resolve({ data: { data: [{ teamId: 'real-team-id', teamName: 'Private team', description: 'Registered team', createdAt: '2026-10-01T00:00:00' }], total: 1, pages: 1 } });
+      }
+      return Promise.reject(new Error(`Unexpected public roster read: ${url}`));
+    });
+    apiClient.delete.mockResolvedValue({ data: { success: true, data: 'Removed' } });
+    renderWithRouter();
+    expect(await screen.findByText('Private team')).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/registrations/teams/list', {
+      params: { competitionId: 'test-competition', page: 1, size: 10, keyword: '', sortBy: 'createdAt', order: 'asc' },
+    });
+    expect(apiClient.get.mock.calls.some(([url]) => url.startsWith('/registrations/public/'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(apiClient.delete).toHaveBeenCalledWith('/registrations/teams/test-competition/team/real-team-id/by-organizer'));
   });
 });

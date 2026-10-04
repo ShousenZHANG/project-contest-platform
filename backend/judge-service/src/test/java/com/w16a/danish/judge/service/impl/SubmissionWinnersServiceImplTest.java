@@ -1,349 +1,270 @@
 package com.w16a.danish.judge.service.impl;
 
-import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.w16a.danish.common.context.RequestContext;
-import com.w16a.danish.judge.notify.AwardNotifier;
-import com.w16a.danish.common.messaging.message.AwardWinnerMessage;
-import com.w16a.danish.judge.domain.po.SubmissionJudges;
-import com.w16a.danish.judge.domain.vo.SubmissionInfoVO;
-import com.w16a.danish.judge.domain.po.SubmissionWinners;
-import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
-import com.w16a.danish.common.domain.vo.PageResponse;
+import com.w16a.danish.common.recovery.DurableTasks;
+import com.w16a.danish.common.domain.enums.*;
+import com.w16a.danish.common.domain.vo.*;
+import com.w16a.danish.judge.domain.po.*;
+import com.w16a.danish.judge.domain.vo.*;
+import com.w16a.danish.judge.feign.*;
 import com.w16a.danish.judge.gateway.CompetitionGateway;
-import com.w16a.danish.judge.feign.UserServiceClient;
-import com.w16a.danish.judge.mapper.SubmissionWinnersMapper;
-import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
-import com.w16a.danish.judge.service.ISubmissionJudgesService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.Spy;
+import com.w16a.danish.judge.mapper.*;
+import com.w16a.danish.judge.notify.AwardNotifier;
+import com.w16a.danish.judge.service.*;
+import org.junit.jupiter.api.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import com.w16a.danish.common.exception.BusinessException;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.List;
-
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class SubmissionWinnersServiceImplTest {
+    private final CompetitionGateway competitions = mock(CompetitionGateway.class);
+    private final SubmissionServiceClient submissions = mock(SubmissionServiceClient.class);
+    private final ISubmissionJudgeScoresService scores = mock(ISubmissionJudgeScoresService.class);
+    private final ISubmissionJudgesService judges = mock(ISubmissionJudgesService.class);
+    private final UserServiceClient users = mock(UserServiceClient.class);
+    private final AwardNotifier notifier = mock(AwardNotifier.class);
+    private final SubmissionJudgesMapper judgeMapper = mock(SubmissionJudgesMapper.class);
+    private final SubmissionWinnersMapper winnerMapper = mock(SubmissionWinnersMapper.class);
+    private final AwardRunMapper runs = mock(AwardRunMapper.class);
+    private final DurableTasks tasks = mock(DurableTasks.class);
+    private SubmissionWinnersServiceImpl service;
+    private CompetitionResponseVO competition;
+    private final List<SubmissionInfoVO> approved = new ArrayList<>();
+    private final List<SubmissionJudges> records = new ArrayList<>();
+    private final List<SubmissionJudgeScores> details = new ArrayList<>();
+    private final List<SubmissionWinners> winners = new ArrayList<>();
+    private final AtomicReference<LocalDateTime> awardedAt = new AtomicReference<>();
+    private final RequestContext organizer = new RequestContext("owner", "ORGANIZER");
 
-    @Spy
-    @InjectMocks
-    private SubmissionWinnersServiceImpl winnersService;
-
-    @Mock private CompetitionGateway competitionGateway;
-    @Mock private com.w16a.danish.judge.feign.SubmissionServiceClient submissionServiceClient;
-    @Mock private ISubmissionJudgeScoresService submissionJudgeScoresService;
-    @Mock private ISubmissionJudgesService submissionJudgesService;
-    @Mock private UserServiceClient userServiceClient;
-    @Mock private AwardNotifier awardNotifier;
-    @Mock private SubmissionWinnersMapper submissionWinnersMapper;
-
-    private static RequestContext ctx(String userId, String role) {
-        return new RequestContext(userId, role);
+    @BeforeEach @SuppressWarnings("unchecked") void setUp() {
+        service = spy(new SubmissionWinnersServiceImpl(competitions, submissions, scores, judges, users, notifier, judgeMapper, runs, tasks));
+        ReflectionTestUtils.setField(service, "baseMapper", winnerMapper);
+        var winnerQuery = mock(LambdaQueryChainWrapper.class, RETURNS_SELF);
+        when(winnerQuery.eq(any(), any())).thenReturn(winnerQuery);
+        doReturn(winnerQuery).when(service).lambdaQuery();
+        when(winnerQuery.exists()).thenAnswer(call -> !winners.isEmpty());
+        when(winnerQuery.list()).thenAnswer(call -> List.copyOf(winners));
+        var judgeQuery = mock(LambdaQueryChainWrapper.class, RETURNS_SELF);
+        when(judgeQuery.eq(any(), any())).thenReturn(judgeQuery);
+        when(judgeQuery.in(any(), anyCollection())).thenReturn(judgeQuery);
+        doReturn(judgeQuery).when(judges).lambdaQuery();
+        when(judgeQuery.list()).thenAnswer(call -> List.copyOf(records));
+        when(scores.listBySubmissionIds(anyList())).thenAnswer(call -> List.copyOf(details));
+        when(judgeMapper.selectValidJudgeIds("c")).thenReturn(Set.of("j1", "j2", "j3", "j4"));
+        competition = new CompetitionResponseVO(); competition.setId("c"); competition.setStatus(CompetitionStatus.COMPLETED);
+        competition.setIsPublic(true);
+        competition.setScoringCriteria(List.of("A", "B")); competition.setParticipationType(ParticipationType.INDIVIDUAL);
+        when(competitions.require("c")).thenReturn(competition);
+        when(competitions.isOrganiser("c", "owner")).thenReturn(true);
+        when(submissions.getApprovedSubmissions("c")).thenAnswer(call -> ResponseEntity.ok(List.copyOf(approved)));
+        when(submissions.getSubmissionsByIds(anyList())).thenAnswer(call -> {
+            List<String> ids = call.getArgument(0);
+            return ResponseEntity.ok(approved.stream().filter(s -> ids.contains(s.getId())).toList());
+        });
+        when(runs.lockRun("c")).thenAnswer(call -> awardedAt.get());
+        when(runs.awardedAt("c")).thenAnswer(call -> awardedAt.get());
+        when(runs.markAwarded("c")).thenAnswer(call -> { awardedAt.set(LocalDateTime.now()); return 1; });
+        doAnswer(call -> { winners.addAll(call.getArgument(0)); return true; }).when(service).saveBatch(anyCollection());
+        when(users.getUsersByIds(anyList(), isNull())).thenReturn(ResponseEntity.ok(List.of()));
+        when(users.getTeamBriefByIds(anyList())).thenReturn(ResponseEntity.ok(List.of()));
+        when(users.getUserBriefById(anyString())).thenAnswer(call -> ResponseEntity.ok(UserBriefVO.builder()
+                .id(call.getArgument(0)).name("Participant").email("participant@example.com").build()));
     }
 
-    @BeforeEach
-    void setUp() throws Exception {
-        MockitoAnnotations.openMocks(this);
-        ReflectionTestUtils.setField(winnersService, "baseMapper", submissionWinnersMapper);
+    private void work(String id, int judgeCount, String a, String b) {
+        var submission = new SubmissionInfoVO(); submission.setId(id); submission.setCompetitionId("c");
+        submission.setUserId("u" + id); submission.setReviewStatus("APPROVED"); submission.setTitle("Project " + id);
+        submission.setTotalScore(new BigDecimal("999")); approved.add(submission);
+        for (int j = 1; j <= judgeCount; j++) {
+            String record = id + ":" + j;
+            records.add(new SubmissionJudges().setId(record).setCompetitionId("c").setSubmissionId(id)
+                    .setJudgeId("j" + j).setScoreSchemaVersion(1));
+            details.add(new SubmissionJudgeScores().setJudgeRecordId(record).setSubmissionId(id).setCriterion("A").setScore(new BigDecimal(a)));
+            details.add(new SubmissionJudgeScores().setJudgeRecordId(record).setSubmissionId(id).setCriterion("B").setScore(new BigDecimal(b)));
+        }
     }
 
-    @Test
-    @DisplayName("✅ Should list scored submissions successfully")
-    void testListScoredSubmissionsSuccess() {
-        // Arrange - Mock permission check
-        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(true);
-
-        // Arrange - Mock scored submissions via Feign
-        SubmissionInfoVO scoredSubmission = new SubmissionInfoVO();
-        scoredSubmission.setId("submission-1");
-        scoredSubmission.setTitle("Awesome Project");
-        scoredSubmission.setTotalScore(BigDecimal.valueOf(95));
-        when(submissionServiceClient.getScoredSubmissions(any()))
-                .thenReturn(ResponseEntity.ok(List.of(scoredSubmission)));
-
-        LambdaQueryChainWrapper<SubmissionJudges> judgeQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(judgeQuery).when(submissionJudgesService).lambdaQuery();
-        when(judgeQuery.in(any(SFunction.class), anyCollection())).thenReturn(judgeQuery);
-        when(judgeQuery.select(any(SFunction.class))).thenReturn(judgeQuery);
-        when(judgeQuery.list()).thenReturn(List.of(
-                new SubmissionJudges().setSubmissionId("submission-1"),
-                new SubmissionJudges().setSubmissionId("submission-1"),
-                new SubmissionJudges().setSubmissionId("submission-1")
-        ));
-
-        // Arrange - Mock submission scores (empty is OK)
-        when(submissionJudgeScoresService.listBySubmissionIds(anyList()))
-                .thenReturn(Collections.emptyList());
-
-        // Act
-        PageResponse<?> response = winnersService.listScoredSubmissions(
-                ctx("userId", "ORGANIZER"), "comp-id", null, "totalScore", "desc", 1, 10);
-
-        // Assert
-        assertThat(response).isNotNull();
-        assertThat(response.getData()).isNotEmpty();
-        assertThat(response.getPage()).isEqualTo(1);
-        assertThat(response.getSize()).isEqualTo(10);
+    @Test void eligibilityIncludesEveryApprovedWorkIncludingZeroScores() {
+        work("ready", 3, "8", "6"); work("empty", 0, "0", "0");
+        var eligibility = service.getAwardEligibility(organizer, "c");
+        assertThat(eligibility.getApprovedCount()).isEqualTo(2);
+        assertThat(eligibility.getEligibleCount()).isEqualTo(1);
+        assertThat(eligibility.isCanAward()).isFalse();
+        var empty = eligibility.getSubmissions().stream().filter(s -> s.getSubmissionId().equals("empty")).findFirst().orElseThrow();
+        assertThat(empty.getJudgeCount()).isZero(); assertThat(empty.getTotalScore()).isNull();
+        assertThat(empty.getBlockers()).isNotEmpty();
+        assertThat(eligibility.getMinimumJudgeCount()).isEqualTo(3);
+        assertThat(eligibility.getIsPublic()).isTrue();
     }
 
-    @Test
-    @DisplayName("❌ Should throw forbidden when listing scored submissions by non-organizer")
-    void testListScoredSubmissionsForbidden() {
-        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(false);
-
-        assertThatThrownBy(() -> winnersService.listScoredSubmissions(
-                ctx("userId", "PARTICIPANT"), "comp-id", null, "totalScore", "desc", 1, 10))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Only organizers or admins can view scored submissions");
+    @Test void insufficientWorkBlocksTheWholeCompetition() {
+        work("ready", 3, "8", "6"); work("late", 2, "10", "10");
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("Every approved submission");
+        assertThat(winners).isEmpty(); verify(runs, never()).markAwarded(anyString());
     }
 
-    @Test
-    @DisplayName("✅ Should auto award successfully")
-    void testAutoAwardSuccess() {
-        // Mock permission: organizer or admin
-        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(true);
-
-        // Mock getScoredSubmissions via Feign
-        SubmissionInfoVO scoredSub = new SubmissionInfoVO();
-        scoredSub.setId("submission-1");
-        scoredSub.setTotalScore(BigDecimal.valueOf(90));
-        scoredSub.setUserId("user-1");
-        when(submissionServiceClient.getScoredSubmissions(any()))
-                .thenReturn(ResponseEntity.ok(List.of(scoredSub)));
-
-        // Mock no criterion scores
-        when(submissionJudgeScoresService.listBySubmissionIds(anyList()))
-                .thenReturn(Collections.emptyList());
-
-        // Mock saveBatch to succeed
-        doReturn(true).when(winnersService).saveBatch(anyList());
-
-        // Mock competition status update
-        doNothing().when(competitionGateway).updateStatus(anyString(), anyString());
-
-        // The award notification reads the competition through find(), where a
-        // missing one is a normal skip rather than a 404.
-        when(competitionGateway.find(anyString()))
-                .thenReturn(java.util.Optional.of(new CompetitionResponseVO()));
-
-        // Mock getCompetitionById to avoid NPE
-        CompetitionResponseVO mockCompetition = new CompetitionResponseVO();
-        mockCompetition.setName("Mocked Competition");
-        when(competitionGateway.require(anyString())).thenReturn(mockCompetition);
-
-        // Mock userServiceClient.getUserBriefById to avoid NPE
-        var mockUser = new com.w16a.danish.common.domain.vo.UserBriefVO();
-        mockUser.setId("user-1");
-        mockUser.setName("Mocked User");
-        mockUser.setEmail("mockeduser@example.com");
-        when(userServiceClient.getUserBriefById(anyString()))
-                .thenReturn(ResponseEntity.ok(mockUser));
-
-        // Mock awardNotifier to do nothing
-        doNothing().when(awardNotifier).sendAwardWinner(any());
-
-        // Act
-        winnersService.autoAward(ctx("userId", "ADMIN"), "comp-id");
-
-        // Assert: Verify critical interactions
-        verify(winnersService, times(1)).saveBatch(anyList());
-        verify(competitionGateway, times(1)).updateStatus(anyString(), anyString());
-        verify(awardNotifier, atLeastOnce()).sendAwardWinner(any());
+    @Test void scoredListIncludesInsufficientWorksAndOrdersByAuthoritativeMean() {
+        work("a", 3, "8", "6"); work("z", 0, "0", "0");
+        var list = service.listScoredSubmissions(organizer, "c", null, "totalScore", "desc", 1, 10);
+        assertThat(list.getData()).extracting(ScoredSubmissionVO::getSubmissionId).containsExactly("a", "z");
+        assertThat(list.getData().getFirst().getTotalScore()).isEqualByComparingTo("7.00");
     }
 
-    @Test
-    @DisplayName("❌ Should throw forbidden when auto awarding by non-organizer")
-    void testAutoAwardForbidden() {
-        when(competitionGateway.isOrganiser(anyString(), anyString())).thenReturn(false);
-
-        assertThatThrownBy(() -> winnersService.autoAward(ctx("userId", "PARTICIPANT"), "comp-id"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Only organizers or admins can auto-award");
+    @Test void allApprovedWorksWithThreeJudgesAwardOnceAndPreserveCompetitionRankingTies() {
+        work("a", 3, "10", "8"); work("b", 3, "8", "10"); work("c", 3, "8", "8");
+        service.autoAward(organizer, "c");
+        assertThat(winners.stream().filter(w -> w.getRankSubmission() != null).toList())
+                .extracting(SubmissionWinners::getRankSubmission).containsExactly(1, 1, 3);
+        assertThat(winners.stream().filter(w -> w.getSubmissionId().equals("a") && w.getAwardName().equals("Best in A")))
+                .hasSize(1);
+        assertThat(winners).allSatisfy(w -> assertThat(w.getTotalScore()).isBetween(BigDecimal.ZERO, BigDecimal.TEN));
+        int count = winners.size(); service.autoAward(organizer, "c");
+        assertThat(winners).hasSize(count);
+        verify(tasks, times(1)).enqueue("COMPETITION_AWARDED", "c", null, Map.of());
     }
 
-    @Test
-    @DisplayName("✅ Should list public winners successfully")
-    void testListPublicWinnersSuccess() {
-        // Mock winnersService.lambdaQuery()
-        LambdaQueryChainWrapper<SubmissionWinners> winnerQuery = mock(LambdaQueryChainWrapper.class);
-        doReturn(winnerQuery).when(winnersService).lambdaQuery();
-        when(winnerQuery.eq(any(SFunction.class), any())).thenReturn(winnerQuery);
-        when(winnerQuery.list()).thenReturn(List.of(
-                new SubmissionWinners()
-                        .setSubmissionId("submission-1")
-                        .setAwardName("Champion")
-        ));
-
-        // Mock getSubmissionsByIds via Feign
-        SubmissionInfoVO sub = new SubmissionInfoVO();
-        sub.setId("submission-1");
-        sub.setTitle("Innovation Project");
-        sub.setTotalScore(BigDecimal.valueOf(88));
-        when(submissionServiceClient.getSubmissionsByIds(anyList()))
-                .thenReturn(ResponseEntity.ok(List.of(sub)));
-
-        when(userServiceClient.getUsersByIds(anyList(), any()))
-                .thenReturn(ResponseEntity.ok(Collections.emptyList()));
-
-        when(userServiceClient.getTeamBriefByIds(anyList()))
-                .thenReturn(ResponseEntity.ok(Collections.emptyList()));
-
-        PageResponse<?> response = winnersService.listPublicWinners("comp-id", 1, 10);
-
-        assertThat(response).isNotNull();
-        assertThat(response.getData()).isNotEmpty();
+    @Test void criterionAwardUsesAllJudgesNotFirstReturnedDetail() {
+        work("a", 3, "10", "8"); work("b", 3, "8", "8");
+        details.stream().filter(d -> d.getSubmissionId().equals("a") && d.getCriterion().equals("A")
+                && !d.getJudgeRecordId().endsWith(":1")).forEach(d -> d.setScore(BigDecimal.ZERO));
+        Collections.reverse(details);
+        service.autoAward(organizer, "c");
+        assertThat(winners.stream().filter(w -> w.getAwardName().equals("Best in A")))
+                .extracting(SubmissionWinners::getSubmissionId).containsExactly("b");
     }
 
-    @Test
-    @DisplayName("❌ Should not send notification if competition not found")
-    void testSendAwardNotification_CompetitionNotFound() throws Exception {
-        // Arrange
-        SubmissionInfoVO submission = new SubmissionInfoVO();
-        submission.setId("submission-1");
-        submission.setUserId("user-1");
-
-        // Mock: getCompetitionById returns ResponseEntity.ok(null)
-        when(competitionGateway.require(anyString())).thenReturn(null);
-
-        // Reflectively call private sendAwardNotification() method
-        Method method = SubmissionWinnersServiceImpl.class.getDeclaredMethod(
-                "sendAwardNotification",
-                SubmissionInfoVO.class,
-                String.class,
-                List.class
-        );
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(winnersService, submission, "comp-id", List.of());
-
-        // Assert: No exception should be thrown and no notifications sent
-        verifyNoInteractions(userServiceClient);
-        verifyNoInteractions(awardNotifier);
+    @Test void removedNonJudgeAndCorruptedScoresDoNotCount() {
+        work("a", 3, "10", "8");
+        when(judgeMapper.selectValidJudgeIds("c")).thenReturn(Set.of("j1", "j2"));
+        assertThat(service.getAwardEligibility(organizer, "c").getSubmissions().getFirst().getJudgeCount()).isEqualTo(2);
+        when(judgeMapper.selectValidJudgeIds("c")).thenReturn(Set.of("j1", "j2", "j3"));
+        details.getFirst().setScore(new BigDecimal("100"));
+        assertThat(service.getAwardEligibility(organizer, "c").getSubmissions().getFirst().getJudgeCount()).isEqualTo(2);
     }
 
-    @Test
-    @DisplayName("❌ Should not send notification if no recipients found")
-    void testSendAwardNotification_NoRecipients() throws Exception {
-        // Arrange
-        SubmissionInfoVO submission = new SubmissionInfoVO();
-        submission.setId("submission-1");
-        submission.setUserId("user-1");
-
-        CompetitionResponseVO competition = new CompetitionResponseVO();
-        competition.setName("Mocked Competition");
-
-        // Mock competitionGateway.getCompetitionById returns a valid competition
-        when(competitionGateway.require(anyString())).thenReturn(competition);
-
-        // Mock userServiceClient.getUserBriefById returns empty (simulate no recipient found)
-        when(userServiceClient.getUserBriefById(anyString()))
-                .thenReturn(ResponseEntity.ok(null));
-
-        // Access private sendAwardNotification method via reflection
-        Method method = SubmissionWinnersServiceImpl.class.getDeclaredMethod(
-                "sendAwardNotification",
-                SubmissionInfoVO.class,
-                String.class,
-                List.class
-        );
-        method.setAccessible(true);
-
-        // Act
-        method.invoke(winnersService, submission, "comp-id", List.of());
-
-        // Assert
-        verify(awardNotifier, never()).sendAwardWinner(any());
+    @Test void legacyScaleAndOldFileRevisionsBlockAwardUntilEveryJudgeRescores() {
+        work("a", 3, "8", "6");
+        records.getFirst().setScoreSchemaVersion(0);
+        var row = service.getAwardEligibility(organizer, "c").getSubmissions().getFirst();
+        assertThat(row.getJudgeCount()).isEqualTo(2); assertThat(row.isEligible()).isFalse();
+        records.getFirst().setScoreSchemaVersion(1);
+        approved.getFirst().setRevision(1);
+        row = service.getAwardEligibility(organizer, "c").getSubmissions().getFirst();
+        assertThat(row.getJudgeCount()).isZero(); assertThat(row.getTotalScore()).isNull();
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("Every approved submission");
+        records.forEach(record -> record.setSubmissionRevision(1));
+        assertThat(service.getAwardEligibility(organizer, "c").isCanAward()).isTrue();
     }
 
-    @Test
-    @DisplayName("✅ Should build award message correctly for a winner")
-    void testBuildAwardMessage_Winner() {
-        // Arrange
-        String userName = "Mocked User";
-        String userEmail = "mocked@example.com";
-
-        SubmissionInfoVO submission = new SubmissionInfoVO();
-        submission.setId("submission-1");
-
-        CompetitionResponseVO competition = new CompetitionResponseVO();
-        competition.setName("Mocked Competition");
-
-        List<SubmissionWinners> winners = List.of(
-                new SubmissionWinners()
-                        .setSubmissionId("submission-1")
-                        .setAwardName("Champion")
-        );
-
-        // Act: Use ReflectionTestUtils to call private method
-        var message = (AwardWinnerMessage) ReflectionTestUtils.invokeMethod(
-                winnersService,
-                "buildAwardMessage",
-                userName,
-                userEmail,
-                submission,
-                competition,
-                true,    // isWinner
-                winners
-        );
-
-        // Assert
-        assertThat(message).isNotNull();
-        assertThat(message.getUserName()).isEqualTo(userName);
-        assertThat(message.getUserEmail()).isEqualTo(userEmail);
-        assertThat(message.getCompetitionName()).isEqualTo("Mocked Competition");
-        assertThat(message.getAwardName()).isEqualTo("Champion");
-        assertThat(message.getAwardedAt()).isNotNull(); // should have timestamp
+    @Test void onlyCompletedCompetitionsAwardAndLegacyAwardedResultsAreImmutable() {
+        work("a", 3, "10", "8"); competition.setStatus(CompetitionStatus.ONGOING);
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("COMPLETED");
+        competition.setStatus(CompetitionStatus.AWARDED); service.autoAward(organizer, "c");
+        assertThat(winners).isEmpty(); verify(competitions, never()).updateStatus(anyString(), anyString());
     }
 
-    @Test
-    @DisplayName("✅ Should build award message correctly for a non-winner")
-    void testBuildAwardMessage_NonWinner() {
-        // Arrange
-        String userName = "Mocked User";
-        String userEmail = "mocked@example.com";
-
-        SubmissionInfoVO submission = new SubmissionInfoVO();
-        submission.setId("submission-1");
-
-        CompetitionResponseVO competition = new CompetitionResponseVO();
-        competition.setName("Mocked Competition");
-
-        List<SubmissionWinners> winners = List.of(); // no winners
-
-        // Act: Use ReflectionTestUtils to call private method
-        var message = (AwardWinnerMessage) ReflectionTestUtils.invokeMethod(
-                winnersService,
-                "buildAwardMessage",
-                userName,
-                userEmail,
-                submission,
-                competition,
-                false,   // isWinner
-                winners
-        );
-
-        // Assert
-        assertThat(message).isNotNull();
-        assertThat(message.getUserName()).isEqualTo(userName);
-        assertThat(message.getUserEmail()).isEqualTo(userEmail);
-        assertThat(message.getCompetitionName()).isEqualTo("Mocked Competition");
-        assertThat(message.getAwardName()).isEqualTo("None");
-        assertThat(message.getAwardedAt()).isNotNull();
+    @Test void malformedReviewOrCompetitionCannotBecomeAnAwardCandidate() {
+        work("a", 3, "10", "8"); approved.getFirst().setReviewStatus("REJECTED");
+        assertThatThrownBy(() -> service.getAwardEligibility(organizer, "c")).hasMessageContaining("approved");
+        approved.getFirst().setReviewStatus("APPROVED"); approved.getFirst().setCompetitionId("other");
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("does not belong");
     }
 
+    @Test void emptyAndFailedSourceReadsNeverProceed() {
+        assertThat(service.getAwardEligibility(organizer, "c").isCanAward()).isFalse();
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("No approved");
+        when(submissions.getApprovedSubmissions("c")).thenReturn(null);
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("no approved-submission data");
+    }
+
+    @Test void unauthorizedActorCannotPreviewOrAward() {
+        var participant = new RequestContext("owner", "PARTICIPANT");
+        assertThatThrownBy(() -> service.getAwardEligibility(participant, "c")).hasMessageContaining("Only organizers");
+        assertThatThrownBy(() -> service.autoAward(participant, "c")).hasMessageContaining("Only organizers");
+        assertThatThrownBy(() -> service.autoAward(new RequestContext("stranger", "ORGANIZER"), "c"))
+                .hasMessageContaining("Only organizers");
+    }
+
+    @Test void winnerPersistenceFailureDoesNotFinalizeOrPublish() {
+        work("a", 3, "10", "8"); doReturn(false).when(service).saveBatch(anyCollection());
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("persist");
+        verify(runs, never()).markAwarded(anyString()); verify(competitions, never()).updateStatus(anyString(), anyString());
+    }
+
+    @Test void publicResultUsesImmutableAwardSnapshotAndIsHiddenBeforePublication() {
+        work("a", 3, "10", "8"); service.autoAward(organizer, "c");
+        assertThat(service.listPublicWinners("c", 1, 10).getData()).isEmpty();
+        competition.setStatus(CompetitionStatus.AWARDED);
+        assertThat(service.listPublicWinners("c", 1, 10).getData().getFirst().getTotalScore()).isEqualByComparingTo("9.00");
+    }
+
+    @Test void privateOrUnknownVisibilityNeverExposesAwardedWinnerMetadata() {
+        competition.setStatus(CompetitionStatus.AWARDED);
+        for (Boolean visibility : Arrays.asList(false, null)) {
+            competition.setIsPublic(visibility);
+            assertThatThrownBy(() -> service.listPublicWinners("c", 1, 10))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(error -> ((BusinessException) error).getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        verifyNoInteractions(submissions, users, winnerMapper);
+    }
+
+    @Test void privateWinnersRemainAvailableOnlyToActualOrganizersOrAdmins() {
+        work("a", 3, "10", "8"); service.autoAward(organizer, "c");
+        competition.setIsPublic(false); competition.setStatus(CompetitionStatus.AWARDED);
+        assertThat(service.listManagedWinners(organizer, "c", 1, 10).getData()).hasSize(1);
+        assertThat(service.listManagedWinners(new RequestContext("admin", "ADMIN"), "c", 1, 10).getData()).hasSize(1);
+        assertThatThrownBy(() -> service.listManagedWinners(new RequestContext("stranger", "ORGANIZER"), "c", 1, 10))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Only organizers");
+        assertThatThrownBy(() -> service.listManagedWinners(new RequestContext("owner", "PARTICIPANT"), "c", 1, 10))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Only organizers");
+    }
+
+    @Test void historicalWinnerRowsCannotPublishRejectedOrOtherCompetitionWorks() {
+        work("rejected", 0, "0", "0"); work("foreign", 0, "0", "0"); work("public", 0, "0", "0");
+        approved.getFirst().setReviewStatus("REJECTED"); approved.get(1).setCompetitionId("private-other");
+        approved.forEach(s -> winners.add(new SubmissionWinners().setCompetitionId("c").setSubmissionId(s.getId()).setAwardName("Champion")));
+        competition.setStatus(CompetitionStatus.AWARDED);
+        var result = service.listPublicWinners("c", 1, 10);
+        assertThat(result.getData()).extracting(WinnerInfoVO::getSubmissionId).containsExactly("public");
+        assertThat(result.getData().getFirst().getTotalScore()).isNull();
+        verify(users).getUsersByIds(List.of("upublic"), null);
+    }
+
+    @Test void publishedMetadataLookupsStayWithinTheHundredIdContract() {
+        for (int i = 0; i < 101; i++) {
+            String id = "s" + i; work(id, 0, "0", "0");
+            winners.add(new SubmissionWinners().setCompetitionId("c").setSubmissionId(id).setAwardName("Best in A")
+                    .setTotalScore(BigDecimal.TEN));
+        }
+        competition.setStatus(CompetitionStatus.AWARDED);
+        assertThat(service.listPublicWinners("c", 2, 100).getData()).hasSize(1);
+        verify(submissions, times(2)).getSubmissionsByIds(argThat(ids -> !ids.isEmpty() && ids.size() <= 100));
+        verify(users, times(2)).getUsersByIds(argThat(ids -> !ids.isEmpty() && ids.size() <= 100), isNull());
+    }
+
+    @Test void unavailableAwardRecipientLookupFailsTheAwardTransaction() {
+        work("a", 3, "10", "8"); when(users.getUserBriefById("ua")).thenReturn(null);
+        assertThatThrownBy(() -> service.autoAward(organizer, "c")).hasMessageContaining("award recipient");
+        // In production the enclosing local transaction also rolls back winners and run state.
+        verifyNoInteractions(notifier);
+    }
+
+    @Test void paginationAndCriterionSortUseRealEligibilityRows() {
+        work("a", 3, "10", "6"); work("b", 3, "8", "9");
+        var list = service.listScoredSubmissions(organizer, "c", null, "B", "desc", 1, 1);
+        assertThat(list.getData().getFirst().getSubmissionId()).isEqualTo("b"); assertThat(list.getPages()).isEqualTo(2);
+        assertThatThrownBy(() -> service.listScoredSubmissions(organizer, "c", null, "B", "desc", 0, 1))
+                .hasMessageContaining("Page must be positive");
+    }
 }

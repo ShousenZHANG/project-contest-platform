@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-Competition management platform for hackathons, innovation challenges, and academic contests. Backend is Java 23 + Spring Boot 3.4 microservices. Frontend is React 19 + Vite. Package group: `com.w16a.danish`.
+Competition management platform for hackathons, innovation challenges, and academic contests. Backend is Java 25 + Spring Boot 4.1 microservices. Frontend is React 19 + Vite, with Node 24 LTS. Package group: `com.w16a.danish`.
 
 ## Build & Run Commands
 
@@ -89,7 +89,9 @@ Frontend stack: Vite, React Router v6, Tailwind CSS 4, Radix primitives, lucide-
 
 ## Environment Variables
 
-Required at project root: `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. See `.env.example`.
+Runtime configuration is in `.env.example`. User JWT and internal service JWT use independent secrets; Compose requires `SERVICE_JWT_SECRET`. OAuth and SMTP credentials enable their respective integrations.
+
+For schema upgrades, administrator bootstrap, private-file migration, or release checks, read `docs/production-readiness-2026-10-04.md` before changing a populated environment. Flyway runs before data services; historical scores use an explicit legacy schema version.
 
 ## Key Conventions
 

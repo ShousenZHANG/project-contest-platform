@@ -55,6 +55,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const PublicuserComents = lazy(() => import('./PublicUser/ComentsPage'));
 const TeamListPage = lazy(() => import('./PublicUser/TeamListPage'));
 const TeamPublicDetail = lazy(() => import('./PublicUser/TeamPublicDetail'));
+const PublicResults = lazy(() => import('./PublicUser/Results'));
 
 /* Homepage */
 const HomePage = lazy(() => import('./Homepages/Homepage'));
@@ -92,7 +93,11 @@ function App() {
                 <Route path="/work-list" element={<WorkList />} />
                 <Route path="/publicusercoments/:submissionId" element={<PublicuserComents />} />
                 <Route path="/public-teams/:contestId" element={<TeamListPage />} />
-                <Route path="/public-team-detail/:competitionId/:teamId" element={<TeamPublicDetail />} />
+                <Route
+                  path="/public-team-detail/:competitionId/:teamId"
+                  element={<TeamPublicDetail />}
+                />
+                <Route path="/results/:competitionId" element={<PublicResults />} />
 
                 {/*
                   Catch-all. It lives inside PublicLayout so an unknown URL
@@ -103,42 +108,89 @@ function App() {
               </Route>
 
               {/* Participant routes (authenticated shell) */}
-              <Route element={<ProtectedRoute roles={["Participant"]}><AuthenticatedShell /></ProtectedRoute>}>
+              <Route
+                element={
+                  <ProtectedRoute roles={['Participant']}>
+                    <AuthenticatedShell />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="/profile/:email" element={<Profile />} />
                 <Route path="/contest/:email" element={<Contest />} />
                 <Route path="/teams/:email" element={<TeamPage />} />
                 <Route path="/project/:email" element={<Project />} />
+              </Route>
+
+              <Route
+                element={
+                  <ProtectedRoute roles={['Judge']}>
+                    <AuthenticatedShell />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/judge" element={<Rating />} />
+                <Route path="/judge/profile/:email" element={<Profile />} />
                 <Route path="/rating/:email" element={<Rating />} />
+                <Route path="/JudgeSubmissions/:competitionId" element={<JudgeSubmissions />} />
+                <Route
+                  path="/RatingDetail/:competitionId/:submissionId"
+                  element={<RatingDetail />}
+                />
+                <Route path="/ReRating/:competitionId/:submissionId" element={<ReRating />} />
               </Route>
 
               {/* Participant sub-pages (authenticated shell, any role) */}
-              <Route element={<ProtectedRoute><AuthenticatedShell /></ProtectedRoute>}>
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AuthenticatedShell />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="/contest-detail/:id" element={<PContestDetail />} />
-                <Route path="/JudgeSubmissions/:competitionId" element={<JudgeSubmissions />} />
-                <Route path="/RatingDetail/:competitionId/:submissionId" element={<RatingDetail />} />
-                <Route path="/ReRating/:competitionId/:submissionId" element={<ReRating />} />
                 <Route path="/view-submission/:competitionId" element={<ViewSubmission />} />
                 <Route path="/comments/:submissionId" element={<CommentsPage />} />
-                <Route path="/team-project-detail/:competitionId/team/:teamId" element={<TeamProjectDetail />} />
+                <Route
+                  path="/team-project-detail/:competitionId/team/:teamId"
+                  element={<TeamProjectDetail />}
+                />
                 <Route path="/project-detail/:competitionId" element={<ProjectDetail />} />
               </Route>
 
               {/* Organizer routes */}
-              <Route element={<ProtectedRoute roles={["Organizer"]}><AuthenticatedShell /></ProtectedRoute>}>
+              <Route
+                element={
+                  <ProtectedRoute roles={['Organizer']}>
+                    <AuthenticatedShell />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="/OrganizerProfile/:email" element={<OrganizerProfile />} />
                 <Route path="/OrganizerDashboard/:email" element={<OrganizerDashboard />} />
                 <Route path="/OrganizerContestList/:email" element={<OrganizerContestList />} />
                 <Route path="/OrganizerContest/:email" element={<OrganizerContest />} />
                 <Route path="/OrganizerEditContest/:email" element={<OrganizerEditContest />} />
                 <Route path="/OrganizerUploadMedia/:id" element={<OrganizerUploadMedia />} />
-                <Route path="/OrganizerParticipantList/:competitionId" element={<OrganizerParticipantList />} />
-                <Route path="/OrganizerSubmissions/:competitionId" element={<OrganizerSubmissions />} />
+                <Route
+                  path="/OrganizerParticipantList/:competitionId"
+                  element={<OrganizerParticipantList />}
+                />
+                <Route
+                  path="/OrganizerSubmissions/:competitionId"
+                  element={<OrganizerSubmissions />}
+                />
                 <Route path="/submissions/:competitionId/ratings" element={<SubmissionRatings />} />
                 <Route path="/OrganizerAddJudge/:competitionId" element={<OrganizerAddJudge />} />
               </Route>
 
               {/* Admin routes */}
-              <Route element={<ProtectedRoute roles={["Admin"]}><AuthenticatedShell /></ProtectedRoute>}>
+              <Route
+                element={
+                  <ProtectedRoute roles={['Admin']}>
+                    <AuthenticatedShell />
+                  </ProtectedRoute>
+                }
+              >
                 <Route path="/AdminProfile" element={<AdminProfile />} />
                 <Route path="/AdminAccountManage" element={<AdminAccountManage />} />
                 <Route path="/AllCompetitions" element={<AdminCompetitionsManage />} />

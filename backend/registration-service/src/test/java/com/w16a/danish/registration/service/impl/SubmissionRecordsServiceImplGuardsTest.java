@@ -62,6 +62,7 @@ class SubmissionRecordsServiceImplGuardsTest {
     private UserServiceClient userServiceClient;
     private ICompetitionParticipantsService participantsService;
     private ICompetitionOrganizersService organizersService;
+    private com.w16a.danish.common.recovery.DurableTasks tasks;
 
     private LambdaQueryChainWrapper<SubmissionRecords> submissionQuery;
     private LambdaQueryChainWrapper<CompetitionParticipants> participantQuery;
@@ -85,10 +86,22 @@ class SubmissionRecordsServiceImplGuardsTest {
         organizersService = mock(ICompetitionOrganizersService.class);
 
         SubmissionRecordsServiceImpl real = new SubmissionRecordsServiceImpl(
-                competitionGateway, fileServiceClient, notifier, userServiceClient);
+                competitionGateway, fileServiceClient, notifier, userServiceClient,
+                mock(com.w16a.danish.registration.service.SubmissionScores.class),
+                tasks = mock(com.w16a.danish.common.recovery.DurableTasks.class),
+                mock(com.w16a.danish.registration.notify.UploadRollbackCleanup.class));
         ReflectionTestUtils.setField(real, "competitionParticipantsService", participantsService);
         ReflectionTestUtils.setField(real, "competitionOrganizersService", organizersService);
-        ReflectionTestUtils.setField(real, "baseMapper", mock(SubmissionRecordsMapper.class));
+        var mapper = mock(SubmissionRecordsMapper.class);
+        when(mapper.competitionStatus(anyString())).thenReturn("ONGOING");
+        ReflectionTestUtils.setField(real, "baseMapper", mapper);
+        var teamRegistrations = mock(com.w16a.danish.registration.service.ICompetitionTeamsService.class);
+        LambdaQueryChainWrapper<com.w16a.danish.registration.domain.po.CompetitionTeams> teamQuery = mock(LambdaQueryChainWrapper.class);
+        when(teamRegistrations.lambdaQuery()).thenReturn(teamQuery);
+        when(teamQuery.eq(any(), any())).thenReturn(teamQuery);
+        when(teamQuery.exists()).thenReturn(true);
+        ReflectionTestUtils.setField(real, "competitionTeamsService", teamRegistrations);
+        when(competitionGateway.require("c1")).thenReturn(competition(CompetitionStatus.ONGOING, null));
         service = spy(real);
 
         submissionQuery = mock(LambdaQueryChainWrapper.class);
@@ -116,10 +129,18 @@ class SubmissionRecordsServiceImplGuardsTest {
 
     private CompetitionResponseVO competition(CompetitionStatus status, LocalDateTime endDate) {
         CompetitionResponseVO c = new CompetitionResponseVO();
+        c.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.INDIVIDUAL);
+        c.setIsPublic(true);
         c.setName("Mock Competition");
         c.setStatus(status);
         c.setEndDate(endDate);
         return c;
+    }
+
+    private CompetitionResponseVO teamCompetition(CompetitionStatus status, LocalDateTime endDate) {
+        var competition = competition(status, endDate);
+        competition.setParticipationType(com.w16a.danish.common.domain.enums.ParticipationType.TEAM);
+        return competition;
     }
 
     @Nested
@@ -189,11 +210,12 @@ class SubmissionRecordsServiceImplGuardsTest {
             when(competitionGateway.require("c1"))
                     .thenReturn(competition(CompetitionStatus.ONGOING, LocalDateTime.now().plusDays(1)));
             when(fileServiceClient.uploadSubmission(any()))
-                    .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
+                    .thenReturn(ResponseEntity.ok("http://minio/submissions/new.pdf"));
 
             SubmissionRecords existing = new SubmissionRecords();
             existing.setId("s1");
-            existing.setFileUrl("http://minio/bucket/old.pdf");
+            existing.setCompetitionId("c1");
+            existing.setFileUrl("http://minio/submissions/old.pdf");
             existing.setReviewStatus("APPROVED");
             existing.setReviewedBy("organizer-1");
             when(submissionQuery.one()).thenReturn(existing);
@@ -209,7 +231,10 @@ class SubmissionRecordsServiceImplGuardsTest {
             assertThat(existing.getReviewStatus()).isEqualTo("PENDING");
             assertThat(existing.getReviewedBy()).isNull();
             assertThat(existing.getTotalScore()).isNull();
-            verify(fileServiceClient).deleteFile("bucket", "old.pdf");
+            verify(tasks).enqueue(org.mockito.ArgumentMatchers.eq("SUBMISSION_FILE_DELETE"),
+                    org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                    org.mockito.ArgumentMatchers.eq(Map.of("objectName", "old.pdf")));
+            verify(fileServiceClient, never()).deleteFile(anyString(), anyString());
         }
 
         @Test
@@ -219,9 +244,9 @@ class SubmissionRecordsServiceImplGuardsTest {
             when(competitionGateway.require("c1"))
                     .thenReturn(competition(CompetitionStatus.ONGOING, null));
             when(fileServiceClient.uploadSubmission(any()))
-                    .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
+                    .thenReturn(ResponseEntity.ok("http://minio/submissions/new.pdf"));
             when(submissionQuery.one()).thenReturn(new SubmissionRecords()
-                    .setId("s1").setFileUrl("http://minio/bucket/old.pdf"));
+                    .setId("s1").setCompetitionId("c1").setFileUrl("http://minio/submissions/old.pdf"));
             doReturn(false).when(service).updateById(any(SubmissionRecords.class));
 
             assertRefused(() -> service.submitWork(participant("u1"), "c1", "T", "D", FILE),
@@ -237,7 +262,7 @@ class SubmissionRecordsServiceImplGuardsTest {
             when(competitionGateway.require("c1"))
                     .thenReturn(competition(CompetitionStatus.ONGOING, null));
             when(fileServiceClient.uploadSubmission(any()))
-                    .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
+                    .thenReturn(ResponseEntity.ok("http://minio/submissions/new.pdf"));
             doReturn(false).when(service).save(any(SubmissionRecords.class));
 
             assertRefused(() -> service.submitWork(participant("u1"), "c1", "T", "D", FILE),
@@ -261,12 +286,12 @@ class SubmissionRecordsServiceImplGuardsTest {
         }
 
         @Test
-        @DisplayName("An absent membership answer is treated as 'not a member', not as 'yes'")
+        @DisplayName("An absent membership answer is a service failure and cannot authorize an upload")
         void missingMembershipAnswerIsRefused() {
             when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(null));
 
             assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
-                    HttpStatus.FORBIDDEN, "not a member");
+                    HttpStatus.SERVICE_UNAVAILABLE, "isUserInTeam");
         }
 
         @Test
@@ -274,7 +299,7 @@ class SubmissionRecordsServiceImplGuardsTest {
         void upcomingCompetitionIsRefused() {
             when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(true));
             when(competitionGateway.require("c1"))
-                    .thenReturn(competition(CompetitionStatus.UPCOMING, null));
+                    .thenReturn(teamCompetition(CompetitionStatus.UPCOMING, null));
 
             assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
                     HttpStatus.BAD_REQUEST, "not open for submissions");
@@ -285,7 +310,7 @@ class SubmissionRecordsServiceImplGuardsTest {
         void blankUploadUrlIsAFailure() {
             when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(true));
             when(competitionGateway.require("c1"))
-                    .thenReturn(competition(CompetitionStatus.ONGOING, LocalDateTime.now().plusDays(1)));
+                    .thenReturn(teamCompetition(CompetitionStatus.ONGOING, LocalDateTime.now().plusDays(1)));
             when(fileServiceClient.uploadSubmission(any())).thenReturn(ResponseEntity.ok("   "));
 
             assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
@@ -297,11 +322,11 @@ class SubmissionRecordsServiceImplGuardsTest {
         void failedUpdatePreservesOriginalFile() {
             when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(true));
             when(competitionGateway.require("c1"))
-                    .thenReturn(competition(CompetitionStatus.ONGOING, null));
+                    .thenReturn(teamCompetition(CompetitionStatus.ONGOING, null));
             when(fileServiceClient.uploadSubmission(any()))
-                    .thenReturn(ResponseEntity.ok("http://minio/bucket/new.pdf"));
+                    .thenReturn(ResponseEntity.ok("http://minio/submissions/new.pdf"));
             when(submissionQuery.one()).thenReturn(new SubmissionRecords()
-                    .setId("s1").setTeamId("t1").setFileUrl("http://minio/bucket/old.pdf"));
+                    .setId("s1").setCompetitionId("c1").setTeamId("t1").setFileUrl("http://minio/submissions/old.pdf"));
             doReturn(false).when(service).updateById(any(SubmissionRecords.class));
 
             assertRefused(() -> service.submitTeamWork(participant("u1"), "c1", "t1", "T", "D", FILE),
@@ -449,14 +474,17 @@ class SubmissionRecordsServiceImplGuardsTest {
         @DisplayName("The competition's organizer may delete it, and the stored file goes too")
         void organizerMayDeleteAndTheFileFollows() {
             doReturn(new SubmissionRecords().setId("s1").setUserId("u2").setCompetitionId("c1")
-                    .setFileUrl("http://minio/bucket/entry.pdf"))
+                    .setFileUrl("http://minio/submissions/entry.pdf"))
                     .when(service).getById("s1");
             when(organizerQuery.exists()).thenReturn(true);
             doReturn(true).when(service).removeById("s1");
 
             service.deleteSubmission("s1", new RequestContext("o1", "ORGANIZER"));
 
-            verify(fileServiceClient).deleteFile("bucket", "entry.pdf");
+            verify(tasks).enqueue(org.mockito.ArgumentMatchers.eq("SUBMISSION_FILE_DELETE"),
+                    org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                    org.mockito.ArgumentMatchers.eq(Map.of("objectName", "entry.pdf")));
+            verify(fileServiceClient, never()).deleteFile(anyString(), anyString());
             verify(service).removeById("s1");
         }
 
@@ -490,7 +518,7 @@ class SubmissionRecordsServiceImplGuardsTest {
         @Test
         @DisplayName("A non-member cannot delete a team's work")
         void nonMemberIsRefused() {
-            doReturn(new SubmissionRecords().setId("s1").setTeamId("t1"))
+            doReturn(new SubmissionRecords().setId("s1").setCompetitionId("c1").setTeamId("t1"))
                     .when(service).getById("s1");
             when(userServiceClient.isUserInTeam("u1", "t1")).thenReturn(ResponseEntity.ok(false));
 
@@ -501,7 +529,7 @@ class SubmissionRecordsServiceImplGuardsTest {
         @Test
         @DisplayName("An admin bypasses the membership check entirely")
         void adminDeletesWithoutMembership() {
-            doReturn(new SubmissionRecords().setId("s1").setTeamId("t1"))
+            doReturn(new SubmissionRecords().setId("s1").setCompetitionId("c1").setTeamId("t1"))
                     .when(service).getById("s1");
             doReturn(true).when(service).removeById("s1");
 

@@ -12,7 +12,6 @@ import com.w16a.danish.user.domain.vo.*;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.common.exception.BusinessException;
-import com.w16a.danish.user.feign.SubmissionServiceClient;
 import com.w16a.danish.user.mapper.TeamMapper;
 import com.w16a.danish.user.service.ITeamMembersService;
 import com.w16a.danish.user.service.IUsersService;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
-import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -46,14 +44,14 @@ class TeamServiceImplTest {
     @Mock
     private IUsersService usersService;
     @Mock
-    private SubmissionServiceClient submissionServiceClient;
-    @Mock
     private TeamMapper teamMapper;
 
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
         ReflectionTestUtils.setField(teamService, "baseMapper", teamMapper);
+        when(teamMapper.lockAccount(anyString())).thenAnswer(call -> call.getArgument(0));
+        when(teamMapper.lockTeam(anyString())).thenAnswer(call -> call.getArgument(0));
     }
 
     private static RequestContext ctx(String userId, String role) {
@@ -133,8 +131,6 @@ class TeamServiceImplTest {
     @DisplayName("✅ Should delete team successfully")
     void testDeleteTeam_Success() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
-        when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
-        when(submissionServiceClient.existsRegistrationByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
 
         LambdaUpdateChainWrapper<TeamMembers> update = mock(LambdaUpdateChainWrapper.class);
         when(teamMembersService.lambdaUpdate()).thenReturn(update);
@@ -144,6 +140,65 @@ class TeamServiceImplTest {
         when(teamService.removeById(anyString())).thenReturn(true);
 
         teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId");
+    }
+
+    @Test
+    void deletionLocksTheAccountAndTeamBeforeItsFirstOrdinaryReadAndHistoryDecision() {
+        doReturn(new Team().setCreatedBy("creatorId")).when(teamService).getById("teamId");
+        doReturn(true).when(teamService).removeById("teamId");
+        LambdaUpdateChainWrapper<TeamMembers> update = mock(LambdaUpdateChainWrapper.class);
+        when(teamMembersService.lambdaUpdate()).thenReturn(update);
+        when(update.eq(any(), any())).thenReturn(update);
+        when(update.remove()).thenReturn(true);
+
+        teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId");
+
+        InOrder order = inOrder(teamMapper, teamService, teamMembersService);
+        order.verify(teamMapper).lockAccount("creatorId");
+        order.verify(teamMapper).lockTeam("teamId");
+        order.verify(teamService).getById("teamId");
+        order.verify(teamMapper).hasCompetitionHistory("teamId");
+        order.verify(teamMembersService).lambdaUpdate();
+        order.verify(teamService).removeById("teamId");
+    }
+
+    @Test
+    void aMissingLockedAccountOrTeamIs404WithoutReadingOrDeletingTheTeam() {
+        when(teamMapper.lockAccount("missing-user")).thenReturn(null);
+        when(teamMapper.lockTeam("missing-team")).thenReturn(null);
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("missing-user", "PARTICIPANT"), "teamId"))
+                .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getStatus())
+                        .isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "missing-team"))
+                .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getStatus())
+                        .isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND));
+        verify(teamService, never()).getById(anyString());
+        verify(teamService, never()).removeById(anyString());
+        verifyNoInteractions(teamMembersService);
+    }
+
+    @Test
+    void aRegistrationCommittedBeforeTheTeamLockIsGrantedBlocksEvenAnAdministrator() {
+        doReturn(new Team().setCreatedBy("creatorId")).when(teamService).getById("teamId");
+        when(teamMapper.lockTeam("teamId")).thenAnswer(call -> {
+            when(teamMapper.hasCompetitionHistory("teamId")).thenReturn(true);
+            return "teamId";
+        });
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("adminId", "ADMIN"), "teamId"))
+                .isInstanceOf(BusinessException.class).hasMessage("Cannot delete a team that has registered for competitions.");
+        verify(teamService, never()).removeById(anyString());
+        verifyNoInteractions(teamMembersService);
+    }
+
+    @Test
+    void aDatabaseHistoryCheckFailureCannotBeInterpretedAsNoHistory() {
+        doReturn(new Team().setCreatedBy("creatorId")).when(teamService).getById("teamId");
+        when(teamMapper.hasCompetitionHistory("teamId"))
+                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("Database unavailable"));
+        assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
+                .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
+        verify(teamService, never()).removeById(anyString());
+        verifyNoInteractions(teamMembersService);
     }
 
     @Test
@@ -292,7 +347,8 @@ class TeamServiceImplTest {
     @DisplayName("❌ Should throw when team has submission")
     void testDeleteTeam_HasSubmission() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
-        when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(true));
+        when(teamMapper.hasCompetitionHistory("teamId")).thenReturn(true);
+        when(teamMapper.hasSubmissionHistory("teamId")).thenReturn(true);
 
         assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
@@ -303,8 +359,7 @@ class TeamServiceImplTest {
     @DisplayName("❌ Should throw when team has registration")
     void testDeleteTeam_HasRegistration() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
-        when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
-        when(submissionServiceClient.existsRegistrationByTeamId(anyString())).thenReturn(ResponseEntity.ok(true));
+        when(teamMapper.hasCompetitionHistory("teamId")).thenReturn(true);
 
         assertThatThrownBy(() -> teamService.deleteTeam(ctx("creatorId", "PARTICIPANT"), "teamId"))
                 .isInstanceOf(BusinessException.class)
@@ -315,8 +370,6 @@ class TeamServiceImplTest {
     @DisplayName("❌ Should throw when team member removal fails during delete")
     void testDeleteTeam_RemoveMembersFail() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
-        when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
-        when(submissionServiceClient.existsRegistrationByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
 
         LambdaUpdateChainWrapper<TeamMembers> update = mock(LambdaUpdateChainWrapper.class);
         when(teamMembersService.lambdaUpdate()).thenReturn(update);
@@ -332,8 +385,6 @@ class TeamServiceImplTest {
     @DisplayName("❌ Should throw when team deletion itself fails")
     void testDeleteTeam_DeleteTeamFail() {
         when(teamService.getById(anyString())).thenReturn(new Team().setCreatedBy("creatorId"));
-        when(submissionServiceClient.existsByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
-        when(submissionServiceClient.existsRegistrationByTeamId(anyString())).thenReturn(ResponseEntity.ok(false));
 
         LambdaUpdateChainWrapper<TeamMembers> update = mock(LambdaUpdateChainWrapper.class);
         when(teamMembersService.lambdaUpdate()).thenReturn(update);

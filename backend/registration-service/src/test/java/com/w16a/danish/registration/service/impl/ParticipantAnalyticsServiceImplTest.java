@@ -61,11 +61,13 @@ class ParticipantAnalyticsServiceImplTest {
         when(competitionTeamsService.lambdaQuery()).thenReturn(teamQuery);
 
         when(participantQuery.eq(any(SFunction.class), any())).thenReturn(participantQuery);
+        when(participantQuery.inSql(any(SFunction.class), org.mockito.ArgumentMatchers.anyString())).thenReturn(participantQuery);
         when(participantQuery.isNotNull(any(SFunction.class))).thenReturn(participantQuery);
         when(participantQuery.select((SFunction<CompetitionParticipants, ?>[]) any(SFunction[].class)))
                 .thenReturn(participantQuery);
 
         when(teamQuery.eq(any(SFunction.class), any())).thenReturn(teamQuery);
+        when(teamQuery.inSql(any(SFunction.class), org.mockito.ArgumentMatchers.anyString())).thenReturn(teamQuery);
         when(teamQuery.select((SFunction<CompetitionTeams, ?>[]) any(SFunction[].class)))
                 .thenReturn(teamQuery);
     }

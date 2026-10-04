@@ -14,6 +14,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 /**
  * This handler is the last thing between a thrown exception and the client, so it decides both
@@ -104,6 +105,25 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getError()).isEqualTo("Missing or invalid Authorization header");
+    }
+
+    @Test void downstreamDomainStatusesAndInfrastructureFailuresHaveSafeStableErrors() {
+        for (int code : new int[]{400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504, -1}) {
+            var ex = mock(feign.FeignException.class);
+            when(ex.status()).thenReturn(code);
+            var response = handler.handleDownstreamException(ex);
+            assertThat(response.getStatusCode().value()).isEqualTo(code >= 400 && code < 500 ? code : 503);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().isSuccess()).isFalse();
+            verify(ex, never()).getMessage();
+        }
+    }
+
+    @Test void missingOrMalformedInputIsBadRequestWithoutEchoingUserData() {
+        var response = handler.handleInvalidRequest(new org.springframework.web.bind.MissingServletRequestParameterException("private-token", "String"));
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getError()).doesNotContain("private-token");
     }
 
     @SuppressWarnings("unused")

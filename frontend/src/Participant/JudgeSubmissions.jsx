@@ -1,3 +1,4 @@
+import { parseApiDateTime } from '@/lib/dateTime';
 /**
  * JudgeSubmissions.jsx
  *
@@ -12,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ChevronLeft, ChevronRight, Scale } from 'lucide-react';
 import { judgeService } from '../services/judgeService';
+import SubmissionFile from '../shared/components/SubmissionFile';
 import { queryKeys, staleTime } from '../api/queryKeys';
 import { unwrap, toMessage } from '../api/queryFn';
 import { Button } from '../components/ui/button';
@@ -41,7 +43,11 @@ function JudgeSubmissions() {
     sortOrder: 'desc',
   };
 
-  const { data: listPage, isPending: loading, error } = useQuery({
+  const {
+    data: listPage,
+    isPending: loading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.judges.assignedSubmissions(competitionId, listParams),
     queryFn: () => unwrap(judgeService.getPendingSubmissions(listParams)),
     enabled: Boolean(competitionId),
@@ -54,7 +60,7 @@ function JudgeSubmissions() {
   // Keyed by submission, so reopening a detail the judge already looked at
   // renders from cache.
   const { data: judgeDetail = null } = useQuery({
-    queryKey: [...queryKeys.judges.all, 'detail', detailId],
+    queryKey: queryKeys.judges.detail(detailId),
     queryFn: () => unwrap(judgeService.getSubmissionDetail(detailId)),
     enabled: Boolean(detailId),
     staleTime: staleTime.medium,
@@ -67,11 +73,10 @@ function JudgeSubmissions() {
   return (
     <>
       <div className="p-6">
-        <h2 className="mb-4 text-xl font-semibold text-foreground">
-          Pending Submissions for Review
-        </h2>
+        <h1 className="mb-4 text-xl font-semibold text-foreground">Submission scoring queue</h1>
 
         <Input
+          aria-label="Search submissions"
           placeholder="Search by title..."
           value={keyword}
           onChange={(e) => {
@@ -111,24 +116,23 @@ function JudgeSubmissions() {
                   </thead>
                   <tbody>
                     {submissions.map((submission, index) => (
-                      <tr key={submission.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                      <tr
+                        key={submission.id}
+                        className="border-b last:border-b-0 hover:bg-muted/20"
+                      >
                         <td className="px-3 py-2">{(page - 1) * 10 + index + 1}</td>
                         <td className="px-3 py-2 font-medium">{submission.title}</td>
                         <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">
                           {submission.description}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {new Date(submission.lastUpdatedAt).toLocaleString()}
+                          {parseApiDateTime(submission.lastUpdatedAt).toLocaleString()}
                         </td>
                         <td className="px-3 py-2">
-                          <a
-                            href={submission.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline-offset-4 hover:underline"
-                          >
-                            {submission.fileName || 'Download'}
-                          </a>
+                          <SubmissionFile
+                            fileUrl={submission.fileUrl}
+                            fileName={submission.fileName}
+                          />
                         </td>
                         <td className="px-3 py-2">
                           {submission.hasScored ? (
@@ -151,7 +155,7 @@ function JudgeSubmissions() {
                               navigate(`/RatingDetail/${competitionId}/${submission.id}`)
                             }
                           >
-                            Review
+                            Score
                           </Button>
                         </td>
                         <td className="px-3 py-2">
@@ -159,11 +163,9 @@ function JudgeSubmissions() {
                             size="sm"
                             variant="outline"
                             disabled={!submission.hasScored}
-                            onClick={() =>
-                              navigate(`/ReRating/${competitionId}/${submission.id}`)
-                            }
+                            onClick={() => navigate(`/ReRating/${competitionId}/${submission.id}`)}
                           >
-                            Rejudge
+                            View or update rating
                           </Button>
                         </td>
                       </tr>
@@ -188,6 +190,7 @@ function JudgeSubmissions() {
             size="sm"
             variant="outline"
             disabled={page <= 1}
+            aria-label="Previous page"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -199,6 +202,7 @@ function JudgeSubmissions() {
             size="sm"
             variant="outline"
             disabled={page >= totalPages}
+            aria-label="Next page"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
             <ChevronRight className="h-4 w-4" />
@@ -216,18 +220,14 @@ function JudgeSubmissions() {
           </DialogHeader>
           <div className="space-y-2 text-sm">
             <p>
-              <strong>Judge Comments:</strong>{' '}
-              {judgeDetail?.judgeComments || 'No comments'}
+              <strong>Judge Comments:</strong> {judgeDetail?.judgeComments || 'No comments'}
             </p>
             <p>
               <strong>Total Score:</strong> {judgeDetail?.totalScore}
             </p>
             <p className="mt-3 font-semibold">Criteria Scores:</p>
             {judgeDetail?.scores?.map((s, idx) => (
-              <div
-                key={idx}
-                className="rounded-md bg-muted/50 px-3 py-2"
-              >
+              <div key={idx} className="rounded-md bg-muted/50 px-3 py-2">
                 <strong>{s.criterion}</strong>: {s.score}{' '}
                 <span className="text-muted-foreground">(weight: {s.weight})</span>
               </div>

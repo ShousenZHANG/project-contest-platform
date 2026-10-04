@@ -5,18 +5,21 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.judge.domain.dto.SubmissionJudgeDTO;
+import com.w16a.danish.judge.domain.dto.CriterionScoreDTO;
 import com.w16a.danish.common.domain.enums.CompetitionStatus;
 import com.w16a.danish.judge.domain.po.CompetitionJudges;
 import com.w16a.danish.judge.domain.po.SubmissionJudgeScores;
 import com.w16a.danish.judge.domain.po.SubmissionJudges;
 import com.w16a.danish.common.domain.vo.PageResponse;
-import com.w16a.danish.common.domain.vo.UserBriefVO;
 import com.w16a.danish.judge.domain.vo.*;
 import com.w16a.danish.common.domain.vo.CompetitionResponseVO;
 import com.w16a.danish.common.exception.BusinessException;
 import com.w16a.danish.judge.gateway.CompetitionGateway;
 import com.w16a.danish.judge.feign.SubmissionServiceClient;
 import com.w16a.danish.judge.mapper.SubmissionJudgesMapper;
+import com.w16a.danish.judge.mapper.AwardRunMapper;
+import com.w16a.danish.judge.score.ScoringPolicy;
+import com.w16a.danish.common.recovery.DurableTasks;
 import com.w16a.danish.judge.service.ICompetitionJudgesService;
 import com.w16a.danish.judge.service.ISubmissionJudgeScoresService;
 import com.w16a.danish.judge.service.ISubmissionJudgesService;
@@ -25,15 +28,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Comparator;
+import java.util.HashSet;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -53,131 +56,108 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
     private final ISubmissionJudgeScoresService submissionJudgeScoresService;
     private final CompetitionGateway competitionGateway;
     private final SubmissionServiceClient submissionServiceClient;
+    private final AwardRunMapper awardRunMapper;
+    private final DurableTasks tasks;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void judgeSubmission(RequestContext ctx, SubmissionJudgeDTO judgeDTO) {
-        boolean isAssignedJudge = competitionJudgesService.lambdaQuery()
-                .eq(CompetitionJudges::getCompetitionId, judgeDTO.getCompetitionId())
-                .eq(CompetitionJudges::getUserId, ctx.userId())
-                .exists();
-        if (!isAssignedJudge) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not assigned as a judge for this competition.");
+        CompetitionResponseVO competition = lockScoringCompetition(ctx, judgeDTO.getCompetitionId());
+        SubmissionInfoVO submission = requireApprovedSubmission(competition, judgeDTO.getSubmissionId());
+        BigDecimal totalScore = ScoringPolicy.judgeMean(competition.getScoringCriteria(), judgeDTO.getScores());
+        SubmissionJudges record = this.lambdaQuery().eq(SubmissionJudges::getSubmissionId, judgeDTO.getSubmissionId())
+                .eq(SubmissionJudges::getJudgeId, ctx.userId()).one();
+        if (ScoringPolicy.isCompleteCurrentScore(record, submission.getRevision(), competition.getScoringCriteria(),
+                submissionJudgeScoresService.listBySubmissionIds(List.of(submission.getId())))) {
+            throw new BusinessException(HttpStatus.CONFLICT, "You have already judged this submission.");
         }
-
-        boolean alreadyJudged = this.lambdaQuery()
-                .eq(SubmissionJudges::getSubmissionId, judgeDTO.getSubmissionId())
-                .eq(SubmissionJudges::getJudgeId, ctx.userId())
-                .exists();
-        if (alreadyJudged) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "You have already judged this submission.");
+        if (record == null) {
+            record = new SubmissionJudges().setId(IdUtil.fastUUID()).setCompetitionId(competition.getId())
+                    .setSubmissionId(judgeDTO.getSubmissionId()).setJudgeId(ctx.userId());
+            applyScore(record, submission, judgeDTO, totalScore);
+            if (!this.save(record)) {
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save judge record.");
+            }
+        } else {
+            if (!Objects.equals(competition.getId(), record.getCompetitionId())) {
+                throw new BusinessException(HttpStatus.CONFLICT, "Judging record belongs to a different competition.");
+            }
+            // Preserve the unique (submission, Judge) identity while replacing stale evaluations.
+            applyScore(record, submission, judgeDTO, totalScore);
+            replaceScoreRecord(record);
         }
-
-        CompetitionResponseVO competition = competitionGateway.require(judgeDTO.getCompetitionId());
-
-        boolean isCompetitionEnded =
-                (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now())) ||
-                        (CompetitionStatus.COMPLETED.equals(competition.getStatus()));
-        if (!isCompetitionEnded) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition is not completed yet. Judging is not allowed.");
-        }
-
-        BigDecimal totalScore = judgeDTO.getScores().stream()
-                .map(item -> item.getScore().multiply(item.getWeight()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        SubmissionJudges judgeRecord = new SubmissionJudges()
-                .setId(IdUtil.fastUUID())
-                .setCompetitionId(judgeDTO.getCompetitionId())
-                .setSubmissionId(judgeDTO.getSubmissionId())
-                .setJudgeId(ctx.userId())
-                .setTotalScore(totalScore)
-                .setJudgeComments(judgeDTO.getJudgeComments());
-
-        boolean recordSaved = this.save(judgeRecord);
-        if (!recordSaved || judgeRecord.getId() == null) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save judge record.");
-        }
-
-        List<SubmissionJudgeScores> scoreList = judgeDTO.getScores().stream()
-                .map(item -> new SubmissionJudgeScores()
-                        .setId(IdUtil.fastUUID())
-                        .setJudgeRecordId(judgeRecord.getId())
-                        .setSubmissionId(judgeDTO.getSubmissionId())
-                        .setCriterion(item.getCriterion())
-                        .setScore(item.getScore())
-                        .setWeight(item.getWeight()))
-                .collect(Collectors.toList());
-
-        boolean scoresSaved = submissionJudgeScoresService.saveBatch(scoreList);
-        if (!scoresSaved) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save judge score details.");
-        }
-
-        // Step 6: Update total_score and updated_at in submission_records table
-        recalculateAndUpdateSubmissionTotalScore(judgeDTO.getSubmissionId());
+        saveCriterionScores(record, judgeDTO, competition);
+        recalculateAndUpdateSubmissionTotalScore(submission, competition);
     }
 
     @Override
     public boolean isUserAssignedAsJudge(String userId, String competitionId) {
-        boolean assigned = competitionJudgesService.lambdaQuery()
-                .eq(CompetitionJudges::getCompetitionId, competitionId)
-                .eq(CompetitionJudges::getUserId, userId)
-                .exists();
-        if (!assigned) {
-            return false;
-        }
-
         CompetitionResponseVO competition = competitionGateway.require(competitionId);
-
         return CompetitionStatus.COMPLETED.equals(competition.getStatus())
-                || (competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now()));
+                && awardRunMapper.awardedAt(competitionId) == null
+                && validJudgeIds(competitionId).contains(userId);
+    }
+
+    @Override
+    public JudgingSubmissionVO getJudgingSubmission(RequestContext ctx, String competitionId, String submissionId) {
+        CompetitionResponseVO competition = requireAssignedCompetition(ctx, competitionId, true);
+        SubmissionInfoVO submission = requireApprovedSubmission(competition, submissionId);
+        JudgingSubmissionVO vo = new JudgingSubmissionVO();
+        vo.setId(submissionId);
+        vo.setCompetitionId(competitionId);
+        vo.setCompetitionStatus(competition.getStatus().name());
+        vo.setRevision(submission.getRevision());
+        vo.setTitle(submission.getTitle());
+        vo.setDescription(submission.getDescription());
+        vo.setFileName(submission.getFileName());
+        vo.setFileUrl(submission.getFileUrl());
+        vo.setFileType(submission.getFileType());
+        vo.setReviewStatus(submission.getReviewStatus());
+        vo.setScoringCriteria(ScoringPolicy.criteria(competition.getScoringCriteria()));
+        SubmissionJudges record = this.lambdaQuery().eq(SubmissionJudges::getSubmissionId, submissionId)
+                .eq(SubmissionJudges::getJudgeId, ctx.userId()).one();
+        vo.setHasScored(ScoringPolicy.isCompleteCurrentScore(record, submission.getRevision(), competition.getScoringCriteria(),
+                submissionJudgeScoresService.listBySubmissionIds(List.of(submissionId))));
+        vo.setRequiresRescore(record != null && !vo.isHasScored());
+        vo.setCanScore(competition.getStatus() == CompetitionStatus.COMPLETED
+                && awardRunMapper.awardedAt(competitionId) == null);
+        return vo;
     }
 
     @Override
     public PageResponse<SubmissionBriefVO> listPendingSubmissionsForJudging(
             RequestContext ctx, String competitionId, String keyword, String sortOrder, int page, int size) {
 
-        // Step 1: Verify competition status (must be completed or ended)
-        CompetitionResponseVO competition = competitionGateway.require(competitionId);
+        validatePage(page, size);
+        CompetitionResponseVO competition = requireAssignedCompetition(ctx, competitionId, true);
 
-        boolean isCompleted = CompetitionStatus.COMPLETED.equals(competition.getStatus());
-        boolean isEnded = competition.getEndDate() != null && competition.getEndDate().isBefore(LocalDateTime.now());
-
-        if (!isCompleted && !isEnded) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "Judging is only allowed after competition has completed or ended.");
+        // Assigned Judges can read private competitions through the service-only contract.
+        var approvedResponse = submissionServiceClient.getApprovedSubmissions(competitionId);
+        if (approvedResponse == null || approvedResponse.getBody() == null) {
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Submission service returned no data.");
         }
-
-        // Step 2: Fetch all APPROVED submissions (with optional keyword and sorting)
-        PageResponse<SubmissionInfoVO> approvedPage = submissionServiceClient
-                .listApprovedSubmissionsPublic(competitionId, page, size, keyword, "createdAt", sortOrder)
-                .getBody();
-
-        if (approvedPage == null || approvedPage.getData() == null || approvedPage.getData().isEmpty()) {
-            return PageResponse.<SubmissionBriefVO>builder()
-                    .data(List.of())
-                    .page(page)
-                    .size(size)
-                    .pages(0)
-                    .total(0L)
-                    .build();
+        Set<String> ids = new HashSet<>();
+        for (SubmissionInfoVO submission : approvedResponse.getBody()) {
+            if (submission == null || StrUtil.isBlank(submission.getId()) || !ids.add(submission.getId())) {
+                throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Submission service returned invalid approved-submission data.");
+            }
+            ScoringPolicy.requireApprovedSubmission(competition, submission);
         }
+        Comparator<LocalDateTime> dates = "asc".equalsIgnoreCase(sortOrder) ? Comparator.naturalOrder() : Comparator.reverseOrder();
+        List<SubmissionInfoVO> sorted = approvedResponse.getBody().stream()
+                .filter(s -> StrUtil.isBlank(keyword) || StrUtil.containsIgnoreCase(s.getTitle(), keyword))
+                .sorted(Comparator.comparing(SubmissionInfoVO::getCreatedAt, Comparator.nullsLast(dates))
+                        .thenComparing(SubmissionInfoVO::getId)).toList();
+        int from = (int) Math.min((long) (page - 1) * size, sorted.size());
+        List<SubmissionInfoVO> pageItems = sorted.subList(from, Math.min(from + size, sorted.size()));
 
-        List<SubmissionInfoVO> allApprovedSubmissions = approvedPage.getData();
-
-        // Step 3: Query all submissions already judged by current judge
-        List<String> judgedSubmissionIds = this.lambdaQuery()
+        List<SubmissionJudges> judgedRecords = this.lambdaQuery()
                 .eq(SubmissionJudges::getJudgeId, ctx.userId())
                 .eq(SubmissionJudges::getCompetitionId, competitionId)
-                .select(SubmissionJudges::getSubmissionId)
-                .list()
-                .stream()
-                .map(SubmissionJudges::getSubmissionId)
-                .toList();
-
-        // Step 4: Assemble submission brief list, marking hasScored accordingly
-        List<SubmissionBriefVO> resultList = allApprovedSubmissions.stream()
+                .list();
+        List<SubmissionJudgeScores> scoreDetails = pageItems.isEmpty() ? List.of()
+                : submissionJudgeScoresService.listBySubmissionIds(pageItems.stream().map(SubmissionInfoVO::getId).toList());
+        List<SubmissionBriefVO> resultList = pageItems.stream()
                 .map(submission -> {
                     SubmissionBriefVO vo = new SubmissionBriefVO();
                     vo.setId(submission.getId());
@@ -186,7 +166,10 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                     vo.setFileName(submission.getFileName());
                     vo.setFileUrl(submission.getFileUrl());
                     vo.setLastUpdatedAt(submission.getCreatedAt() != null ? submission.getCreatedAt().toString() : null);
-                    vo.setHasScored(judgedSubmissionIds.contains(submission.getId()));
+                    vo.setHasScored(judgedRecords.stream().anyMatch(record ->
+                            Objects.equals(record.getSubmissionId(), submission.getId())
+                                    && ScoringPolicy.isCompleteCurrentScore(record, submission.getRevision(),
+                                    competition.getScoringCriteria(), scoreDetails)));
                     return vo;
                 })
                 .toList();
@@ -196,63 +179,33 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .data(resultList)
                 .page(page)
                 .size(size)
-                .total(approvedPage.getTotal())
-                .pages(approvedPage.getPages())
+                .total((long) sorted.size())
+                .pages((sorted.size() + size - 1) / size)
                 .build();
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateJudgement(RequestContext ctx, String submissionId, SubmissionJudgeDTO judgeDTO) {
-        // Step 1: Validate existence of original judging record
-        SubmissionJudges existingRecord = this.lambdaQuery()
-                .eq(SubmissionJudges::getSubmissionId, submissionId)
-                .eq(SubmissionJudges::getJudgeId, ctx.userId())
-                .one();
-
-        if (existingRecord == null) {
+        ctx.requireAnyRole("JUDGE");
+        if (!Objects.equals(submissionId, judgeDTO.getSubmissionId())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Path and body submission IDs must match.");
+        }
+        CompetitionResponseVO competition = lockScoringCompetition(ctx, judgeDTO.getCompetitionId());
+        SubmissionInfoVO submission = requireApprovedSubmission(competition, submissionId);
+        BigDecimal total = ScoringPolicy.judgeMean(competition.getScoringCriteria(), judgeDTO.getScores());
+        SubmissionJudges existing = this.lambdaQuery().eq(SubmissionJudges::getSubmissionId, submissionId)
+                .eq(SubmissionJudges::getJudgeId, ctx.userId()).one();
+        if (existing == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "No existing judging record found for this submission.");
         }
-
-        // Step 2: Recalculate new total score
-        BigDecimal newTotalScore = judgeDTO.getScores().stream()
-                .map(item -> item.getScore().multiply(item.getWeight()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // Step 3: Update judging record (comment + total score + updatedAt)
-        existingRecord.setJudgeComments(judgeDTO.getJudgeComments());
-        existingRecord.setTotalScore(newTotalScore);
-        existingRecord.setUpdatedAt(LocalDateTime.now());
-        boolean updated = this.updateById(existingRecord);
-        if (!updated) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update judging record.");
+        if (!Objects.equals(competition.getId(), existing.getCompetitionId())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Judging record belongs to a different competition.");
         }
-
-        // Step 4: Remove old detailed scores
-        submissionJudgeScoresService.remove(
-                new LambdaQueryWrapper<SubmissionJudgeScores>()
-                        .eq(SubmissionJudgeScores::getJudgeRecordId, existingRecord.getId())
-        );
-
-        // Step 5: Insert new detailed scores
-        List<SubmissionJudgeScores> newScoreList = judgeDTO.getScores().stream()
-                .map(item -> new SubmissionJudgeScores()
-                        .setId(StrUtil.uuid())
-                        .setJudgeRecordId(existingRecord.getId())
-                        .setSubmissionId(submissionId)
-                        .setCriterion(item.getCriterion())
-                        .setScore(item.getScore())
-                        .setWeight(item.getWeight()))
-                .collect(Collectors.toList());
-
-        boolean scoresSaved = submissionJudgeScoresService.saveBatch(newScoreList);
-        if (!scoresSaved) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save updated score details.");
-        }
-
-        // Step 6: Update total_score and updated_at in submission_records table
-        recalculateAndUpdateSubmissionTotalScore(judgeDTO.getSubmissionId());
+        applyScore(existing, submission, judgeDTO, total);
+        replaceScoreRecord(existing);
+        saveCriterionScores(existing, judgeDTO, competition);
+        recalculateAndUpdateSubmissionTotalScore(submission, competition);
     }
 
     @Override
@@ -268,6 +221,10 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
             throw new BusinessException(HttpStatus.NOT_FOUND, "No judging record found for this submission by the current judge.");
         }
 
+        CompetitionResponseVO competition = requireAssignedCompetition(new RequestContext(judgeId, "JUDGE"),
+                judgeRecord.getCompetitionId(), true);
+        SubmissionInfoVO submission = requireApprovedSubmission(competition, submissionId);
+
         // Step 2: Query all detailed criterion scores
         List<SubmissionJudgeScores> scoreDetails = submissionJudgeScoresService.lambdaQuery()
                 .eq(SubmissionJudgeScores::getJudgeRecordId, judgeRecord.getId())
@@ -278,8 +235,17 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
         vo.setSubmissionId(judgeRecord.getSubmissionId());
         vo.setCompetitionId(judgeRecord.getCompetitionId());
         vo.setJudgeId(judgeRecord.getJudgeId());
+        vo.setSubmissionRevision(judgeRecord.getSubmissionRevision());
+        vo.setScoreSchemaVersion(judgeRecord.getScoreSchemaVersion());
+        vo.setRequiresRescore(!ScoringPolicy.isCompleteCurrentScore(judgeRecord, submission.getRevision(),
+                competition.getScoringCriteria(), scoreDetails));
         vo.setJudgeComments(judgeRecord.getJudgeComments());
-        vo.setTotalScore(judgeRecord.getTotalScore());
+        vo.setTotalScore(vo.isRequiresRescore() ? null : ScoringPolicy.judgeMean(competition.getScoringCriteria(), scoreDetails.stream().map(detail -> {
+            CriterionScoreDTO dto = new CriterionScoreDTO();
+            dto.setCriterion(detail.getCriterion());
+            dto.setScore(detail.getScore());
+            return dto;
+        }).toList()));
         vo.setCreatedAt(judgeRecord.getCreatedAt());
         vo.setUpdatedAt(judgeRecord.getUpdatedAt());
 
@@ -288,7 +254,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                     SubmissionJudgeVO.CriterionScoreVO scoreVO = new SubmissionJudgeVO.CriterionScoreVO();
                     scoreVO.setCriterion(detail.getCriterion());
                     scoreVO.setScore(detail.getScore());
-                    scoreVO.setWeight(detail.getWeight());
+                    scoreVO.setWeight(vo.isRequiresRescore() ? null : ScoringPolicy.equalWeight(competition.getScoringCriteria().size()));
                     return scoreVO;
                 })
                 .toList();
@@ -302,6 +268,8 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
     public PageResponse<CompetitionResponseVO> listMyJudgingCompetitions(
             RequestContext ctx, String keyword, String sortBy, String order, int page, int size) {
 
+        ctx.requireAnyRole("JUDGE");
+        validatePage(page, size);
         // Step 1: Find all competitionIds where user is assigned as judge
         List<String> competitionIds = competitionJudgesService.lambdaQuery()
                 .eq(CompetitionJudges::getUserId, ctx.userId())
@@ -337,6 +305,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
 
         // Step 3: Keyword filtering if necessary
         List<CompetitionResponseVO> filtered = competitions.stream()
+                .filter(c -> validJudgeIds(c.getId()).contains(ctx.userId()))
                 .filter(c -> StrUtil.isBlank(keyword) || StrUtil.containsIgnoreCase(c.getName(), keyword))
                 .toList();
 
@@ -374,7 +343,7 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .toList();
 
         // Step 5: Manual pagination
-        int fromIndex = (page - 1) * size;
+        int fromIndex = (int) Math.min((long) (page - 1) * size, sorted.size());
         int toIndex = Math.min(fromIndex + size, sorted.size());
 
         List<CompetitionResponseVO> paginated;
@@ -394,49 +363,93 @@ public class SubmissionJudgesServiceImpl extends ServiceImpl<SubmissionJudgesMap
                 .build();
     }
 
-    private void recalculateAndUpdateSubmissionTotalScore(String submissionId) {
-        List<BigDecimal> allScores = this.lambdaQuery()
-                .eq(SubmissionJudges::getSubmissionId, submissionId)
-                .select(SubmissionJudges::getTotalScore)
-                .list()
-                .stream()
-                .map(SubmissionJudges::getTotalScore)
-                .filter(Objects::nonNull)
-                .toList();
-
-        if (allScores.isEmpty()) {
-            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "No scores found to calculate average.");
+    private CompetitionResponseVO lockScoringCompetition(RequestContext ctx, String competitionId) {
+        ctx.requireAnyRole("JUDGE");
+        awardRunMapper.ensureRun(competitionId);
+        if (awardRunMapper.lockRun(competitionId) != null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Awards have been finalized. Scores are immutable.");
         }
-
-        BigDecimal averageScore = allScores.stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(allScores.size()), 2, RoundingMode.HALF_UP);
-
-        // Defer the cross-service total-score write until the local judge-score
-        // transaction commits, so a rollback never pushes a score the DB did not keep.
-        final BigDecimal finalScore = averageScore;
-        runAfterCommit(() -> {
-            submissionServiceClient.updateTotalScore(submissionId, finalScore);
-            log.info("[Judge] Updated total score for submission={} score={}", submissionId, finalScore);
-        });
+        return requireAssignedCompetition(ctx, competitionId, false);
     }
 
-    /**
-     * Run cross-service side effects after the surrounding transaction commits, so a
-     * rollback never propagates a score the local DB did not persist. Falls back to
-     * inline execution when no transaction is active (e.g. unit tests).
-     */
-    private void runAfterCommit(Runnable action) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
-        } else {
-            action.run();
+    private CompetitionResponseVO requireAssignedCompetition(RequestContext ctx, String competitionId, boolean readOnly) {
+        ctx.requireAnyRole("JUDGE");
+        CompetitionResponseVO competition = competitionGateway.require(competitionId);
+        boolean allowed = competition.getStatus() == CompetitionStatus.COMPLETED
+                || (readOnly && competition.getStatus() == CompetitionStatus.AWARDED);
+        if (!allowed) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Competition is not completed yet. Judging is not allowed.");
+        }
+        if (!validJudgeIds(competitionId).contains(ctx.userId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You are not assigned as a judge for this competition.");
+        }
+        return competition;
+    }
+
+    private Set<String> validJudgeIds(String competitionId) {
+        Set<String> ids = baseMapper.selectValidJudgeIds(competitionId);
+        return ids == null ? Set.of() : ids;
+    }
+
+    private SubmissionInfoVO requireApprovedSubmission(CompetitionResponseVO competition, String submissionId) {
+        var response = submissionServiceClient.getSubmissionsByIds(List.of(submissionId));
+        if (response == null || response.getBody() == null) {
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "Submission service returned no data.");
+        }
+        SubmissionInfoVO submission = response.getBody().stream().filter(s -> Objects.equals(submissionId, s.getId()))
+                .findFirst().orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Submission not found."));
+        ScoringPolicy.requireApprovedSubmission(competition, submission);
+        return submission;
+    }
+
+    private void saveCriterionScores(SubmissionJudges record, SubmissionJudgeDTO dto, CompetitionResponseVO competition) {
+        BigDecimal weight = ScoringPolicy.equalWeight(competition.getScoringCriteria().size());
+        List<SubmissionJudgeScores> details = dto.getScores().stream().map(item -> new SubmissionJudgeScores()
+                .setId(IdUtil.fastUUID()).setJudgeRecordId(record.getId()).setSubmissionId(record.getSubmissionId())
+                .setCriterion(item.getCriterion()).setScore(item.getScore()).setWeight(weight)).toList();
+        if (!submissionJudgeScoresService.saveBatch(details)) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save judge score details.");
         }
     }
+
+    private void applyScore(SubmissionJudges record, SubmissionInfoVO submission, SubmissionJudgeDTO dto, BigDecimal total) {
+        record.setSubmissionRevision(submission.getRevision()).setScoreSchemaVersion(ScoringPolicy.SCORE_SCHEMA_VERSION)
+                .setJudgeComments(dto.getJudgeComments()).setTotalScore(total).setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void replaceScoreRecord(SubmissionJudges record) {
+        if (!this.updateById(record)) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update judging record.");
+        }
+        // A historical record may have no criterion rows; deleting zero rows is still successful.
+        submissionJudgeScoresService.remove(new LambdaQueryWrapper<SubmissionJudgeScores>()
+                .eq(SubmissionJudgeScores::getJudgeRecordId, record.getId()));
+    }
+
+    private void recalculateAndUpdateSubmissionTotalScore(SubmissionInfoVO submission, CompetitionResponseVO competition) {
+        String submissionId = submission.getId();
+        List<SubmissionJudges> records = this.lambdaQuery().eq(SubmissionJudges::getCompetitionId, competition.getId())
+                .eq(SubmissionJudges::getSubmissionId, submissionId).list();
+        List<SubmissionJudgeScores> details = submissionJudgeScoresService.listBySubmissionIds(List.of(submissionId));
+        ScoringPolicy.Summary summary = ScoringPolicy.summarize(competition.getId(), submissionId, submission.getRevision(),
+                competition.getScoringCriteria(), records, details, validJudgeIds(competition.getId()));
+        if (summary.judgeCount() == 0) {
+            throw new BusinessException(HttpStatus.CONFLICT, "No valid Judge scores found to calculate average.");
+        }
+        if (awardRunMapper.incrementScoreVersion(competition.getId()) != 1) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Score synchronization version could not be advanced.");
+        }
+        long scoreVersion = awardRunMapper.scoreVersion(competition.getId());
+        BigDecimal finalScore = summary.totalScore();
+        tasks.enqueue("SUBMISSION_SCORE", submissionId, scoreVersion,
+                Map.of("score", finalScore, "revision", submission.getRevision()));
+    }
+
+    private void validatePage(int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Page must be positive and size between 1 and 100.");
+        }
+    }
+
 
 }

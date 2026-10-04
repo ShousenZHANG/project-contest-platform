@@ -1,0 +1,9 @@
+node_modules
+build
+dist
+coverage-summary
+playwright-report
+test-results
+.cache
+.env
+.env.*

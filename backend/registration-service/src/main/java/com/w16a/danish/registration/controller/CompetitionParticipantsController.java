@@ -1,5 +1,7 @@
 package com.w16a.danish.registration.controller;
 
+import com.w16a.danish.common.security.ServiceOnly;
+
 import com.w16a.danish.common.web.ApiResponses;
 import com.w16a.danish.common.domain.vo.PageResponse;
 import com.w16a.danish.common.domain.vo.UserBriefVO;
@@ -8,6 +10,8 @@ import com.w16a.danish.common.context.CurrentUser;
 import com.w16a.danish.common.context.RequestContext;
 import com.w16a.danish.registration.service.ICompetitionParticipantsService;
 import com.w16a.danish.registration.service.IParticipantAnalyticsService;
+import com.w16a.danish.registration.gateway.CompetitionGateway;
+import com.w16a.danish.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,6 +20,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -38,6 +43,7 @@ public class CompetitionParticipantsController {
 
     private final ICompetitionParticipantsService participantsService;
     private final IParticipantAnalyticsService participantAnalyticsService;
+    private final CompetitionGateway competitionGateway;
 
     @Operation(
             summary = "Register for a competition",
@@ -249,9 +255,10 @@ public class CompetitionParticipantsController {
     @GetMapping("/teams/{competitionId}/{teamId}/status")
     public ResponseEntity<Boolean> isTeamRegistered(
             @PathVariable String competitionId,
-            @PathVariable String teamId) {
+            @PathVariable String teamId,
+            @CurrentUser RequestContext ctx) {
 
-        boolean registered = participantsService.isTeamRegistered(competitionId, teamId);
+        boolean registered = participantsService.isTeamRegistered(competitionId, teamId, ctx);
         return ResponseEntity.ok(registered);
     }
 
@@ -279,10 +286,25 @@ public class CompetitionParticipantsController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String order
     ) {
+        requirePublicCompetition(competitionId);
         PageResponse<TeamInfoVO> result = participantsService.getTeamsByCompetitionWithSearch(
                 competitionId, page, size, keyword, sortBy, order
         );
         return ResponseEntity.ok(result);
+    }
+
+    @Operation(summary = "List registered teams for an authorized competition member")
+    @GetMapping("/teams/list")
+    public ResponseEntity<PageResponse<TeamInfoVO>> listManagedRegisteredTeams(
+            @RequestParam String competitionId,
+            @CurrentUser RequestContext ctx,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String order) {
+        return ResponseEntity.ok(participantsService.getManagedTeamsByCompetitionWithSearch(
+                competitionId, ctx, page, size, keyword, sortBy, order));
     }
 
     @Operation(
@@ -303,6 +325,7 @@ public class CompetitionParticipantsController {
     @GetMapping("/teams/{teamId}/competitions")
     public ResponseEntity<PageResponse<CompetitionParticipationVO>> getCompetitionsByTeam(
             @PathVariable String teamId,
+            @CurrentUser RequestContext ctx,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String keyword,
@@ -310,7 +333,7 @@ public class CompetitionParticipantsController {
             @RequestParam(defaultValue = "asc") String order
     ) {
         PageResponse<CompetitionParticipationVO> response = participantsService.getCompetitionsRegisteredByTeam(
-                teamId, page, size, keyword, sortBy, order
+                teamId, ctx, page, size, keyword, sortBy, order
         );
         return ResponseEntity.ok(response);
     }
@@ -340,6 +363,7 @@ public class CompetitionParticipantsController {
 
     @Operation(hidden = true)
     @GetMapping("/internal/exists-registration-by-team")
+    @ServiceOnly(value = "internal:read", callers = "user-service")
     public ResponseEntity<Boolean> existsRegistrationByTeamId(@RequestParam String teamId) {
         boolean exists = participantsService.existsRegistrationByTeamId(teamId);
         return ResponseEntity.ok(exists);
@@ -361,6 +385,7 @@ public class CompetitionParticipantsController {
     public ResponseEntity<RegistrationStatisticsVO> getRegistrationStatistics(
             @PathVariable("competitionId") String competitionId) {
 
+        requirePublicCompetition(competitionId);
         RegistrationStatisticsVO statistics = participantAnalyticsService.getRegistrationStatistics(competitionId);
         return ResponseEntity.ok(statistics);
     }
@@ -381,6 +406,7 @@ public class CompetitionParticipantsController {
     public ResponseEntity<Map<String, Map<String, Integer>>> getParticipantTrend(
             @PathVariable("competitionId") String competitionId) {
 
+        requirePublicCompetition(competitionId);
         Map<String, Map<String, Integer>> trend = participantAnalyticsService.getParticipantTrend(competitionId);
         return ResponseEntity.ok(trend);
     }
@@ -411,6 +437,26 @@ public class CompetitionParticipantsController {
     public ResponseEntity<Map<String, Map<String, Integer>>> getPlatformParticipantTrend() {
         Map<String, Map<String, Integer>> trend = participantAnalyticsService.getPlatformParticipantTrend();
         return ResponseEntity.ok(trend);
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/{competitionId}/statistics")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    public ResponseEntity<RegistrationStatisticsVO> getInternalRegistrationStatistics(@PathVariable String competitionId) {
+        return ResponseEntity.ok(participantAnalyticsService.getRegistrationStatistics(competitionId));
+    }
+
+    @Operation(hidden = true)
+    @GetMapping("/internal/{competitionId}/participant-trend")
+    @ServiceOnly(value = "internal:read", callers = "judge-service")
+    public ResponseEntity<Map<String, Map<String, Integer>>> getInternalParticipantTrend(@PathVariable String competitionId) {
+        return ResponseEntity.ok(participantAnalyticsService.getParticipantTrend(competitionId));
+    }
+
+    private void requirePublicCompetition(String competitionId) {
+        if (!Boolean.TRUE.equals(competitionGateway.require(competitionId).getIsPublic())) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Competition not found");
+        }
     }
 
 }

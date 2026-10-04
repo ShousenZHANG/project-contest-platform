@@ -1,318 +1,198 @@
-/**
- * UserContestList.jsx
- *
- * Public contest browse list with search, filter, pagination. Migrated from MUI to shadcn/ui.
- *
- * Role: Public User
- * Developer: Beiqi Dai
- */
-
-import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { CATEGORIES } from '../shared/competitionCategories';
+import { parseApiDateTime } from '@/lib/dateTime';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Search, LayoutGrid, List, Trophy } from 'lucide-react';
+import Navbar from '../Homepages/Navbar';
+import Footer from '../Homepages/Footer';
+import ContestCard from '../Homepages/ContestCard';
+import { competitionService } from '../services/competitionService';
+import { queryKeys, staleTime } from '../api/queryKeys';
+import { unwrap } from '../api/queryFn';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
+import { Card } from '../components/ui/card';
+import PageError from '../shared/components/PageError';
+import PageSkeleton from '../shared/components/PageSkeleton';
+import EmptyState from '../shared/components/EmptyState';
+import Pagination from '../shared/components/Pagination';
+import usePagedSearchParams from '../shared/hooks/usePagedSearchParams';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { useNavigate } from "react-router-dom";
-import Navbar from "../Homepages/Navbar";
-import Footer from "../Homepages/Footer";
-import ContestCard from "./UserContestCard";
-import ChangeContestTable from "./PublicChangeContestTable";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Search, SlidersHorizontal, LayoutGrid, List, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
-import { competitionService } from "../services/competitionService";
-import { queryKeys, staleTime } from "../api/queryKeys";
-import { unwrap, toMessage } from "../api/queryFn";
-import PageSkeleton from "@/shared/components/PageSkeleton";
-import EmptyState from "@/shared/components/EmptyState";
-import { toast } from "sonner";
 
-function Contest() {
+const SELECT =
+  'h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+export default function Contest() {
   useDocumentTitle('Contests');
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [selectedParticipationType, setSelectedParticipationType] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isListView, setIsListView] = useState(false);
-  const [page, setPage] = useState(1);
-  const size = 6;
-  const navigate = useNavigate();
-
-  const handleCategoryChange = (category) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
-    );
+  const state = usePagedSearchParams();
+  const [listView, setListView] = useState(false);
+  const status = state.searchParams.get('status') || '';
+  const category = state.searchParams.get('category') || '';
+  const participationType = state.searchParams.get('participationType') || '';
+  const params = {
+    page: state.page,
+    size: 12,
+    ...(state.keyword && { keyword: state.keyword }),
+    ...(status && { status }),
+    ...(category && { category }),
+    ...(participationType && { participationType }),
   };
-
-  const listParams = {
-    ...(searchTerm && { keyword: searchTerm }),
-    ...(selectedCategories.length > 0 && { category: selectedCategories.join(",") }),
-    ...(selectedStatus && { status: selectedStatus }),
-  };
-
-  // Shares its cache entry with the participant contest list, which reads the
-  // same endpoint with the same filters.
-  const {
-    data: contests = [],
-    isPending,
-    error: listError,
-  } = useQuery({
-    queryKey: queryKeys.competitions.list(listParams),
-    queryFn: () => unwrap(competitionService.list(listParams)),
-    select: (payload) => (payload && payload.data) || [],
+  const query = useQuery({
+    queryKey: queryKeys.competitions.list(params),
+    queryFn: () => unwrap(competitionService.list(params)),
     staleTime: staleTime.short,
   });
-
-  useEffect(() => {
-    if (listError) toast.error(toMessage(listError));
-  }, [listError]);
-
-  const formatDateRange = (start, end) => {
-    if (!start || !end) return "N/A";
-    return `${new Date(start).toLocaleDateString()} ~ ${new Date(end).toLocaleDateString()}`;
-  };
-
-  const handleCardClick = (contest) => {
-    navigate(`/publiccontest-detail/${contest.id}`);
-  };
-
-  const handleSearchClick = () => {
-    setSearchTerm(searchInput);
-    setPage(1);
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case "UPCOMING":
-        return "not started";
-      case "ONGOING":
-        return "in progress";
-      case "COMPLETED":
-        return "completed";
-      default:
-        return "unknown";
-    }
-  };
-
-  const pages = Math.ceil(contests.length / size);
-  const paginatedContests = contests.slice((page - 1) * size, page * size);
-  const filteredContests = paginatedContests.filter((item) => {
-    if (selectedParticipationType && item.participationType !== selectedParticipationType) return false;
-    return true;
-  });
-  const allCategories = Array.from(new Set(contests.map((item) => item.category))).sort();
-
+  const items = query.data?.data || [];
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 py-10 px-4">
+      <div className="px-4 py-8 sm:px-6">
         <div className="mx-auto max-w-7xl">
-          <header className="mb-8 text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Contest List</h1>
-            <p className="mt-2 text-muted-foreground">Discover and join exciting competitions</p>
+          <header className="mb-7">
+            <h1 className="text-3xl font-bold tracking-tight">Contest List</h1>
+            <p className="mt-2 text-muted-foreground">
+              Find a challenge that fits your interests and team.
+            </p>
           </header>
-
-          {/* Toolbar */}
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search contests..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearchClick()}
-                className="pl-9"
-              />
-            </div>
-            <Button onClick={handleSearchClick} variant="default">
-              <Search className="mr-2 h-4 w-4" />
-              Search
-            </Button>
-
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon" title="Filter">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                </SheetHeader>
-                <div className="mt-6 space-y-6">
-                  <div>
-                    <h4 className="mb-2 text-sm font-semibold">Status</h4>
-                    <select
-                      value={selectedStatus}
-                      onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">All</option>
-                      <option value="UPCOMING">UPCOMING</option>
-                      <option value="ONGOING">ONGOING</option>
-                      <option value="COMPLETED">COMPLETED</option>
-                      <option value="AWARDED">AWARDED</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <h4 className="mb-2 text-sm font-semibold">Participation Type</h4>
-                    <select
-                      value={selectedParticipationType}
-                      onChange={(e) => {
-                        setSelectedParticipationType(e.target.value);
-                        setPage(1);
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">All</option>
-                      <option value="INDIVIDUAL">INDIVIDUAL</option>
-                      <option value="TEAM">TEAM</option>
-                    </select>
-                  </div>
-
-                  {allCategories.length > 0 && (
-                    <div>
-                      <h4 className="mb-2 text-sm font-semibold">Category</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {allCategories.map((category) => {
-                          const isSelected = selectedCategories.includes(category);
-                          return (
-                            <Badge
-                              key={category}
-                              variant={isSelected ? "default" : "outline"}
-                              className="cursor-pointer transition-all"
-                              onClick={() => handleCategoryChange(category)}
-                            >
-                              {category}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+          <Card className="mb-6 space-y-4 p-4">
+            <form onSubmit={state.submitSearch} className="flex flex-wrap items-end gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor="contest-search">Search contests</Label>
+                <Input
+                  id="contest-search"
+                  type="search"
+                  placeholder="Search contests..."
+                  className="h-11 text-base"
+                  value={state.searchInput}
+                  onChange={(event) => state.setSearchInput(event.target.value)}
+                />
+              </div>
+              <Button type="submit" className="h-11">
+                <Search aria-hidden="true" />
+                Search
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+                aria-label={listView ? 'Show cards' : 'Show table'}
+                onClick={() => setListView((value) => !value)}
+              >
+                {listView ? <LayoutGrid aria-hidden="true" /> : <List aria-hidden="true" />}
+              </Button>
+            </form>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                [
+                  'status',
+                  'Status',
+                  status,
+                  ['UPCOMING', 'ONGOING', 'COMPLETED', 'AWARDED', 'CANCELED'],
+                ],
+                [
+                  'participationType',
+                  'Participation type',
+                  participationType,
+                  ['INDIVIDUAL', 'TEAM'],
+                ],
+                ['category', 'Category', category, CATEGORIES],
+              ].map(([key, label, value, options]) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={`contest-${key}`}>{label}</Label>
+                  <select
+                    id={`contest-${key}`}
+                    className={SELECT}
+                    value={value}
+                    onChange={(event) => state.setFilters({ [key]: event.target.value })}
+                  >
+                    <option value="">All</option>
+                    {options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </SheetContent>
-            </Sheet>
-
-            <Button
-              variant="outline"
-              size="icon"
-              title="Toggle list / card view"
-              onClick={() => setIsListView((prev) => !prev)}
-            >
-              {isListView ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
-            </Button>
-          </div>
-
-          {/* Contest grid/table */}
-          <div>
-            {isPending ? (
-              <PageSkeleton rows={6} />
-            ) : listError ? (
-              <div
-                role="alert"
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-              >
-                {toMessage(listError)}
-              </div>
-            ) : filteredContests.length === 0 ? (
-              <EmptyState
-                icon={Trophy}
-                title="No contests match these filters"
-                description="Try clearing the search box or widening the category and status filters."
-              />
-            ) : isListView ? (
-              <ChangeContestTable
-                contests={filteredContests.map((item) => ({
-                  id: item.id,
-                  title: item.name,
-                  description: item.description,
-                  category: item.category,
-                  date: formatDateRange(item.startDate, item.endDate),
-                  isPublic: item.isPublic,
-                  status: item.status,
-                  statusText: getStatusText(item.status),
-                  allowedSubmissionTypes: item.allowedSubmissionTypes,
-                  scoringCriteria: item.scoringCriteria,
-                  introVideoUrl: item.introVideoUrl,
-                  image: item.imageUrls?.[0] || defaultImage,
-                  createdAt: item.createdAt,
-                  participationType: item.participationType || "INDIVIDUAL",
-                }))}
-                onRowClick={handleCardClick}
-              />
-            ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredContests.map((item) => (
-                  <ContestCard
-                    key={item.id}
-                    contest={{
-                      id: item.id,
-                      title: item.name,
-                      description: item.description,
-                      category: item.category,
-                      date: formatDateRange(item.startDate, item.endDate),
-                      isPublic: item.isPublic,
-                      status: item.status,
-                      allowedSubmissionTypes: item.allowedSubmissionTypes,
-                      scoringCriteria: item.scoringCriteria,
-                      introVideoUrl: item.introVideoUrl,
-                      image: item.imageUrls?.[0],
-                      createdAt: item.createdAt,
-                      participationType: item.participationType || "INDIVIDUAL",
-                    }}
-                    onCardClick={handleCardClick}
-                  />
-                ))}
-              </div>
-            )}
-
-            {filteredContests.length === 0 && (
-              <div className="rounded-lg border border-dashed border-border bg-card/50 py-16 text-center">
-                <p className="text-muted-foreground">No contests match your filters.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {pages > 1 && (
-            <div className="mt-8 flex items-center justify-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
-                <Button
-                  key={p}
-                  variant={p === page ? "default" : "outline"}
-                  size="sm"
-                  className="w-9"
-                  onClick={() => setPage(p)}
-                >
-                  {p}
-                </Button>
               ))}
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={page === pages}
-                onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
             </div>
+          </Card>
+          {query.isPending ? (
+            <PageSkeleton rows={4} />
+          ) : query.error ? (
+            <PageError
+              error={query.error}
+              onRetry={() => query.refetch()}
+              retrying={query.isFetching}
+            />
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={Trophy}
+              title="No contests match these filters"
+              description="Try a different search or widen the filters."
+            />
+          ) : listView ? (
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Competition search results">
+                <table className="w-full text-left text-sm">
+                  <caption className="sr-only">Competition search results</caption>
+                  <thead className="border-b bg-muted/40">
+                    <tr>
+                      {['Competition', 'Category', 'Status', 'Entry type'].map((label) => (
+                        <th key={label} scope="col" className="px-4 py-3">
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => (
+                      <tr key={item.id} className="border-b last:border-0">
+                        <td className="px-4 py-3">
+                          <Link
+                            to={`/publiccontest-detail/${item.id}`}
+                            className="font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            {item.name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">{item.category}</td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline">{item.status}</Badge>
+                        </td>
+                        <td className="px-4 py-3">{item.participationType}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((item) => (
+                <ContestCard
+                  key={item.id}
+                  contest={{
+                    ...item,
+                    title: item.name,
+                    image: item.imageUrls?.[0],
+                    date: `${parseApiDateTime(item.startDate).toLocaleDateString()} – ${parseApiDateTime(item.endDate).toLocaleDateString()}`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {!query.error && !query.isPending && (
+            <Pagination
+              page={state.page}
+              pages={query.data?.pages}
+              total={query.data?.total ?? items.length}
+              onPageChange={state.setPage}
+              busy={query.isFetching}
+            />
           )}
         </div>
       </div>
@@ -320,5 +200,3 @@ function Contest() {
     </>
   );
 }
-
-export default Contest;

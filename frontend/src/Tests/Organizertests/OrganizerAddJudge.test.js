@@ -38,9 +38,9 @@ beforeEach(() => {
         data: { data: [{ email: "participant@example.com" }] },
       });
     }
-    if (url.includes("/competitions/test-competition")) {
+    if (url.includes("/competitions/managed/test-competition")) {
       return Promise.resolve({
-        data: { name: "Test Competition" },
+        data: { name: "Test Competition", status: "COMPLETED" },
       });
     }
     return Promise.reject(new Error("Unknown URL"));
