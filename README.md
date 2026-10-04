@@ -202,7 +202,8 @@ Comments and votes require a public APPROVED Submission. Only Participants creat
 or edit interactions; moderators remove comments within their authorized scope.
 Deleting an account with competition, Team, scoring or interaction history is
 rejected, and deleting the last Admin is rejected. Deleting a Team retains its
-registration/submission history. Password changes revoke the old active session.
+registration/submission history. Password changes revoke the old active session
+and show a persistent sign-in confirmation on the Login page.
 
 Media and avatar changes use their dedicated upload endpoints. Replacements retain
 the previous object until database commit and enqueue deletion in the same

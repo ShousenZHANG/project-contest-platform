@@ -83,7 +83,7 @@ test.describe('Profile Page', () => {
       description: 'This is a mock description.',
     });
     await expect(page).toHaveURL('/login');
-    await expect(page.getByText('Password updated. Please sign in again with your new password.')).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Password updated. Please sign in again with your new password.' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
     expect(await page.evaluate(() => ({
       token: localStorage.getItem('token'),

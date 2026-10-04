@@ -159,6 +159,11 @@ function LoginForm({ role: roleProp, onClose, onShowRegister }) {
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {location.state?.passwordChanged === true && (
+          <p role="status" className="rounded-md border border-success/40 bg-success/5 p-4 text-sm text-foreground">
+            Password updated. Please sign in again with your new password.
+          </p>
+        )}
         {typeof location.state?.oauthError === 'string' && (
           <div role="alert" className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
             <p className="text-destructive">{location.state.oauthError}</p>

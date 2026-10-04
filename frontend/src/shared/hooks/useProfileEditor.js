@@ -124,9 +124,10 @@ export function useProfileEditor(options = {}) {
     mutationFn: (data) => unwrap(userService.updateProfile(data)),
     onSuccess: (_profile, submitted) => {
       if (submitted.password?.trim()) {
-        toast.success('Password updated. Please sign in again with your new password.');
+        // Session isolation remounts the query tree and its Toaster. Keep the
+        // confirmation on the destination rather than in that outgoing tree.
+        navigate('/login', { replace: true, state: { passwordChanged: true } });
         AuthTokenManager.clearSession();
-        navigate('/login', { replace: true });
         return;
       }
       toast.success('Profile updated successfully');
